@@ -8,6 +8,14 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.1.1] - 2026-11-06
+
+### Corregido
+- Las barras de las celdas se escalan entre la celda más baja y la más alta,
+  para que el desequilibrio se vea (antes todas parecían iguales).
+- Barras del ranking de consumos más cortas para que cada circuito quepa en
+  una línea.
+
 ## [1.1.0] - 2026-11-06
 
 ### Añadido

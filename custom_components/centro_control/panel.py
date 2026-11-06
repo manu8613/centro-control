@@ -876,7 +876,7 @@ def _battery(ctx: PanelContext, t: Templates) -> dict[str, Any]:
                 + '\n### <ha-icon icon="mdi:view-grid"></ha-icon> Celdas · Δ {{ n((hi - lo) * 1000, 0) }} mV\n'
                 + "{% for v in vals %}{%- set c = '#ff1744' if v < 3.0 or v > 3.6 else '#ffc400' if v < 3.2 or v > 3.45 else '#00e676' -%}"
                 + "{%- set mark = ' ▼' if v == lo else ' ▲' if v == hi else '' -%}"
-                + "`{{ '%02d' | format(loop.index) }}` {{ bar(v - 2.8, 0.85, c, 16) }} <font color=\"{{ c }}\">{{ n(v, 3) }} V{{ mark }}</font><br>\n{% endfor %}"
+                + "`{{ '%02d' | format(loop.index) }}` {{ bar(v - lo + 0.01, [hi - lo, 0.005] | max + 0.02, c, 16) }} <font color=\"{{ c }}\">{{ n(v, 3) }} V{{ mark }}</font><br>\n{% endfor %}"
             )
             cards.append(md(content, GREEN, "full"))
         sections.append(section(cards))
@@ -931,7 +931,7 @@ def _consumption(ctx: PanelContext, t: Templates) -> dict[str, Any]:
 {%- set cs = state_attr('@potencia_consumo','circuitos') or [] -%}
 {%- set top = (cs | map(attribute='w') | map('float', 0) | list + [1]) | max -%}
 {% for c in cs %}
-<ha-icon icon="{{ c.icono }}"></ha-icon> **{{ c.nombre }}**{% if c.padre %} <font color="#8fb3c9">⤷ {{ c.padre }}</font>{% endif %}<br>{{ bar(c.w or 0, top, '#ff4fd8') }} {{ w(c.w) }} · {{ n(c.pct, 0) }} % · {{ n(c.periodo_kwh, 2) }} kWh
+<ha-icon icon="{{ c.icono }}"></ha-icon> **{{ c.nombre }}**{% if c.padre %} <font color="#8fb3c9">⤷ {{ c.padre }}</font>{% endif %}<br>{{ bar(c.w or 0, top, '#ff4fd8', 12) }} {{ w(c.w) }} · {{ n(c.pct, 0) }} % · {{ n(c.periodo_kwh, 2) }} kWh
 {% endfor %}
 {%- set nm = state_attr('@potencia_consumo','no_medido_w') -%}{% if nm is not none %}
 <font color="#b388ff">◌ Sin medir: {{ w(nm) }}</font>{% endif %}"""

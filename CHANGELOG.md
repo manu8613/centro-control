@@ -8,6 +8,13 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.1.1] - 2026-11-06
+
+### Corregido
+- Script de Windows: en Windows PowerShell 5.1 usa curl.exe, porque .NET no
+  conecta por TLS 1.3 ni con certificados propios (https por IP). Con https por
+  IP acepta el certificado de tu Home Assistant sin tener que poner -Inseguro.
+
 ## [2.1.0] - 2026-11-06
 
 ### Añadido

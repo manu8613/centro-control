@@ -31,8 +31,6 @@ param(
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-if ($Inseguro) { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true } }
 
 $Carpeta = Join-Path (Get-Location) "CentroControl"
 New-Item -ItemType Directory -Force -Path $Carpeta | Out-Null
@@ -50,16 +48,52 @@ $Url = $Url.TrimEnd("/")
 $Seguro = Read-Host "Token de larga duración (no se muestra ni se guarda)" -AsSecureString
 $Token = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($Seguro))
 $Cab = @{ Authorization = "Bearer $Token" }
+if ($Url -like "https://*" -and -not $Inseguro -and $Url -match "https://(\d+\.){3}\d+") {
+  # Por IP el certificado nunca coincide: se acepta el de tu Home Assistant.
+  $Inseguro = $true
+}
+
+# Windows PowerShell 5.1 no habla TLS 1.3 (el que usa Home Assistant con https)
+# ni acepta bien certificados propios, así que ahí se usa curl.exe, que viene
+# con Windows 10/11. En PowerShell 7 se usa Invoke-WebRequest.
+$UsarCurl = $PSVersionTable.PSVersion.Major -lt 7
+if ($UsarCurl -and -not (Get-Command curl.exe -ErrorAction SilentlyContinue)) {
+  Write-Host "No encuentro curl.exe. Instala PowerShell 7 (winget install Microsoft.PowerShell) y usa pwsh en lugar de powershell." -ForegroundColor Red
+  exit 1
+}
 
 function Pedir([string]$Metodo, [string]$Ruta, [string]$Cuerpo = $null, [int]$Espera = 120) {
-  $p = @{ Method = $Metodo; Uri = "$Url$Ruta"; Headers = $Cab; TimeoutSec = $Espera; UseBasicParsing = $true }
-  if ($Cuerpo) {
-    $p.Body = [System.Text.Encoding]::UTF8.GetBytes($Cuerpo)
-    $p.ContentType = "application/json; charset=utf-8"
+  if (-not $UsarCurl) {
+    $p = @{ Method = $Metodo; Uri = "$Url$Ruta"; Headers = $Cab; TimeoutSec = $Espera; UseBasicParsing = $true }
+    if ($Inseguro) { $p.SkipCertificateCheck = $true }
+    if ($Cuerpo) {
+      $p.Body = [System.Text.Encoding]::UTF8.GetBytes($Cuerpo)
+      $p.ContentType = "application/json; charset=utf-8"
+    }
+    $r = Invoke-WebRequest @p
+    return [System.Text.Encoding]::UTF8.GetString($r.RawContentStream.ToArray())
   }
-  $r = Invoke-WebRequest @p
-  $bytes = $r.RawContentStream.ToArray()
-  return [System.Text.Encoding]::UTF8.GetString($bytes)
+  $tmpH = [System.IO.Path]::GetTempFileName()
+  $tmpB = [System.IO.Path]::GetTempFileName()
+  $tmpO = [System.IO.Path]::GetTempFileName()
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  try {
+    [System.IO.File]::WriteAllText($tmpH, "Authorization: Bearer $Token`r`nContent-Type: application/json; charset=utf-8`r`n", $utf8)
+    $ca = @("-s", "-S", "-X", $Metodo, "-H", "@$tmpH", "--max-time", "$Espera", "-o", $tmpO, "-w", "%{http_code}")
+    if ($Inseguro) { $ca += "-k" }
+    if ($Cuerpo) {
+      [System.IO.File]::WriteAllText($tmpB, $Cuerpo, $utf8)
+      $ca += @("--data-binary", "@$tmpB")
+    }
+    $ca += "$Url$Ruta"
+    $codigo = & curl.exe @ca 2>&1
+    $texto = [System.IO.File]::ReadAllText($tmpO, [System.Text.Encoding]::UTF8)
+    if ($LASTEXITCODE -ne 0) { throw "curl: $codigo" }
+    if ("$codigo" -notmatch "^2\d\d$") { throw "HTTP $codigo $texto" }
+    return $texto
+  } finally {
+    Remove-Item $tmpH, $tmpB, $tmpO -ErrorAction SilentlyContinue
+  }
 }
 function Guardar([string]$Nombre, [string]$Texto) {
   $ruta = Join-Path $Carpeta $Nombre

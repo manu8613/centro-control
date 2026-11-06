@@ -171,9 +171,9 @@ pytest -q
 python3 scripts/make_translations.py custom_components/centro_control/translations
 ```
 
-Para publicar: sube la versión en `manifest.json` y `const.py`, añade su
-apartado al `CHANGELOG.md` y crea la etiqueta `vX.Y.Z`; GitHub publica la
-versión sola.
+Para publicar una versión: sube el número en `manifest.json` y `const.py` y
+añade su apartado al `CHANGELOG.md`. Al llegar a `main`, GitHub pasa las
+pruebas, crea la etiqueta `vX.Y.Z` y publica la versión sola.
 
 ## Autoría y licencia
 

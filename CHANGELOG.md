@@ -8,6 +8,24 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [1.1.0] - 2026-11-06
+
+### Añadido
+- Importación del histórico de Home Assistant: la primera vez que arranca
+  rellena el histórico diario con las estadísticas del recorder (contadores de
+  energía y medias de potencia), para que las previsiones usen tu año pasado
+  desde el primer día. También con el botón «Importar histórico» y la acción
+  `centro_control.importar_historico`. El coste de esos días se estima con el
+  precio medio.
+
+### Cambiado
+- Las listas automáticas de luces, termostatos, temperaturas y humedades
+  ignoran entidades de diagnóstico, ocultas o desactivadas (p. ej. la
+  temperatura interna de los enchufes Zigbee).
+- Las pilas de los móviles ya no cuentan como «pila baja».
+- Los termómetros exteriores no avisan de frío o calor; umbrales por defecto
+  10–32 °C.
+
 ## [1.0.0] - 2026-11-06
 
 ### Añadido

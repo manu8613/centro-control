@@ -10,7 +10,7 @@ OUT = Path(sys.argv[1])
 
 L = {  # key: (label, description or None)
     "nombre": ("Nombre", None),
-    "crear_panel": ("Crear el panel en la barra lateral", "Necesita Mushroom, ApexCharts card, card-mod y Power Flow Card Plus de HACS."),
+    "crear_panel": ("Crear el panel en la barra lateral", "Panel propio, no necesita tarjetas de HACS."),
     "dia_factura": ("Día en que empieza cada factura", "Día del mes de la lectura de tu factura de la luz (1–28)."),
     "notificar_servicio": (
         "Avisarme con",

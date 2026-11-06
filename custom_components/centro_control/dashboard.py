@@ -8,6 +8,7 @@ ids, so it always matches the installed entities. It is rebuilt on every load
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import logging
 from pathlib import Path
 from typing import Any
@@ -17,7 +18,18 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.yaml import dump
 
-from .const import DASHBOARD_ICON, DASHBOARD_URL, DOMAIN, SUB_CIRCUIT, SUB_STRING, SUB_ZONE
+from .const import (
+    AUTHOR,
+    AUTHOR_URL,
+    DASHBOARD_ICON,
+    DASHBOARD_URL,
+    DOMAIN,
+    REPO_URL,
+    SUB_CIRCUIT,
+    SUB_STRING,
+    SUB_ZONE,
+    VERSION,
+)
 from .manager import CentroConfigEntry, CentroManager
 from .panel import Light, PanelContext, build_panel
 from .sensor import MAIN
@@ -35,6 +47,7 @@ MAIN_KEYS: dict[str, str] = {
     "reconocer_problemas": "button",
     "apagar_luces": "button",
     "regenerar_panel": "button",
+    "importar_historico": "button",
     "parar_riego": "button",
     "sim_potencia_p1": "number",
     "sim_potencia_p2": "number",
@@ -138,51 +151,69 @@ def _dashboards(hass: HomeAssistant) -> dict[str | None, Any] | None:
     return data.dashboards if hasattr(data, "dashboards") else data["dashboards"]
 
 
+STATIC_URL = f"/{DOMAIN}_static"
+PANEL_ELEMENT = "centro-control-panel"
+
+
+async def _async_register_static(hass: HomeAssistant) -> bool:
+    """Serve the panel's JavaScript once per Home Assistant run."""
+    if hass.data.get(f"{DOMAIN}_static"):
+        return True
+    if getattr(hass, "http", None) is None:
+        return False
+    from homeassistant.components.http import StaticPathConfig
+
+    folder = Path(__file__).parent / "frontend"
+    await hass.http.async_register_static_paths([StaticPathConfig(STATIC_URL, str(folder), False)])
+    hass.data[f"{DOMAIN}_static"] = True
+    return True
+
+
+def panel_config(hass: HomeAssistant, entry: CentroConfigEntry) -> dict[str, Any]:
+    ctx = asdict(build_context(hass, entry.runtime_data))
+    ctx.update({"version": VERSION, "author": AUTHOR, "author_url": AUTHOR_URL, "repo_url": REPO_URL})
+    return {
+        "_panel_custom": {
+            "name": PANEL_ELEMENT,
+            "module_url": f"{STATIC_URL}/centro-control-panel.js?v={VERSION}",
+            "embed_iframe": False,
+            "trust_external": False,
+        },
+        "ctx": ctx,
+    }
+
+
 async def async_setup_dashboard(hass: HomeAssistant, entry: CentroConfigEntry, force: bool = False) -> None:
-    """Write the dashboard YAML and register it in the sidebar."""
+    """Register the Centro de Control panel in the sidebar (and keep a Lovelace copy on disk)."""
     url = dashboard_url(hass, entry)
     path = panel_path(hass, entry.entry_id)
-    config = build_panel(build_context(hass, entry.runtime_data), url)
-    await hass.async_add_executor_job(_write, path, dump(config))
+    context = build_context(hass, entry.runtime_data)
+    # A Lovelace version with HACS cards stays in config/centro_control/ for whoever prefers it.
+    await hass.async_add_executor_job(_write, path, dump(build_panel(context, url)))
 
+    if not await _async_register_static(hass):
+        _LOGGER.warning("HTTP no está disponible; no se puede registrar el panel")
+        return
     ours: set[str] = hass.data.setdefault(_OURS, set())
-    dashboards = _dashboards(hass)
-    if dashboards is None:
-        _LOGGER.warning("Lovelace no está cargado; el panel está en %s", path)
-        return
-    if url in ours and not force:
-        return
-    if url not in ours and (url in dashboards or frontend.async_panel_exists(hass, url)):
+    if url not in ours and frontend.async_panel_exists(hass, url):
         _notify(hass, entry, url, path)
         return
-
+    dashboards = _dashboards(hass)
+    if dashboards is not None and url in dashboards and url in ours:
+        dashboards.pop(url, None)  # Lovelace panel of version 1.1 in this same run
     try:
-        from homeassistant.components.lovelace.dashboard import LovelaceYAML
-
-        dashboards[url] = LovelaceYAML(
-            hass,
-            url,
-            {
-                "mode": "yaml",
-                "filename": str(path.relative_to(hass.config.config_dir)),
-                "title": entry.title,
-                "icon": DASHBOARD_ICON,
-                "show_in_sidebar": True,
-                "require_admin": False,
-            },
-        )
         frontend.async_register_built_in_panel(
             hass,
-            "lovelace",
+            component_name="custom",
             sidebar_title=entry.title,
             sidebar_icon=DASHBOARD_ICON,
             frontend_url_path=url,
-            config={"mode": "yaml"},
+            config=panel_config(hass, entry),
             require_admin=False,
-            update=frontend.async_panel_exists(hass, url),
+            update=url in ours or force,
         )
-    except Exception:  # noqa: BLE001 - never break the integration for the dashboard
-        _LOGGER.exception("No se pudo registrar el panel; el YAML está en %s", path)
+    except Exception:  # noqa: BLE001 - never break the integration for the panel
+        _LOGGER.exception("No se pudo registrar el panel")
         _notify(hass, entry, url, path)
         return
     ours.add(url)
@@ -209,10 +240,9 @@ def _notify(hass: HomeAssistant, entry: CentroConfigEntry, url: str, path: Path)
     persistent_notification.async_create(
         hass,
         (
-            f"Ya existe un panel en `/{url}`, así que no lo he sustituido. "
-            f"El panel de **{entry.title}** está en `{path}`: cópialo en un panel nuevo "
-            "(Editar → Editor de configuración en bruto) o borra el existente y ejecuta "
-            "la acción `centro_control.crear_panel`."
+            f"Ya existe otro panel en `/{url}`, así que no lo he sustituido. "
+            "Bórralo (Ajustes → Paneles) y pulsa «Regenerar panel». Mientras, tienes una "
+            f"versión con tarjetas de Lovelace en `{path}`."
         ),
         title="Centro de Control",
         notification_id=f"{DOMAIN}_{entry.entry_id}_panel",

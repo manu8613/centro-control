@@ -15,7 +15,7 @@
           "red_potencia": "Sensor del medidor general (W o kW).",
           "consumo_potencia": "Si no lo tienes se calcula: solar + red + batería.",
           "solar_potencia": "Si lo dejas vacío se suman los strings.",
-          "crear_panel": "Necesita Mushroom, ApexCharts card, card-mod y Power Flow Card Plus de HACS."
+          "crear_panel": "Panel propio, no necesita tarjetas de HACS."
         },
         "description": "Lo mínimo para empezar. Después, en **Configurar**, ajustas cada área y con **Añadir string / batería / circuito / zona de riego** vas sumando tu instalación."
       }
@@ -51,7 +51,7 @@
           "notificar_nivel": "Avisar desde el nivel"
         },
         "data_description": {
-          "crear_panel": "Necesita Mushroom, ApexCharts card, card-mod y Power Flow Card Plus de HACS.",
+          "crear_panel": "Panel propio, no necesita tarjetas de HACS.",
           "dia_factura": "Día del mes de la lectura de tu factura de la luz (1–28).",
           "notificar_servicio": "p. ej. notify.mobile_app_mi_movil, notify.pushover o persistent_notification. Vacío = sin avisos."
         }

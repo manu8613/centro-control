@@ -50,9 +50,10 @@ evitado. Se configura entero desde la interfaz y crea el panel solo.
 ## Requisitos
 
 - Home Assistant 2025.6 o posterior y [HACS](https://hacs.xyz).
-- Tarjetas de HACS para el panel: **Mushroom**, **ApexCharts card**,
-  **card-mod** y **Power Flow Card Plus**. Si falta alguna, verás «Custom
-  element doesn't exist» en las tarjetas que la usan.
+- Nada más: el panel es propio (JavaScript incluido en la integración) y no
+  depende de tarjetas de HACS ni del tema que uses.
+- Opcional: la copia del panel en Lovelace (`config/centro_control/panel_<id>.yaml`)
+  usa Mushroom, ApexCharts card, card-mod y Power Flow Card Plus.
 
 ## Instalación
 
@@ -83,8 +84,9 @@ Todo se cambia desde la integración, sin YAML:
 - Las luces, termostatos y sensores de temperatura y humedad se cogen todos
   automáticamente si no eliges ninguno (los de batería e inversor se excluyen).
 - El panel se regenera solo al arrancar y con el botón **Regenerar panel**.
-  Además se guarda en `config/centro_control/panel_<id>.yaml` por si quieres
-  copiarlo a otro panel y retocarlo.
+  Además se guarda una versión con tarjetas de Lovelace en
+  `config/centro_control/panel_<id>.yaml` por si quieres copiarla a otro panel
+  y retocarla.
 
 ## Entidades
 

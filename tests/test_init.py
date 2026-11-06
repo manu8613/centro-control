@@ -266,6 +266,15 @@ async def test_panel_builds_with_real_entities(hass: HomeAssistant) -> None:
     panel = build_panel(ctx)
     assert len(panel["views"]) == 12
 
+    import json
+
+    from custom_components.centro_control.dashboard import panel_config
+
+    config = panel_config(hass, entry)
+    assert config["_panel_custom"]["name"] == "centro-control-panel"
+    assert config["ctx"]["ids"]["potencia_solar"] == ctx.ids["potencia_solar"]
+    json.dumps(config)  # must reach the browser as JSON
+
 
 async def test_unload_and_persist(hass: HomeAssistant, freezer) -> None:
     freezer.move_to("2026-11-09 11:00:00+01:00")

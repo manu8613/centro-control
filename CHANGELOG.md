@@ -8,6 +8,20 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.0.0] - 2026-11-06
+
+### Cambiado
+- **Panel propio en JavaScript**: el panel de la barra lateral ya no es un
+  panel de Lovelace con tarjetas de HACS, sino un panel independiente que
+  trae la integración. Se ve igual en cualquier instalación, con o sin
+  card-mod, Mushroom o ApexCharts, y con cualquier tema.
+- Flujo de energía animado con el reparto real (solar → casa, batería y red),
+  gráficas propias de 24 h, 7 días, 30 días y meses, celdas, ranking de
+  consumos, luces con brillo, termostatos con ±, riego y simulador con
+  deslizadores. Se adapta a móvil.
+- La versión con tarjetas de Lovelace se sigue guardando en
+  `config/centro_control/panel_<id>.yaml` para quien la prefiera.
+
 ## [1.1.1] - 2026-11-06
 
 ### Corregido

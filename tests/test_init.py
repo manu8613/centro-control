@@ -278,3 +278,12 @@ async def test_unload_and_persist(hass: HomeAssistant, freezer) -> None:
     await hass.async_block_till_done()
     assert float(value(hass, entry, "energia_importada").state) == pytest.approx(before, abs=0.002)
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_import_history_without_recorder(hass: HomeAssistant) -> None:
+    entry = make_entry()
+    await setup(hass, entry)
+    await hass.services.async_call(DOMAIN, "importar_historico", {"dias": 30}, blocking=True)
+    await hass.async_block_till_done()
+    notes = hass.states.async_entity_ids("persistent_notification")
+    assert isinstance(notes, list)

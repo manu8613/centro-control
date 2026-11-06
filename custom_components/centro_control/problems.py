@@ -115,6 +115,7 @@ class Live:
     temperatures: tuple[str, ...] = ()
     humidities: tuple[str, ...] = ()
     outdoor: str | None = None
+    skip: frozenset[str] = frozenset()  # entities left out of the house-wide checks
 
 
 def _num(st: StateLike | None) -> float | None:
@@ -152,7 +153,7 @@ def evaluate(
     out += _irrigation(model, get, live)
     out += _climate(model, get, live)
     out += _gas(model, get)
-    out += _house(model, states, now)
+    out += _house(model, states, now, live.skip)
     return sorted(out, key=lambda p: (LEVEL_ORDER.get(p.level, 9), p.area, p.title))
 
 
@@ -558,8 +559,8 @@ def _climate(model: Model, get: Callable[[str], StateLike | None], live: Live) -
             continue
         st = get(entity)
         t = _num(st)
-        if t is None:
-            continue
+        if t is None or model.is_outdoor(f"{entity} {_name(st, entity)}"):
+            continue  # outdoor thermometers do not have a comfort range
         if t > tmax:
             out.append(
                 Problem(
@@ -623,7 +624,7 @@ def _gas(model: Model, get: Callable[[str], StateLike | None]) -> list[Problem]:
     ]
 
 
-def _house(model: Model, states: Iterable[StateLike], now: datetime) -> list[Problem]:
+def _house(model: Model, states: Iterable[StateLike], now: datetime, skip: frozenset[str] = frozenset()) -> list[Problem]:
     out = []
     check_batteries = bool(model.get(CONF_CHECK_DEVICE_BATTERIES))
     check_safety = bool(model.get(CONF_CHECK_SAFETY))
@@ -634,7 +635,7 @@ def _house(model: Model, states: Iterable[StateLike], now: datetime) -> list[Pro
     for st in states:
         domain = st.entity_id.split(".", 1)[0]
         cls = st.attributes.get("device_class")
-        if check_batteries and domain == "sensor" and cls == "battery" and st.entity_id not in own:
+        if check_batteries and domain == "sensor" and cls == "battery" and st.entity_id not in own and st.entity_id not in skip:
             level = _num(st)
             if level is not None and level <= threshold:
                 out.append(

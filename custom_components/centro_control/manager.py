@@ -166,6 +166,7 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.gas_entities: dict[str, str] = {}
         self._forecast_at = 0.0
         self._forced_close: dict[str, float] = {}
+        self.imported = False
 
     # ================================================================ setup
     @property
@@ -203,6 +204,7 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.skip_rain = bool(data.get("skip_rain", True))
         self.period = data.get("period", "hoy") if data.get("period") in PERIODS else "hoy"
         self.sim.update({k: float(v) for k, v in data.get("sim", {}).items() if k in SIM_DEFAULTS})
+        self.imported = bool(data.get("imported", False))
         self.gas_entities = self._find_gas_tur()
 
     def _data_to_save(self) -> dict[str, Any]:
@@ -216,6 +218,7 @@ class CentroManager(DataUpdateCoordinator[None]):
             "skip_rain": self.skip_rain,
             "period": self.period,
             "sim": self.sim,
+            "imported": self.imported,
         }
 
     @callback
@@ -603,7 +606,20 @@ class CentroManager(DataUpdateCoordinator[None]):
             temperatures=tuple(self.temperature_entities()),
             humidities=tuple(self.humidity_entities()),
             outdoor=self.model.get(CONF_OUTDOOR_TEMP),
+            skip=frozenset(self._skip_device_checks()),
         )
+
+    def _skip_device_checks(self) -> set[str]:
+        """Phones and diagnostic entities are not 'devices with a battery to replace'."""
+        registry = er.async_get(self.hass)
+        out = set()
+        for st in self.hass.states.async_all("sensor"):
+            if st.attributes.get("device_class") != "battery":
+                continue
+            entry = registry.async_get(st.entity_id)
+            if entry is not None and (entry.platform == "mobile_app" or entry.disabled_by is not None or entry.hidden_by is not None):
+                out.add(st.entity_id)
+        return out
 
     @staticmethod
     def is_raining(state: State | None) -> bool:
@@ -679,22 +695,30 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.async_set_updated_data(None)
 
     # ================================================================ lights / climate lists
+    def _hidden(self, entity_id: str) -> bool:
+        """Diagnostic, hidden or leftover entities are not shown automatically."""
+        entry = er.async_get(self.hass).async_get(entity_id)
+        if entry is not None and (entry.entity_category is not None or entry.hidden_by is not None or entry.disabled_by is not None):
+            return True
+        state = self.hass.states.get(entity_id)
+        return bool(state and state.attributes.get("restored"))
+
     def light_entities(self) -> list[str]:
         chosen = self.model.lights()
         if chosen:
             return chosen
         excluded = self.model.lights_excluded()
-        return sorted(e for e in self.hass.states.async_entity_ids("light") if e not in excluded)
+        return sorted(e for e in self.hass.states.async_entity_ids("light") if e not in excluded and not self._hidden(e))
 
     def climate_entities(self) -> list[str]:
         chosen = self.model.climates()
-        return chosen or sorted(self.hass.states.async_entity_ids("climate"))
+        return chosen or sorted(e for e in self.hass.states.async_entity_ids("climate") if not self._hidden(e))
 
     def _auto_class(self, device_class: str) -> list[str]:
         used = self.model.energy_entities()
         out = []
         for st in self.hass.states.async_all("sensor"):
-            if st.attributes.get("device_class") != device_class or st.entity_id in used:
+            if st.attributes.get("device_class") != device_class or st.entity_id in used or self._hidden(st.entity_id):
                 continue
             if self.model.temp_excluded(f"{st.entity_id} {st.attributes.get('friendly_name', '')}"):
                 continue
@@ -824,6 +848,86 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.skip_rain = value
         self.schedule_save()
         self.async_set_updated_data(None)
+
+    # ================================================================ import
+    def _history_sources(self) -> tuple[dict[str, str], dict[str, str]]:
+        """Statistics to import: metric -> energy meter, metric -> power sensor."""
+        meters = {metric: entity for entity, metric in self._meter_sources.items()}
+        m = self.model
+        powers: dict[str, str] = {}
+        if "solar" not in meters and m.get(CONF_PV_POWER):
+            powers["solar"] = m.get(CONF_PV_POWER)
+        if "consumo" not in meters and m.get(CONF_LOAD_POWER):
+            powers["consumo"] = m.get(CONF_LOAD_POWER)
+        for s in m.strings:
+            if s.metric not in meters:
+                powers[s.metric] = s.power
+        for c in m.circuits:
+            if c.metric not in meters:
+                powers[c.metric] = c.power
+        return meters, powers
+
+    async def async_import_history(self, days: int = 730) -> int:
+        """Fill the daily history with what the recorder already knows."""
+        from homeassistant.components.recorder import get_instance
+        from homeassistant.components.recorder.statistics import statistics_during_period
+
+        if "recorder" not in self.hass.config.components:
+            return 0
+        meters, powers = self._history_sources()
+        if not meters and not powers:
+            return 0
+        now = dt_util.now()
+        start = dt_util.start_of_local_day(now) - timedelta(days=days)
+        end = dt_util.start_of_local_day(now)
+        recorder = get_instance(self.hass)
+        records: dict[str, dict[str, float]] = {}
+
+        def day_of(ts: float) -> str:
+            return dt_util.as_local(dt_util.utc_from_timestamp(ts)).date().isoformat()
+
+        if meters:
+            energy = {e for metric, e in meters.items() if metric != "gas_m3"}
+            for ids, units in ((energy, {"energy": "kWh"}), ({meters["gas_m3"]} if "gas_m3" in meters else set(), {"volume": "m³"})):
+                if not ids:
+                    continue
+                stats = await recorder.async_add_executor_job(
+                    statistics_during_period, self.hass, start, end, ids, "hour", units, {"change"}
+                )
+                for metric, entity in meters.items():
+                    for row in stats.get(entity, []):
+                        change = row.get("change")
+                        if change and 0 < change < 60:
+                            rec = records.setdefault(day_of(row["start"]), {})
+                            rec[metric] = rec.get(metric, 0.0) + change
+        if powers:
+            stats = await recorder.async_add_executor_job(
+                statistics_during_period, self.hass, start, end, set(powers.values()), "hour", {"power": "W"}, {"mean"}
+            )
+            for metric, entity in powers.items():
+                for row in stats.get(entity, []):
+                    mean = row.get("mean")
+                    if mean is not None and mean > 0:
+                        rec = records.setdefault(day_of(row["start"]), {})
+                        rec[metric] = rec.get(metric, 0.0) + mean / 1000  # one hour at mean W
+        tariff = self.tariff
+        co2 = self.model.num(CONF_CO2_FACTOR, 0.102)
+        for rec in records.values():
+            if "importada" in rec:
+                rec["coste_energia"] = rec["importada"] * tariff.typical_price()
+                rec["co2_red"] = rec["importada"] * co2
+            if "exportada" in rec:
+                rec["compensacion"] = rec["exportada"] * tariff.export_price_now(None)
+            if "solar" in rec:
+                rec["co2_evitado"] = rec["solar"] * co2
+            if "gas_m3" in rec:
+                rec["co2_gas"] = rec["gas_m3"] * self.gas_factor() * self.model.num(CONF_CO2_GAS, 0.182)
+        added = self.counters.import_days(records, now.date())
+        self.imported = True
+        self._forecast_at = 0
+        await self.async_flush()
+        self._tick(dt_util.now())
+        return added
 
     # ================================================================ maintenance
     @callback

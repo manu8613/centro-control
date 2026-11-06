@@ -358,6 +358,7 @@ data = {
             "reconocer_problemas": {"name": "Reconocer problemas"},
             "apagar_luces": {"name": "Apagar todas las luces"},
             "regenerar_panel": {"name": "Regenerar panel"},
+            "importar_historico": {"name": "Importar histórico"},
             "parar_riego": {"name": "Parar todo el riego"},
             "regar": {"name": "Regar"},
         },
@@ -399,6 +400,14 @@ data = {
             "name": "Regenerar el panel",
             "description": "Vuelve a crear el panel con las entidades actuales.",
             "fields": {"config_entry_id": {"name": "Centro de Control", "description": "Solo si tienes más de uno."}},
+        },
+        "importar_historico": {
+            "name": "Importar histórico",
+            "description": "Rellena el histórico diario con las estadísticas que ya guarda Home Assistant (contadores y potencias). El coste de esos días se estima con el precio medio.",
+            "fields": {
+                "dias": {"name": "Días", "description": "Hasta cuántos días atrás."},
+                "config_entry_id": {"name": "Centro de Control", "description": "Solo si tienes más de uno."},
+            },
         },
         "reiniciar_contadores": {
             "name": "Reiniciar contadores",

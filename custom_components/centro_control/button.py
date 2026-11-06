@@ -7,7 +7,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import SUB_ZONE
+from .const import DOMAIN, SUB_ZONE
 from .entity import CentroEntity
 from .manager import CentroConfigEntry, CentroManager
 
@@ -18,7 +18,7 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     manager = entry.runtime_data
-    buttons: list[ButtonEntity] = [Acknowledge(manager), LightsOff(manager), RebuildPanel(manager)]
+    buttons: list[ButtonEntity] = [Acknowledge(manager), LightsOff(manager), RebuildPanel(manager), ImportHistory(manager)]
     if manager.model.zones:
         buttons.append(StopAll(manager))
     async_add_entities(buttons)
@@ -60,6 +60,19 @@ class RebuildPanel(CentroEntity, ButtonEntity):
         from .dashboard import async_setup_dashboard
 
         await async_setup_dashboard(self.hass, self.coordinator.config_entry, force=True)
+
+
+class ImportHistory(CentroEntity, ButtonEntity):
+    _attr_icon = "mdi:database-import"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, manager: CentroManager) -> None:
+        super().__init__(manager, "importar_historico")
+
+    async def async_press(self) -> None:
+        await self.hass.services.async_call(
+            DOMAIN, "importar_historico", {"config_entry_id": self.coordinator.config_entry.entry_id}, blocking=True
+        )
 
 
 class StopAll(CentroEntity, ButtonEntity):

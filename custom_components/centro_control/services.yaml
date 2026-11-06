@@ -54,3 +54,18 @@ reiniciar_contadores:
       selector:
         config_entry:
           integration: centro_control
+importar_historico:
+  fields:
+    dias:
+      required: false
+      default: 730
+      selector:
+        number:
+          min: 1
+          max: 800
+          unit_of_measurement: días
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control

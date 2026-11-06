@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from homeassistant.components import persistent_notification
 from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import ServiceValidationError
 import homeassistant.helpers.config_validation as cv
@@ -17,6 +18,7 @@ SCHEMA_WATER = vol.Schema({**_BASE, vol.Required("zona"): cv.string, vol.Optiona
 SCHEMA_STOP = vol.Schema({**_BASE, vol.Optional("zona"): cv.string})
 SCHEMA_PLAIN = vol.Schema(_BASE)
 SCHEMA_RESET = vol.Schema({**_BASE, vol.Required("confirmar"): cv.boolean})
+SCHEMA_IMPORT = vol.Schema({**_BASE, vol.Optional("dias", default=730): vol.All(vol.Coerce(int), vol.Range(min=1, max=800))})
 
 
 def _manager(hass: HomeAssistant, call: ServiceCall) -> CentroManager:
@@ -56,7 +58,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
             raise ServiceValidationError("Marca «confirmar» para borrar los contadores.")
         _manager(hass, call).reset_counters()
 
+    async def import_history(call: ServiceCall) -> None:
+        manager = _manager(hass, call)
+        added = await manager.async_import_history(call.data["dias"])
+        persistent_notification.async_create(
+            hass,
+            f"Importados **{added}** días del historial de Home Assistant." if added else "No había días nuevos que importar.",
+            title=manager.config_entry.title,
+            notification_id=f"{DOMAIN}_importar",
+        )
+
     hass.services.async_register(DOMAIN, "regar", water, schema=SCHEMA_WATER)
+    hass.services.async_register(DOMAIN, "importar_historico", import_history, schema=SCHEMA_IMPORT)
     hass.services.async_register(DOMAIN, "parar_riego", stop, schema=SCHEMA_STOP)
     hass.services.async_register(DOMAIN, "reconocer_problemas", acknowledge, schema=SCHEMA_PLAIN)
     hass.services.async_register(DOMAIN, "crear_panel", panel, schema=SCHEMA_PLAIN)

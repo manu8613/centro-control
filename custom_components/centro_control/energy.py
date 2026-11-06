@@ -137,6 +137,33 @@ class Counters:
             buckets["factura"] = totals.get(metric, 0.0) + buckets.get("hoy", 0.0)
         self.keys["factura"] = start.isoformat()
 
+    def import_days(self, records: dict[str, dict[str, float]], today: date) -> int:
+        """Add past days (e.g. from the recorder) that are not in the history yet.
+
+        The days also count towards the month, billing period, year and total
+        buckets they belong to. Returns how many days were added.
+        """
+        self.roll(today)
+        start = period_start(today, self.billing_day)
+        added = 0
+        for key in sorted(records):
+            day = date.fromisoformat(key)
+            if day >= today or key in self.history or not records[key]:
+                continue
+            self.history[key] = {m: round(v, 6) for m, v in records[key].items() if v}
+            added += 1
+            for metric, value in self.history[key].items():
+                buckets = self.values.setdefault(metric, dict.fromkeys(BUCKETS, 0.0))
+                buckets["total"] = buckets.get("total", 0.0) + value
+                if day.year == today.year:
+                    buckets["ano"] = buckets.get("ano", 0.0) + value
+                    if day.month == today.month:
+                        buckets["mes"] = buckets.get("mes", 0.0) + value
+                if day >= start:
+                    buckets["factura"] = buckets.get("factura", 0.0) + value
+        self._prune(today)
+        return added
+
     # ---------------------------------------------------------------- history
     def days(self, metric: str, last: int, day: date) -> list[tuple[str, float]]:
         """Daily values for the ``last`` days up to ``day`` (today included)."""

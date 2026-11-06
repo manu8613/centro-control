@@ -102,3 +102,24 @@ def test_integrator_trapezoid_and_gaps():
     assert total == pytest.approx(1.0)
     assert i.sample(1000.0, 3601 + 500) == 0  # gap too long
     assert i.sample(None, 5000) == 0
+
+
+def test_import_days_fills_history_and_buckets():
+    c = Counters(billing_day=1)
+    c.add("solar", 2, date(2026, 11, 6))
+    added = c.import_days(
+        {
+            "2026-11-03": {"solar": 10},
+            "2026-10-15": {"solar": 5},
+            "2025-11-03": {"solar": 7},
+            "2026-11-06": {"solar": 99},  # today: ignored
+        },
+        date(2026, 11, 6),
+    )
+    assert added == 3
+    assert c.get("solar", "hoy") == 2
+    assert c.get("solar", "mes") == 12
+    assert c.get("solar", "factura") == 12
+    assert c.get("solar", "ano") == 17
+    assert c.get("solar", "total") == 24
+    assert c.import_days({"2026-11-03": {"solar": 10}}, date(2026, 11, 6)) == 0  # not twice

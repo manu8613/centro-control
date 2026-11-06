@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from homeassistant.components import persistent_notification
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 import homeassistant.helpers.config_validation as cv
@@ -55,6 +56,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: CentroConfigEntry) -> bo
     manager.async_start()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_reload))
+
+    async def _first_import(_hass: HomeAssistant) -> None:
+        # The first time, fill the history with what Home Assistant already recorded.
+        if manager.imported:
+            return
+        try:
+            added = await manager.async_import_history()
+        except Exception:  # noqa: BLE001 - the history is a bonus, never block setup
+            _LOGGER.exception("No se pudo importar el histórico de Home Assistant")
+            return
+        if added:
+            persistent_notification.async_create(
+                hass,
+                f"He rellenado el histórico con **{added}** días que Home Assistant ya tenía guardados. "
+                "El coste de esos días es una estimación con el precio medio.",
+                title=entry.title,
+                notification_id=f"{DOMAIN}_importar",
+            )
+
+    entry.async_on_unload(async_at_started(hass, _first_import))
+
     if entry.options.get(CONF_CREATE_DASHBOARD, True):
         await async_setup_dashboard(hass, entry)
 

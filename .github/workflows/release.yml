@@ -1,0 +1,51 @@
+name: Release
+
+# Al subir una etiqueta vX.Y.Z se publica la versión en GitHub.
+# HACS muestra las versiones publicadas y permite instalar cualquiera
+# (también una anterior, para volver atrás).
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Etiqueta existente a publicar (p. ej. v1.0.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: Comprobar versión
+        id: v
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          M=$(python3 -c "import json;print(json.load(open('custom_components/centro_control/manifest.json'))['version'])")
+          test "v$M" = "$TAG" || { echo "La etiqueta $TAG no coincide con manifest.json ($M)"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$M" >> "$GITHUB_OUTPUT"
+      - name: Notas de la versión
+        run: |
+          python3 - <<'PY'
+          import re
+          v = "${{ steps.v.outputs.version }}"
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(rf"^## \[{re.escape(v)}\].*?$(.*?)(?=^## \[|\Z)", text, re.S | re.M)
+          body = (m.group(1).strip() if m else "") + "\n\n---\nCentro de Control · creado por [manu8613](https://github.com/manu8613)"
+          open("NOTES.md", "w", encoding="utf-8").write(body)
+          PY
+      - name: ZIP de la integración
+        run: cd custom_components/centro_control && zip -r ../../centro_control.zip . -x "__pycache__/*"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.tag }}
+          name: Centro de Control ${{ steps.v.outputs.tag }}
+          body_path: NOTES.md
+          files: centro_control.zip

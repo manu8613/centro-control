@@ -1,0 +1,56 @@
+regar:
+  fields:
+    zona:
+      required: true
+      example: "Césped"
+      selector:
+        text:
+    minutos:
+      required: false
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 480
+          unit_of_measurement: min
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control
+parar_riego:
+  fields:
+    zona:
+      required: false
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control
+reconocer_problemas:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control
+crear_panel:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control
+reiniciar_contadores:
+  fields:
+    confirmar:
+      required: true
+      selector:
+        boolean:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control

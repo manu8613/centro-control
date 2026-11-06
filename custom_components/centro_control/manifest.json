@@ -1,0 +1,18 @@
+{
+  "domain": "centro_control",
+  "name": "Centro de Control",
+  "after_dependencies": [
+    "lovelace",
+    "frontend"
+  ],
+  "codeowners": [
+    "@manu8613"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/manu8613/centro-control",
+  "integration_type": "service",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/manu8613/centro-control/issues",
+  "requirements": [],
+  "version": "1.0.0"
+}

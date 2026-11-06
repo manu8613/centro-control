@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Tests en Home Assistant
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Instalar dependencias
+        run: pip install -r requirements_test.txt jinja2 pyyaml
+      - name: Pytest
+        run: pytest -q
+
+  version:
+    name: Versión coherente
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: manifest.json, const.py y CHANGELOG coinciden
+        run: |
+          M=$(python3 -c "import json;print(json.load(open('custom_components/centro_control/manifest.json'))['version'])")
+          C=$(python3 -c "import re;print(re.search(r'VERSION: Final = \"(.+?)\"', open('custom_components/centro_control/const.py').read()).group(1))")
+          echo "manifest=$M const=$C"
+          test "$M" = "$C"
+          grep -q "^## \[$M\]" CHANGELOG.md
+
+  anonimato:
+    name: Sin datos de ninguna casa
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Buscar IPs privadas, claves y tokens
+        run: |
+          ! grep -rInE "192\.168\.[0-9]+\.[0-9]+|10\.[0-9]+\.[0-9]+\.[0-9]+\b|local_key|api_key|eyJ[a-zA-Z0-9_-]{20,}" custom_components README.md
+
+  hassfest:
+    name: Hassfest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    name: Validación HACS
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          ignore: brands description topics

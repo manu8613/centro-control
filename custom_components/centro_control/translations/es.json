@@ -1,0 +1,734 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Centro de Control",
+        "data": {
+          "nombre": "Nombre",
+          "red_potencia": "Potencia de la red",
+          "red_signo": "Signo de la potencia de red",
+          "consumo_potencia": "Consumo total de la casa",
+          "solar_potencia": "Potencia solar total",
+          "crear_panel": "Crear el panel en la barra lateral"
+        },
+        "data_description": {
+          "red_potencia": "Sensor del medidor general (W o kW).",
+          "consumo_potencia": "Si no lo tienes se calcula: solar + red + batería.",
+          "solar_potencia": "Si lo dejas vacío se suman los strings.",
+          "crear_panel": "Necesita Mushroom, ApexCharts card, card-mod y Power Flow Card Plus de HACS."
+        },
+        "description": "Lo mínimo para empezar. Después, en **Configurar**, ajustas cada área y con **Añadir string / batería / circuito / zona de riego** vas sumando tu instalación."
+      }
+    },
+    "abort": {
+      "already_configured": "Ya está configurado."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "¿Qué quieres ajustar?",
+        "menu_options": {
+          "general": "General",
+          "red": "Red eléctrica",
+          "consumo": "Consumo total",
+          "solar": "Solar e inversor",
+          "tarifa": "Tarifa de la luz",
+          "gas": "Gas",
+          "luces": "Luces",
+          "clima": "Temperaturas",
+          "riego": "Riego",
+          "co2": "CO₂",
+          "problemas": "Detección de problemas"
+        }
+      },
+      "general": {
+        "title": "General",
+        "data": {
+          "crear_panel": "Crear el panel en la barra lateral",
+          "dia_factura": "Día en que empieza cada factura",
+          "notificar_servicio": "Avisarme con",
+          "notificar_nivel": "Avisar desde el nivel"
+        },
+        "data_description": {
+          "crear_panel": "Necesita Mushroom, ApexCharts card, card-mod y Power Flow Card Plus de HACS.",
+          "dia_factura": "Día del mes de la lectura de tu factura de la luz (1–28).",
+          "notificar_servicio": "p. ej. notify.mobile_app_mi_movil, notify.pushover o persistent_notification. Vacío = sin avisos."
+        }
+      },
+      "red": {
+        "title": "Red eléctrica",
+        "data": {
+          "red_potencia": "Potencia de la red",
+          "red_signo": "Signo de la potencia de red",
+          "red_energia_importada": "Energía importada (contador)",
+          "red_energia_exportada": "Energía vertida (contador)",
+          "red_tension": "Tensión de red",
+          "red_frecuencia": "Frecuencia de red",
+          "potencia_contratada_p1": "Potencia contratada punta (P1)",
+          "potencia_contratada_p2": "Potencia contratada valle (P2)"
+        },
+        "data_description": {
+          "red_potencia": "Sensor del medidor general (W o kW).",
+          "red_energia_importada": "Opcional. Si no, se calcula integrando la potencia.",
+          "red_energia_exportada": "Opcional. Si no, se calcula integrando la potencia.",
+          "red_tension": "Opcional, para avisar si sale de rango."
+        }
+      },
+      "consumo": {
+        "title": "Consumo total",
+        "data": {
+          "consumo_potencia": "Consumo total de la casa",
+          "consumo_energia": "Energía consumida (contador)"
+        },
+        "data_description": {
+          "consumo_potencia": "Si no lo tienes se calcula: solar + red + batería."
+        }
+      },
+      "solar": {
+        "title": "Solar e inversor",
+        "data": {
+          "solar_potencia": "Potencia solar total",
+          "solar_energia": "Energía solar (contador)",
+          "solar_prevision_hoy": "Previsión solar de hoy (kWh)",
+          "solar_pico_wp": "Potencia pico instalada (Wp)",
+          "inversor_temperatura": "Temperatura del inversor",
+          "inversor_temperatura_dc": "Temperatura DC / disipador",
+          "inversor_estado": "Estado del inversor",
+          "inversor_fallo": "Fallo del inversor",
+          "inversor_alarma": "Alarma del inversor"
+        },
+        "data_description": {
+          "solar_potencia": "Si lo dejas vacío se suman los strings.",
+          "solar_energia": "Opcional. Vale un sensor diario («producción de hoy») o total.",
+          "solar_prevision_hoy": "Opcional, p. ej. de Forecast.Solar o Solcast.",
+          "solar_pico_wp": "0 = suma de los strings."
+        }
+      },
+      "tarifa": {
+        "title": "Tarifa de la luz",
+        "data": {
+          "precio_modo": "Precio de la energía",
+          "precio_sensor": "Sensor de precio (€/kWh)",
+          "precio_p1": "Precio punta P1 (€/kWh)",
+          "precio_p2": "Precio llano P2 (€/kWh)",
+          "precio_p3": "Precio valle P3 (€/kWh)",
+          "precio_unico": "Precio único (€/kWh)",
+          "excedentes_modo": "Compensación de excedentes",
+          "excedentes_precio": "Precio de los excedentes (€/kWh)",
+          "excedentes_sensor": "Sensor de precio de excedentes",
+          "excedentes_tope": "Tope: no compensar más que la energía del periodo",
+          "potencia_precio_p1": "Término de potencia P1 (€/kW·día)",
+          "potencia_precio_p2": "Término de potencia P2 (€/kW·día)",
+          "impuesto_electrico": "Impuesto sobre la electricidad (%)",
+          "iva": "IVA (%)",
+          "alquiler_contador": "Alquiler del contador (€/día)",
+          "otros_fijos": "Otros cargos fijos (€/día)"
+        },
+        "data_description": {
+          "precio_sensor": "Por ejemplo el de la integración «Precio de la luz en España (PVPC)».",
+          "excedentes_tope": "Así lo hace la compensación simplificada. Desactívalo si tienes batería virtual.",
+          "potencia_precio_p1": "Por defecto peajes + cargos 2026 sin margen de comercializadora.",
+          "impuesto_electrico": "5,11269632 % desde el 1 de junio de 2026.",
+          "otros_fijos": "p. ej. financiación del bono social (9,011295 €/año) o servicios."
+        }
+      },
+      "gas": {
+        "title": "Gas",
+        "data": {
+          "gas_auto": "Detectar Gas TUR automáticamente",
+          "gas_lectura": "Lectura del contador de gas (m³)",
+          "gas_factor": "Factor de conversión (kWh/m³)",
+          "gas_coste_hoy": "Coste del gas hoy",
+          "gas_coste_mes": "Coste del gas este mes",
+          "gas_factura": "Factura de gas en curso",
+          "gas_caudal": "Caudal de gas (m³/h)"
+        },
+        "data_description": {
+          "gas_lectura": "Si no usas Gas TUR.",
+          "gas_factor": "Se usa si Gas TUR no da el suyo.",
+          "gas_caudal": "Para avisar de consumo continuo."
+        }
+      },
+      "luces": {
+        "title": "Luces",
+        "data": {
+          "luces": "Luces del panel",
+          "luces_excluir": "Luces que no quiero ver",
+          "patron_exterior": "Palabras de luces exteriores"
+        },
+        "data_description": {
+          "luces": "Vacío = todas las luces.",
+          "patron_exterior": "Expresión regular sobre el nombre, p. ej. porche|patio|jardín."
+        }
+      },
+      "clima": {
+        "title": "Temperaturas",
+        "data": {
+          "climas": "Termostatos",
+          "temperaturas": "Sensores de temperatura",
+          "humedades": "Sensores de humedad",
+          "temperatura_exterior": "Temperatura exterior",
+          "patron_excluir_temperaturas": "Excluir temperaturas que contengan",
+          "temperatura_max": "Avisar por encima de",
+          "temperatura_min": "Avisar por debajo de",
+          "humedad_max": "Humedad máxima"
+        },
+        "data_description": {
+          "climas": "Vacío = todos.",
+          "temperaturas": "Vacío = todos, menos los de la batería e inversor.",
+          "humedades": "Vacío = todos.",
+          "patron_excluir_temperaturas": "Expresión regular."
+        }
+      },
+      "riego": {
+        "title": "Riego",
+        "data": {
+          "lluvia_sensor": "Sensor de lluvia",
+          "humedad_suelo_min": "Humedad del suelo mínima"
+        },
+        "data_description": {}
+      },
+      "co2": {
+        "title": "CO₂",
+        "data": {
+          "co2_factor_red": "Emisiones de la red (kg CO₂/kWh)",
+          "co2_sensor": "Intensidad de CO₂ en vivo (g/kWh)",
+          "co2_factor_gas": "Emisiones del gas (kg CO₂/kWh)",
+          "co2_arbol": "CO₂ que absorbe un árbol al año (kg)",
+          "co2_coche_km": "CO₂ de un coche por km (kg)"
+        },
+        "data_description": {
+          "co2_factor_red": "0,102 = mix nacional 2024 (CNMC).",
+          "co2_sensor": "Opcional, p. ej. la integración Electricity Maps.",
+          "co2_factor_gas": "0,182 = gas natural (MITECO)."
+        }
+      },
+      "problemas": {
+        "title": "Detección de problemas",
+        "data": {
+          "tolerancia_strings": "Tolerancia entre strings (%)",
+          "delta_celdas_aviso": "Diferencia de celdas: aviso (V)",
+          "delta_celdas_critico": "Diferencia de celdas: crítico (V)",
+          "celda_min": "Tensión mínima de celda (V)",
+          "celda_max": "Tensión máxima de celda (V)",
+          "bateria_temp_max": "Temperatura máxima de batería",
+          "soc_min": "SOC mínimo",
+          "inversor_temp_aviso": "Inversor: aviso a partir de",
+          "inversor_temp_critico": "Inversor: crítico a partir de",
+          "tension_min": "Tensión de red mínima",
+          "tension_max": "Tensión de red máxima",
+          "no_medido_max": "Consumo sin medir máximo",
+          "revisar_red_con_bateria": "Avisar si se importa con la batería cargada",
+          "revisar_baterias": "Revisar las pilas de todos los dispositivos",
+          "bateria_dispositivo_min": "Pila baja por debajo de",
+          "revisar_seguridad": "Avisar de agua, humo y gas",
+          "gas_horas_continuo": "Gas continuo durante más de"
+        },
+        "data_description": {
+          "tolerancia_strings": "Aviso si un string rinde este % menos que los de su grupo.",
+          "soc_min": "Por debajo, aviso. También es la reserva para la autonomía.",
+          "revisar_seguridad": "Sensores binarios de fuga, humo, gas y monóxido."
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "string": {
+      "entry_type": "String fotovoltaico",
+      "initiate_flow": {
+        "user": "Añadir string",
+        "reconfigure": "Editar string"
+      },
+      "step": {
+        "user": {
+          "title": "Añadir string",
+          "data": {
+            "nombre": "Nombre",
+            "potencia": "Potencia",
+            "tension": "Tensión",
+            "corriente": "Corriente",
+            "energia": "Energía (contador)",
+            "pico_wp": "Potencia pico (Wp)",
+            "grupo": "Grupo"
+          },
+          "data_description": {
+            "potencia": "Sensor en W o kW.",
+            "energia": "Opcional. Si no, se integra la potencia."
+          },
+          "description": "Cada string o MPPT del inversor. Los strings del mismo **grupo** (misma orientación) se comparan entre sí para detectar sombras o fallos."
+        },
+        "reconfigure": {
+          "title": "Editar string",
+          "data": {
+            "nombre": "Nombre",
+            "potencia": "Potencia",
+            "tension": "Tensión",
+            "corriente": "Corriente",
+            "energia": "Energía (contador)",
+            "pico_wp": "Potencia pico (Wp)",
+            "grupo": "Grupo"
+          },
+          "data_description": {
+            "potencia": "Sensor en W o kW.",
+            "energia": "Opcional. Si no, se integra la potencia."
+          },
+          "description": "Cada string o MPPT del inversor. Los strings del mismo **grupo** (misma orientación) se comparan entre sí para detectar sombras o fallos."
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Guardado."
+      }
+    },
+    "bateria": {
+      "entry_type": "Batería",
+      "initiate_flow": {
+        "user": "Añadir batería",
+        "reconfigure": "Editar batería"
+      },
+      "step": {
+        "user": {
+          "title": "Añadir batería",
+          "data": {
+            "nombre": "Nombre",
+            "soc": "Estado de carga (SOC)",
+            "potencia": "Potencia",
+            "signo": "Signo de la potencia",
+            "capacidad_kwh": "Capacidad (kWh)",
+            "tension": "Tensión",
+            "corriente": "Corriente",
+            "temperatura": "Temperaturas",
+            "celdas": "Tensión de cada celda",
+            "celda_minima": "Celda mínima",
+            "celda_maxima": "Celda máxima",
+            "diferencia_celdas": "Diferencia entre celdas",
+            "alarmas": "Alarmas del BMS",
+            "ciclos": "Ciclos"
+          },
+          "data_description": {
+            "potencia": "Sensor en W o kW.",
+            "celdas": "Opcional: todas las celdas, en orden.",
+            "celda_minima": "Si no das las celdas una a una.",
+            "diferencia_celdas": "En V o mV."
+          },
+          "description": "Una batería o banco con su BMS."
+        },
+        "reconfigure": {
+          "title": "Editar batería",
+          "data": {
+            "nombre": "Nombre",
+            "soc": "Estado de carga (SOC)",
+            "potencia": "Potencia",
+            "signo": "Signo de la potencia",
+            "capacidad_kwh": "Capacidad (kWh)",
+            "tension": "Tensión",
+            "corriente": "Corriente",
+            "temperatura": "Temperaturas",
+            "celdas": "Tensión de cada celda",
+            "celda_minima": "Celda mínima",
+            "celda_maxima": "Celda máxima",
+            "diferencia_celdas": "Diferencia entre celdas",
+            "alarmas": "Alarmas del BMS",
+            "ciclos": "Ciclos"
+          },
+          "data_description": {
+            "potencia": "Sensor en W o kW.",
+            "celdas": "Opcional: todas las celdas, en orden.",
+            "celda_minima": "Si no das las celdas una a una.",
+            "diferencia_celdas": "En V o mV."
+          },
+          "description": "Una batería o banco con su BMS."
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Guardado."
+      }
+    },
+    "circuito": {
+      "entry_type": "Circuito",
+      "initiate_flow": {
+        "user": "Añadir circuito",
+        "reconfigure": "Editar circuito"
+      },
+      "step": {
+        "user": {
+          "title": "Añadir circuito",
+          "data": {
+            "nombre": "Nombre",
+            "potencia": "Potencia",
+            "energia": "Energía (contador)",
+            "grupo": "Grupo",
+            "padre": "Cuelga de (nombre del circuito)",
+            "suma_en_total": "Cuenta para el total medido",
+            "icono": "Icono"
+          },
+          "data_description": {
+            "potencia": "Sensor en W o kW.",
+            "energia": "Opcional. Si no, se integra la potencia.",
+            "padre": "Si este aparato está dentro de otro circuito medido.",
+            "suma_en_total": "Desactívalo si cuelga de otro circuito, para no contarlo dos veces."
+          },
+          "description": "Un circuito del cuadro o un aparato con medida. El **grupo** agrupa las tarjetas del panel (Cuadro, Caseta, Aparatos…)."
+        },
+        "reconfigure": {
+          "title": "Editar circuito",
+          "data": {
+            "nombre": "Nombre",
+            "potencia": "Potencia",
+            "energia": "Energía (contador)",
+            "grupo": "Grupo",
+            "padre": "Cuelga de (nombre del circuito)",
+            "suma_en_total": "Cuenta para el total medido",
+            "icono": "Icono"
+          },
+          "data_description": {
+            "potencia": "Sensor en W o kW.",
+            "energia": "Opcional. Si no, se integra la potencia.",
+            "padre": "Si este aparato está dentro de otro circuito medido.",
+            "suma_en_total": "Desactívalo si cuelga de otro circuito, para no contarlo dos veces."
+          },
+          "description": "Un circuito del cuadro o un aparato con medida. El **grupo** agrupa las tarjetas del panel (Cuadro, Caseta, Aparatos…)."
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Guardado."
+      }
+    },
+    "zona_riego": {
+      "entry_type": "Zona de riego",
+      "initiate_flow": {
+        "user": "Añadir zona de riego",
+        "reconfigure": "Editar zona de riego"
+      },
+      "step": {
+        "user": {
+          "title": "Añadir zona de riego",
+          "data": {
+            "nombre": "Nombre",
+            "valvula": "Válvula",
+            "humedad_suelo": "Humedad del suelo",
+            "minutos": "Minutos por defecto",
+            "minutos_max": "Máximo de seguridad (min)"
+          },
+          "data_description": {
+            "minutos_max": "Si sigue abierta más tiempo, se cierra y se avisa."
+          },
+          "description": "Una electroválvula o temporizador de riego."
+        },
+        "reconfigure": {
+          "title": "Editar zona de riego",
+          "data": {
+            "nombre": "Nombre",
+            "valvula": "Válvula",
+            "humedad_suelo": "Humedad del suelo",
+            "minutos": "Minutos por defecto",
+            "minutos_max": "Máximo de seguridad (min)"
+          },
+          "data_description": {
+            "minutos_max": "Si sigue abierta más tiempo, se cierra y se avisa."
+          },
+          "description": "Una electroválvula o temporizador de riego."
+        }
+      },
+      "abort": {
+        "reconfigure_successful": "Guardado."
+      }
+    }
+  },
+  "selector": {
+    "notificar_nivel": {
+      "options": {
+        "critico": "Solo críticos",
+        "aviso": "Críticos y avisos",
+        "info": "Todo"
+      }
+    },
+    "red_signo": {
+      "options": {
+        "positivo_importa": "Positivo = importando de la red",
+        "positivo_exporta": "Positivo = vertiendo a la red"
+      }
+    },
+    "precio_modo": {
+      "options": {
+        "periodos": "Por periodos 2.0TD (P1/P2/P3)",
+        "sensor": "Desde un sensor (PVPC, indexada…)",
+        "unico": "Precio único"
+      }
+    },
+    "excedentes_modo": {
+      "options": {
+        "precio_fijo": "Precio fijo",
+        "sensor": "Desde un sensor",
+        "ninguna": "Sin compensación"
+      }
+    },
+    "signo": {
+      "options": {
+        "positivo_descarga": "Positivo = descargando",
+        "positivo_carga": "Positivo = cargando"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "potencia_solar": {
+        "name": "Potencia solar"
+      },
+      "potencia_red": {
+        "name": "Potencia de red"
+      },
+      "potencia_importada": {
+        "name": "Potencia importada"
+      },
+      "potencia_exportada": {
+        "name": "Potencia vertida"
+      },
+      "potencia_bateria": {
+        "name": "Potencia de batería"
+      },
+      "potencia_consumo": {
+        "name": "Consumo"
+      },
+      "potencia_no_medida": {
+        "name": "Consumo sin medir"
+      },
+      "soc_bateria": {
+        "name": "Carga de la batería"
+      },
+      "energia_almacenada": {
+        "name": "Energía almacenada"
+      },
+      "autonomia_bateria": {
+        "name": "Autonomía de la batería"
+      },
+      "autosuficiencia_ahora": {
+        "name": "Autosuficiencia ahora"
+      },
+      "uso_potencia_contratada": {
+        "name": "Uso de la potencia contratada"
+      },
+      "precio_actual": {
+        "name": "Precio de la luz"
+      },
+      "precio_excedentes": {
+        "name": "Precio de excedentes"
+      },
+      "periodo_tarifario": {
+        "name": "Periodo tarifario"
+      },
+      "energia_solar": {
+        "name": "Energía solar"
+      },
+      "energia_importada": {
+        "name": "Energía importada"
+      },
+      "energia_exportada": {
+        "name": "Energía vertida"
+      },
+      "energia_consumo": {
+        "name": "Energía consumida"
+      },
+      "energia_bateria_carga": {
+        "name": "Energía cargada en batería"
+      },
+      "energia_bateria_descarga": {
+        "name": "Energía descargada de batería"
+      },
+      "coste_energia": {
+        "name": "Coste de la energía"
+      },
+      "compensacion_excedentes": {
+        "name": "Compensación de excedentes"
+      },
+      "ahorro_solar": {
+        "name": "Ahorro solar"
+      },
+      "factura_actual": {
+        "name": "Factura de la luz en curso"
+      },
+      "prevision_factura": {
+        "name": "Previsión de la factura"
+      },
+      "simulacion_factura": {
+        "name": "Factura simulada"
+      },
+      "autoconsumo": {
+        "name": "Autoconsumo"
+      },
+      "autosuficiencia": {
+        "name": "Autosuficiencia"
+      },
+      "co2_evitado": {
+        "name": "CO₂ evitado"
+      },
+      "co2_emitido": {
+        "name": "CO₂ emitido"
+      },
+      "consumo_gas": {
+        "name": "Consumo de gas"
+      },
+      "problemas": {
+        "name": "Problemas"
+      },
+      "luces_encendidas": {
+        "name": "Luces encendidas"
+      },
+      "temperatura_interior": {
+        "name": "Temperatura interior"
+      },
+      "humedad_interior": {
+        "name": "Humedad interior"
+      },
+      "historico": {
+        "name": "Histórico"
+      },
+      "energia_string": {
+        "name": "Energía hoy"
+      },
+      "energia_circuito": {
+        "name": "Energía hoy"
+      },
+      "riego_restante": {
+        "name": "Tiempo restante"
+      }
+    },
+    "binary_sensor": {
+      "problema_critico": {
+        "name": "Problema crítico"
+      },
+      "riego_activo": {
+        "name": "Regando"
+      }
+    },
+    "select": {
+      "periodo": {
+        "name": "Periodo del panel",
+        "state": {
+          "hoy": "Hoy",
+          "ayer": "Ayer",
+          "mes": "Este mes",
+          "factura": "Factura en curso",
+          "ano": "Este año",
+          "total": "Total"
+        }
+      }
+    },
+    "switch": {
+      "omitir_si_llueve": {
+        "name": "Omitir riego si llueve"
+      }
+    },
+    "button": {
+      "reconocer_problemas": {
+        "name": "Reconocer problemas"
+      },
+      "apagar_luces": {
+        "name": "Apagar todas las luces"
+      },
+      "regenerar_panel": {
+        "name": "Regenerar panel"
+      },
+      "parar_riego": {
+        "name": "Parar todo el riego"
+      },
+      "regar": {
+        "name": "Regar"
+      }
+    },
+    "number": {
+      "sim_potencia_p1": {
+        "name": "Simulador: potencia P1"
+      },
+      "sim_potencia_p2": {
+        "name": "Simulador: potencia P2"
+      },
+      "sim_consumo": {
+        "name": "Simulador: cambio de consumo"
+      },
+      "sim_precio": {
+        "name": "Simulador: cambio de precio"
+      },
+      "sim_paneles": {
+        "name": "Simulador: paneles extra"
+      },
+      "sim_bateria": {
+        "name": "Simulador: batería extra"
+      },
+      "sim_excedentes": {
+        "name": "Simulador: precio de excedentes"
+      },
+      "minutos_riego": {
+        "name": "Minutos de riego"
+      }
+    }
+  },
+  "services": {
+    "regar": {
+      "name": "Regar una zona",
+      "description": "Abre la válvula de la zona y la cierra al acabar el tiempo.",
+      "fields": {
+        "zona": {
+          "name": "Zona",
+          "description": "Nombre de la zona de riego."
+        },
+        "minutos": {
+          "name": "Minutos",
+          "description": "Si no, los de la zona."
+        },
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "parar_riego": {
+      "name": "Parar el riego",
+      "description": "Cierra una zona o todas.",
+      "fields": {
+        "zona": {
+          "name": "Zona",
+          "description": "Vacío = todas."
+        },
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "reconocer_problemas": {
+      "name": "Reconocer problemas",
+      "description": "Marca como vistos los problemas actuales.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "crear_panel": {
+      "name": "Regenerar el panel",
+      "description": "Vuelve a crear el panel con las entidades actuales.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "reiniciar_contadores": {
+      "name": "Reiniciar contadores",
+      "description": "Borra toda la energía, el coste y el histórico acumulados (no la configuración).",
+      "fields": {
+        "confirmar": {
+          "name": "Confirmar",
+          "description": "Tiene que estar activado."
+        },
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    }
+  }
+}

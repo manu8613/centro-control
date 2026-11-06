@@ -391,11 +391,13 @@ def _batteries(model: Model, get: Callable[[str], StateLike | None], live: Live)
         cells = [v for v in (_num(get(c)) for c in b.cells) if v is not None and 1.0 < v < 5.0]
         low = min(cells) if cells else _num(get(b.cell_low)) if b.cell_low else None
         high = max(cells) if cells else _num(get(b.cell_high)) if b.cell_high else None
-        delta = (high - low) if cells else _num(get(b.cell_diff)) if b.cell_diff else None
+        delta = (high - low) if cells else None
+        if delta is None and b.cell_diff and (diff_state := get(b.cell_diff)) is not None:
+            delta = _num(diff_state)
+            if delta is not None and (diff_state.attributes.get("unit_of_measurement") == "mV" or delta > 1.0):
+                delta /= 1000
         if delta is None and low is not None and high is not None:
             delta = high - low
-        if delta is not None and delta > 1.0:  # sensor in mV
-            delta /= 1000
         if delta is not None and delta >= warn:
             worst = ""
             if cells:

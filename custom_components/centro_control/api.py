@@ -224,11 +224,20 @@ class ConfigView(_Admin):
         await hass.async_add_executor_job(_write, backup, current_config(hass))
 
         applied = []
+        imported: dict[str, int] = {}
         for item in wanted:
             entry = await self._entry_for(hass, item)
             await self._apply(hass, entry, item)
             applied.append(entry.entry_id)
-        return self.json({"ok": True, "copia": str(backup), "entradas": applied, "avisos": warnings})
+            manager = getattr(entry, "runtime_data", None)
+            if manager is None:
+                continue
+            if body.get("reiniciar_contadores"):
+                manager.reset_counters()
+                manager.imported = False
+            if days := int(body.get("importar_historico") or 0):
+                imported[entry.entry_id] = await manager.async_import_history(min(days, 800))
+        return self.json({"ok": True, "copia": str(backup), "entradas": applied, "avisos": warnings, "dias_importados": imported})
 
     async def _entry_for(self, hass: HomeAssistant, item: dict[str, Any]) -> ConfigEntry:
         entries = hass.config_entries.async_entries(DOMAIN)

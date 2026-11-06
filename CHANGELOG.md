@@ -8,6 +8,20 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.2.0] - 2026-11-06
+
+### Añadido
+- La API de configuración acepta `"reiniciar_contadores": true` y
+  `"importar_historico": <días>` para empezar de cero y rellenar el histórico
+  con las estadísticas de Home Assistant tras aplicar un plan.
+
+### Corregido
+- Detección de Gas TUR: «factura» ya no se confunde con «previsión de
+  factura» ni con «consumo de la factura».
+- Diferencia de celdas en mV por debajo de 1 mV.
+- Los sensores del propio Centro de Control no entran en las listas
+  automáticas de temperaturas.
+
 ## [2.1.1] - 2026-11-06
 
 ### Corregido

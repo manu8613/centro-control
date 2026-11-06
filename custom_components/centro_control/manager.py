@@ -276,9 +276,10 @@ class CentroManager(DataUpdateCoordinator[None]):
             for entry in registry.entities.values():
                 if entry.platform != "gas_tur" or not entry.unique_id:
                     continue
-                for key in GAS_TUR_KEYS:
-                    if entry.unique_id.endswith(f"_{key}") and key not in found:
-                        found[key] = entry.entity_id
+                # Gas TUR unique ids are "<entry_id>_<key>" and entry ids have no "_".
+                key = entry.unique_id.split("_", 1)[1] if "_" in entry.unique_id else ""
+                if key in GAS_TUR_KEYS and key not in found:
+                    found[key] = entry.entity_id
         found.update({k: v for k, v in manual.items() if v})
         return found
 
@@ -751,7 +752,7 @@ class CentroManager(DataUpdateCoordinator[None]):
             if st.attributes.get("device_class") != device_class or st.entity_id in used or self._hidden(st.entity_id):
                 continue
             entry = registry.async_get(st.entity_id)
-            if entry is not None and entry.platform in WEATHER_PLATFORMS:
+            if entry is not None and (entry.platform in WEATHER_PLATFORMS or entry.platform == DOMAIN):
                 continue  # weather services: forecasts are not rooms
             if self.model.temp_excluded(f"{st.entity_id} {st.attributes.get('friendly_name', '')}"):
                 continue

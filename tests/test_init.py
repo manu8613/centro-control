@@ -327,9 +327,10 @@ async def test_api_inventory_and_configuration(hass: HomeAssistant, hass_client)
     assert body["simulado"] and "No existe sensor.no_existe" in body["avisos"]
     assert entry.options["precio_unico"] == 0.20  # nothing changed
 
-    resp = await client.post("/api/centro_control/configuracion", json=config)
+    resp = await client.post("/api/centro_control/configuracion", json={**config, "reiniciar_contadores": True, "importar_historico": 30})
     body = await resp.json()
     assert body["ok"], body
+    assert body["dias_importados"] == {entry.entry_id: 0}  # no recorder in this test
     await hass.async_block_till_done()
     assert entry.options["precio_unico"] == 0.3
     assert len(entry.subentries) == 6

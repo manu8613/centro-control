@@ -181,9 +181,11 @@ function Aplicar([string]$Ruta) {
   CopiaConfig
 
   Titulo "Aplicando"
-  $res = Pedir "POST" "/api/centro_control/configuracion" $raw -Espera 300 | ConvertFrom-Json
+  if ($plan.importar_historico) { Write-Host "  Importando el histórico de Home Assistant: puede tardar unos minutos..." }
+  $res = Pedir "POST" "/api/centro_control/configuracion" $raw -Espera 1800 | ConvertFrom-Json
   if (-not $res.ok) { Fallo "Home Assistant no lo aceptó: $($res | ConvertTo-Json -Depth 5)"; exit 1 }
   Ok "Aplicado. Copia en Home Assistant: $($res.copia)"
+  if ($res.dias_importados) { $res.dias_importados.PSObject.Properties | ForEach-Object { Ok "Histórico: $($_.Value) días importados" } }
   Comprobar
   Write-Host ""
   Write-Host "Para deshacer: .\centro-control.ps1 restaurar .\CentroControl\config_actual_$Sello.json" -ForegroundColor Cyan

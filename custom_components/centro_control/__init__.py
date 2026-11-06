@@ -36,6 +36,10 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async_setup_services(hass)
+    if hass.http is not None:
+        from .api import async_register_api
+
+        async_register_api(hass)
     return True
 
 

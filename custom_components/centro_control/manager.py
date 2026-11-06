@@ -112,6 +112,35 @@ GAS_TUR_KEYS = (
     "precio_m3",
     "factor_conversion",
 )
+WEATHER_PLATFORMS = frozenset(
+    {
+        "accuweather",
+        "aemet",
+        "bom",
+        "buienradar",
+        "environment_canada",
+        "ipma",
+        "met",
+        "met_eireann",
+        "meteo_france",
+        "meteoclimatic",
+        "metoffice",
+        "nws",
+        "open_meteo",
+        "openweathermap",
+        "pirateweather",
+        "smhi",
+        "tomorrowio",
+        "weatherflow",
+        "weatherflow_cloud",
+        "weatherkit",
+        "google_weather",
+        "meteoalarm",
+        "pvpc_hourly_pricing",
+        "forecast_solar",
+        "solcast_solar",
+    }
+)
 SIM_DEFAULTS: dict[str, float] = {
     "sim_potencia_p1": -1.0,  # -1 = same as the contract
     "sim_potencia_p2": -1.0,
@@ -716,10 +745,14 @@ class CentroManager(DataUpdateCoordinator[None]):
 
     def _auto_class(self, device_class: str) -> list[str]:
         used = self.model.energy_entities()
+        registry = er.async_get(self.hass)
         out = []
         for st in self.hass.states.async_all("sensor"):
             if st.attributes.get("device_class") != device_class or st.entity_id in used or self._hidden(st.entity_id):
                 continue
+            entry = registry.async_get(st.entity_id)
+            if entry is not None and entry.platform in WEATHER_PLATFORMS:
+                continue  # weather services: forecasts are not rooms
             if self.model.temp_excluded(f"{st.entity_id} {st.attributes.get('friendly_name', '')}"):
                 continue
             out.append(st.entity_id)

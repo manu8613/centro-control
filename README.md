@@ -25,7 +25,7 @@ evitado. Se configura entero desde la interfaz y crea el panel solo.
 | **Batería** | Carga total, flujo, energía almacenada, autonomía, cada batería y sus celdas una a una. |
 | **Consumos** | Total, consumo sin medir, ranking de circuitos y aparatos, tarjetas por grupo y gráfica apilada. |
 | **Problemas** | Críticos, avisos e información con el detalle de cada uno, estado de todas las fuentes e historial. |
-| **Coste** | Factura en curso línea a línea, previsión al cierre, las tres siguientes facturas y simulador «¿y si…?». |
+| **Coste** | Luz y gas juntos: total previsto, factura en curso de cada uno línea a línea, previsiones, las tres siguientes facturas de luz y simulador «¿y si…?». |
 | **CO₂** | CO₂ evitado, emitido por la red y el gas, huella neta, equivalencias en árboles y km, independencia energética. |
 | **Gas** | Consumo y coste (detecta [Gas TUR](https://github.com/manu8613/gas-tur) automáticamente) y gráficas. |
 | **Luces** | Encendidas, interior y exterior, sin conexión, control de cada luz y «Apagar todas». |
@@ -145,6 +145,29 @@ temperaturas y humedad de la casa · gas consumiéndose sin parar.
 
 Cada problema tiene que durar un tiempo antes de aparecer, para que una lectura
 suelta no dispare un aviso.
+
+## Configurar desde Windows con un token (opcional)
+
+Para configurarlo todo de una vez, o hacer copias y restaurarlas, la carpeta
+[`tools`](tools) trae `centro-control.ps1`. Pide la dirección de Home
+Assistant y un token de larga duración de un administrador (Perfil →
+Seguridad); el token no se guarda.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\centro-control.ps1 exportar      # solo lee: inventario + configuración actual
+powershell -ExecutionPolicy Bypass -File .\centro-control.ps1 aplicar .\plan.json
+powershell -ExecutionPolicy Bypass -File .\centro-control.ps1 restaurar .\CentroControl\config_actual_<fecha>.json
+powershell -ExecutionPolicy Bypass -File .\centro-control.ps1 comprobar
+```
+
+`aplicar` y `restaurar` hacen antes una **copia de seguridad completa** de
+Home Assistant y guardan la configuración actual, simulan el cambio, piden
+confirmación y al final comprueban que todo responde.
+
+Usan una API solo para administradores:
+`GET /api/centro_control/inventario`, `GET|POST /api/centro_control/configuracion`
+y `GET /api/centro_control/estado`. El formato de `plan.json` es el mismo que
+devuelve `GET /api/centro_control/configuracion`.
 
 ## Privacidad
 

@@ -1,888 +1,1082 @@
 /*
- * Centro de Control — panel propio para Home Assistant.
+ * Centro de Control — panel de Home Assistant.
  * Creado por manu8613 · https://github.com/manu8613/centro-control
- * Licencia Apache 2.0 (ver LICENSE y NOTICE).
+ * Licencia Apache 2.0 (conservar esta atribución en copias y derivados).
  *
- * Panel independiente: no necesita tarjetas de HACS. Lee los estados de
- * Home Assistant, pide el historial por websocket y dibuja todo en SVG.
+ * Panel autónomo (sin dependencias): HTML + CSS + SVG generados aquí.
+ * Las gráficas leen el historial de tus sensores originales, así que se
+ * conservan desde el primer día.
  */
 
 const C = {
   cyan: "#00e5ff", amber: "#ffc400", green: "#00e676", pink: "#ff4fd8", violet: "#b388ff",
   blue: "#40c4ff", orange: "#ff9100", red: "#ff1744", lime: "#c6ff00", gold: "#ffd740",
-  text: "#e6f7ff", muted: "#8fb3c9", line: "#1b2a44", dim: "#1d2d4a",
+  text: "#e6f7ff", muted: "#8fb3c9", line: "#1b2a44",
 };
-const PALETTE = [C.pink, C.violet, C.orange, C.blue, C.cyan, C.lime, C.gold, C.amber, C.green, C.red, "#ff8a80", "#82b1ff"];
+const PALETTE = [C.amber, C.pink, C.cyan, C.green, C.violet, C.orange, C.blue, C.lime, C.gold, C.red, "#ff8a80", "#82b1ff"];
 const PERIODS = { hoy: "Hoy", ayer: "Ayer", mes: "Este mes", factura: "Factura", ano: "Este año", total: "Total" };
 const TABS = [
-  ["resumen", "Puente de mando", "mdi:view-dashboard-variant", C.cyan],
-  ["red", "Red", "mdi:transmission-tower", C.cyan],
-  ["solar", "Solar", "mdi:solar-power-variant", C.amber],
-  ["bateria", "Batería", "mdi:home-battery", C.green],
-  ["consumos", "Consumos", "mdi:home-lightning-bolt", C.pink],
-  ["problemas", "Problemas", "mdi:alert-decagram", C.red],
-  ["coste", "Coste", "mdi:cash-multiple", C.gold],
-  ["co2", "CO₂", "mdi:leaf-circle", C.lime],
-  ["gas", "Gas", "mdi:fire", C.violet],
-  ["luces", "Luces", "mdi:lightbulb-group", C.gold],
-  ["clima", "Temperaturas", "mdi:thermometer", C.orange],
-  ["riego", "Riego", "mdi:sprinkler-variant", C.blue],
+  ["resumen", "Puente de mando", "mdi:view-dashboard-variant"],
+  ["red", "Red", "mdi:transmission-tower"],
+  ["solar", "Solar", "mdi:solar-power-variant"],
+  ["bateria", "Batería", "mdi:home-battery"],
+  ["consumos", "Consumos", "mdi:home-lightning-bolt"],
+  ["problemas", "Problemas", "mdi:alert-decagram"],
+  ["coste", "Coste", "mdi:cash-multiple"],
+  ["co2", "CO₂", "mdi:leaf-circle"],
+  ["gas", "Gas", "mdi:fire"],
+  ["luces", "Luces", "mdi:lightbulb-group"],
+  ["clima", "Temperaturas", "mdi:thermometer"],
+  ["riego", "Riego", "mdi:sprinkler-variant"],
 ];
 
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const n = (x, d = 1) => {
-  const v = Number(x);
-  if (x === null || x === undefined || x === "" || Number.isNaN(v)) return "—";
-  return v.toLocaleString("es-ES", { minimumFractionDigits: d, maximumFractionDigits: d });
-};
-const w = (x) => {
-  const v = Number(x);
-  if (x === null || x === undefined || Number.isNaN(v)) return "—";
-  return Math.abs(v) >= 1000 ? `${n(v / 1000, 2)} kW` : `${n(v, 0)} W`;
-};
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const niceStep = (span) => {
-  const raw = span / 4 || 1, mag = 10 ** Math.floor(Math.log10(raw));
-  return [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) || 10 * mag;
-};
+// ------------------------------------------------------------------ formatting
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const isNum = (v) => v !== null && v !== undefined && v !== "" && !isNaN(Number(v));
+const toNum = (v, d = null) => (isNum(v) ? Number(v) : d);
+function fmt(v, dec = 1) {
+  if (!isNum(v)) return "—";
+  return Number(v).toLocaleString("es-ES", { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function fmtW(w) {
+  if (!isNum(w)) return "—";
+  const v = Number(w);
+  return Math.abs(v) >= 1000 ? `${fmt(v / 1000, 2)} kW` : `${fmt(v, 0)} W`;
+}
+const eur = (v, d = 2) => (isNum(v) ? `${fmt(v, d)} €` : "—");
+const kwh = (v, d = 1) => (isNum(v) ? `${fmt(v, d)} kWh` : "—");
+function fmtDate(iso, withTime = false) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const p = (n) => String(n).padStart(2, "0");
+  return withTime ? `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}` : `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
+}
+const icon = (i, cls = "") => `<ha-icon class="${cls}" icon="${esc(i)}"></ha-icon>`;
 
+// ------------------------------------------------------------------ styles
+const CSS = `
+:host{display:block;min-height:100vh;color:${C.text};font-family:var(--paper-font-body1_-_font-family, "Segoe UI", Roboto, sans-serif);
+ background:radial-gradient(1200px 600px at 8% -10%, rgba(0,229,255,.16), transparent 60%),radial-gradient(900px 500px at 110% 0%, rgba(255,79,216,.10), transparent 60%),
+ repeating-linear-gradient(0deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),repeating-linear-gradient(90deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),
+ linear-gradient(180deg,#030712,#060d20)}
+*{box-sizing:border-box}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(3,8,20,.88);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
+.menu{display:none}.menu.show{display:block}
+.brand{display:flex;align-items:center;gap:8px;color:${C.cyan};font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:14px;white-space:nowrap;text-shadow:0 0 10px ${C.cyan}aa;margin-right:6px}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1}
+nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 11px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
+nav button ha-icon{--mdc-icon-size:18px}
+nav button:hover{color:${C.text};background:#0b1a30}
+nav button.on{color:${C.cyan};background:${C.cyan}14;box-shadow:inset 0 -2px ${C.cyan}}
+nav .badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;background:${C.red};color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 0 8px ${C.red}}
+nav .badge.warn{background:${C.amber};color:#221}
+main{padding:16px;max-width:1800px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start}
+.sec{display:grid;grid-template-columns:repeat(12,1fr);gap:10px;align-content:start}
+.sec.w2{grid-column:span 2}.sec.wall{grid-column:1/-1}
+@media(max-width:720px){.sec.w2{grid-column:span 1}}
+.card{--c:${C.cyan};position:relative;grid-column:span 12;background:linear-gradient(150deg,rgba(10,20,44,.92),rgba(3,8,20,.94));border:1px solid color-mix(in srgb,var(--c) 34%,transparent);
+ border-radius:16px;padding:12px 14px;font-size:13px;overflow:hidden;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 8%,transparent),0 0 22px color-mix(in srgb,var(--c) 14%,transparent),0 8px 24px rgba(0,0,0,.45)}
+.card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,transparent,var(--c),transparent)}
+.card.s6{grid-column:span 6}.card.s4{grid-column:span 4}.card.s3{grid-column:span 3}.card.s8{grid-column:span 8}
+.card.click{cursor:pointer;transition:transform .15s, box-shadow .15s}.card.click:hover{transform:translateY(-1px);box-shadow:0 0 30px color-mix(in srgb,var(--c) 30%,transparent)}
+.title{grid-column:span 12;color:var(--c,${C.cyan});padding:6px 2px 0}
+.title h2{margin:0;font-size:17px;text-transform:uppercase;letter-spacing:3px;font-weight:700;text-shadow:0 0 10px var(--c),0 0 22px color-mix(in srgb,var(--c) 40%,transparent);display:flex;gap:8px;align-items:center}
+.title p{margin:3px 0 0;color:${C.muted};font-size:12px}
+h3{margin:0 0 8px;font-size:13px;color:var(--c);letter-spacing:.6px;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+h3 ha-icon{--mdc-icon-size:16px}
+.kpi{display:flex;gap:12px;align-items:center}
+.kpi .ic{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;color:var(--c);background:color-mix(in srgb,var(--c) 15%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c) 35%,transparent)}
+.kpi .v{font-size:20px;font-weight:700;line-height:1.1}.kpi .l{color:${C.muted};font-size:11.5px;margin-top:3px}
+.big{font-size:34px;font-weight:800;color:var(--c);text-shadow:0 0 16px color-mix(in srgb,var(--c) 60%,transparent)}
+.muted{color:${C.muted}}.small{font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}td,th{padding:4px 5px;border-bottom:1px solid #12223a;text-align:left;vertical-align:top}
+th{color:${C.muted};font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px}td.r,th.r{text-align:right;white-space:nowrap}tr.tot td{color:${C.gold};font-weight:800;border-bottom:none;font-size:14px}
+.alert{padding:8px 10px;border-radius:9px;margin:6px 0;border-left:4px solid var(--a);background:color-mix(in srgb,var(--a) 13%,transparent);font-size:12.5px}
+.alert b{color:var(--a)}.alert .when{color:${C.muted};font-size:11px;margin-top:3px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{all:unset;cursor:pointer;padding:5px 11px;border-radius:14px;background:#0d1c33;color:${C.muted};font-size:12px;border:1px solid #16304f}
+.chip.on{background:var(--c);color:#031018;font-weight:700;box-shadow:0 0 12px var(--c)}
+.btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:12px;border:1px solid color-mix(in srgb,var(--c) 50%,transparent);color:var(--c);background:color-mix(in srgb,var(--c) 10%,transparent);font-weight:600;font-size:13px}
+.btn:hover{background:color-mix(in srgb,var(--c) 22%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c) 40%,transparent)}
+.btn.full{display:flex;width:100%}
+.bar{height:8px;border-radius:5px;background:#0d1c33;overflow:hidden}.bar>i{display:block;height:100%;border-radius:5px;background:var(--b,var(--c));box-shadow:0 0 8px var(--b,var(--c))}
+.row{display:flex;align-items:center;gap:10px;padding:5px 0}.row .n{flex:0 0 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .bar{flex:1}.row .x{flex:0 0 auto;text-align:right;min-width:72px;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:5px;background:#0d1c33;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer;border:none}
+.sim{display:grid;grid-template-columns:1fr 64px;gap:4px 10px;align-items:center;margin:6px 0}.sim label{font-size:12px;color:${C.muted};grid-column:1/-1}
+.sim b{text-align:right;font-variant-numeric:tabular-nums}
+svg text{font-family:inherit}
+.chart{position:relative;min-height:180px}.chart svg{width:100%;display:block}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:${C.muted};margin-top:4px}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:3px;border-radius:2px;display:inline-block}
+.tip{position:absolute;pointer-events:none;background:rgba(3,8,20,.95);border:1px solid #1d3557;border-radius:8px;padding:6px 8px;font-size:11px;white-space:nowrap;display:none;z-index:2}
+.loading{color:${C.muted};font-size:12px;padding:20px 0;text-align:center}
+.flow .ln{fill:none;stroke-width:2.2;stroke-dasharray:6 10;animation:dash var(--d,1.5s) linear infinite}
+@keyframes dash{to{stroke-dashoffset:-32}}
+.flow .node circle.ring{filter:drop-shadow(0 0 6px var(--c))}
+.pulse{animation:pulse 2s ease-in-out infinite}@keyframes pulse{50%{opacity:.45}}
+.light{display:flex;align-items:center;gap:10px}.light .ic{cursor:pointer}.light.on .ic{color:${C.gold};background:${C.gold}26;box-shadow:0 0 16px ${C.gold}88}
+.light.off .ic{color:#5c7089;background:#0d1c33;box-shadow:none}.light .grow{flex:1;min-width:0}
+.thermo{text-align:center}.thermo .ctr{display:flex;align-items:center;justify-content:center;gap:12px}
+.cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 14px}
+.cell{display:flex;align-items:center;gap:6px;font-size:11.5px;font-variant-numeric:tabular-nums}.cell .bar{flex:1;height:7px}
+.foot{grid-column:1/-1;text-align:center;color:${C.muted};font-size:12px;padding:14px}.foot a{color:${C.cyan}}
+.empty{color:${C.muted};font-size:13px;padding:6px 0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;background:var(--a);box-shadow:0 0 6px var(--a)}
+`;
+
+// ------------------------------------------------------------------ charts
+function niceMax(v) {
+  if (!(v > 0)) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (v <= m * p) return m * p;
+  return 10 * p;
+}
+function drawChart(el, series, opt) {
+  const W = el.clientWidth || 600, H = opt.height || 220, L = 46, R = 10, T = 10, B = 24;
+  const t0 = opt.start, t1 = opt.end;
+  const all = series.flatMap((s) => s.points.map((p) => p[1])).filter((v) => isNum(v));
+  let lo = Math.min(0, ...all), hi = Math.max(0, ...all);
+  if (opt.stacked) {
+    const sums = {};
+    series.forEach((s) => s.points.forEach(([t, v]) => (sums[t] = (sums[t] || 0) + Math.max(v, 0))));
+    hi = Math.max(hi, ...Object.values(sums));
+  }
+  if (opt.min !== undefined) lo = opt.min;
+  if (opt.max !== undefined) hi = opt.max;
+  if (hi === lo) hi = lo + 1;
+  let step = opt.max !== undefined && opt.min !== undefined ? (hi - lo) / 4 : niceMax((hi - lo) / 4);
+  if (opt.min === undefined) lo = Math.floor(lo / step) * step;
+  if (opt.max === undefined) hi = Math.ceil(hi / step) * step;
+  if (hi === lo) hi = lo + step;
+  const x = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R);
+  const y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  let s = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" height="${H}">`;
+  const nTicks = Math.round((hi - lo) / step);
+  for (let i = 0; i <= nTicks; i++) {
+    const v = lo + step * i;
+    s += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="${C.line}" stroke-dasharray="3 4"/>`;
+    s += `<text x="${L - 6}" y="${y(v) + 3}" text-anchor="end" fill="${C.muted}" font-size="10">${fmt(v, step < 1 ? (step < 0.1 ? 2 : 1) : 0)}</text>`;
+  }
+  const span = t1 - t0, day = 86400000;
+  const p2 = (n) => String(n).padStart(2, "0");
+  const label = (d) => (span <= 2 * day ? `${p2(d.getHours())}:${p2(d.getMinutes())}` : span <= 40 * day ? `${p2(d.getDate())}/${p2(d.getMonth() + 1)}` : d.toLocaleDateString("es-ES", { month: "short" }));
+  const slotTimes = opt.slots && opt.slots <= 24 ? (series.find((q) => q.points.length) || { points: [] }).points.map((p) => p[0]) : null;
+  const tickTimes = slotTimes && slotTimes.length ? slotTimes : Array.from({ length: 7 }, (_, i) => t0 + (span * i) / 6);
+  const every = Math.max(1, Math.ceil(tickTimes.length / 12));
+  tickTimes.forEach((t, i) => {
+    if (i % every) return;
+    s += `<text x="${x(t)}" y="${H - 6}" text-anchor="middle" fill="${C.muted}" font-size="10">${label(new Date(t))}</text>`;
+  });
+  if (lo < 0) s += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="#2d4a70"/>`;
+  const bars = series.filter((q) => q.type === "bar");
+  const base = {};
+  series.forEach((q) => {
+    const pts = q.points.filter((p) => isNum(p[1]) && p[0] >= t0 - 1 && p[0] <= t1 + 1);
+    if (!pts.length) return;
+    if (q.type === "bar") {
+      const n = bars.length, i = bars.indexOf(q);
+      const slot = (W - L - R) / Math.max(opt.slots || pts.length, 1);
+      const bw = Math.max(2, (slot * 0.8) / (opt.stacked ? 1 : n));
+      pts.forEach(([t, v]) => {
+        const b0 = opt.stacked ? base[t] || 0 : 0;
+        const x0 = x(t) - (slot * 0.8) / 2 + (opt.stacked ? 0 : i * bw);
+        const y0 = y(Math.max(v, 0) + b0), y1 = y(Math.min(v, 0) + b0);
+        s += `<rect x="${x0}" y="${Math.min(y0, y1)}" width="${bw}" height="${Math.max(Math.abs(y1 - y0), 1)}" rx="2" fill="${q.color}" opacity=".88"/>`;
+        if (opt.stacked) base[t] = b0 + Math.max(v, 0);
+      });
+      return;
+    }
+    let d = "";
+    pts.forEach(([t, v], k) => {
+      const yy = y(v);
+      d += k === 0 ? `M${x(t)},${yy}` : q.step ? `H${x(t)}V${yy}` : `L${x(t)},${yy}`;
+    });
+    if (q.type === "area") s += `<path d="${d}L${x(pts[pts.length - 1][0])},${y(Math.max(lo, 0))}L${x(pts[0][0])},${y(Math.max(lo, 0))}Z" fill="${q.color}" opacity=".16"/>`;
+    s += `<path d="${d}" fill="none" stroke="${q.color}" stroke-width="2" style="filter:drop-shadow(0 0 3px ${q.color})"/>`;
+  });
+  s += `<line class="cur" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="${C.muted}" stroke-dasharray="2 3" style="display:none"/></svg>`;
+  const legend = series.map((q) => `<span><i style="background:${q.color}"></i>${esc(q.name)}</span>`).join("");
+  el.innerHTML = s + `<div class="legend">${legend}</div><div class="tip"></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), cur = el.querySelector(".cur");
+  const unit = opt.unit || "";
+  svg.addEventListener("mousemove", (ev) => {
+    const r = svg.getBoundingClientRect();
+    const px = ((ev.clientX - r.left) / r.width) * W;
+    const t = t0 + ((px - L) / (W - L - R)) * (t1 - t0);
+    if (t < t0 || t > t1) return;
+    const rows = series.map((q) => {
+      let best = null;
+      for (const p of q.points) if (p[0] <= t + (opt.slots ? span / opt.slots / 2 : 0)) best = p;
+      return best && isNum(best[1]) ? `<div><span class="dot" style="--a:${q.color}"></span>${esc(q.name)}: <b>${fmt(best[1], opt.decimals ?? (Math.abs(best[1]) < 10 ? 2 : 0))} ${unit}</b></div>` : "";
+    });
+    const d = new Date(t);
+    tip.innerHTML = `<div class="muted">${span <= 2 * day ? d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : d.toLocaleDateString("es-ES")}</div>${rows.join("")}`;
+    tip.style.display = "block";
+    const left = Math.min(ev.clientX - r.left + 12, r.width - tip.offsetWidth - 4);
+    tip.style.left = `${left}px`;
+    tip.style.top = `8px`;
+    cur.setAttribute("x1", px);
+    cur.setAttribute("x2", px);
+    cur.style.display = "";
+  });
+  svg.addEventListener("mouseleave", () => {
+    tip.style.display = "none";
+    cur.style.display = "none";
+  });
+}
+
+function gauge(value, min, max, color, label, unit, size = 150) {
+  const v = toNum(value);
+  const f = v === null ? 0 : Math.max(0, Math.min(1, (v - min) / (max - min || 1)));
+  const R = 52, cx = 70, cy = 66, a0 = Math.PI * 0.85, a1 = Math.PI * 2.15;
+  const a = a0 + (a1 - a0) * f;
+  const pt = (ang) => [cx + R * Math.cos(ang), cy + R * Math.sin(ang)];
+  const [x0, y0] = pt(a0), [x1, y1] = pt(a1), [xa, ya] = pt(a);
+  const large = (a - a0) > Math.PI ? 1 : 0;
+  const ticks = Array.from({ length: 11 }, (_, i) => {
+    const t = a0 + ((a1 - a0) * i) / 10, [p, q] = [cx + (R + 9) * Math.cos(t), cy + (R + 9) * Math.sin(t)], [r, s] = [cx + (R + 5) * Math.cos(t), cy + (R + 5) * Math.sin(t)];
+    return `<line x1="${p}" y1="${q}" x2="${r}" y2="${s}" stroke="${i / 10 <= f ? color : "#1d2d4a"}" stroke-width="1.5"/>`;
+  }).join("");
+  return `<svg viewBox="0 0 140 120" style="width:100%;max-width:${size}px;display:block;margin:auto">
+  ${ticks}
+  <path d="M${x0},${y0} A${R},${R} 0 1 1 ${x1},${y1}" stroke="#14233b" stroke-width="10" fill="none" stroke-linecap="round"/>
+  ${f > 0.001 ? `<path d="M${x0},${y0} A${R},${R} 0 ${large} 1 ${xa},${ya}" stroke="${color}" stroke-width="10" fill="none" stroke-linecap="round" style="filter:drop-shadow(0 0 6px ${color})"/>` : ""}
+  <text x="70" y="70" text-anchor="middle" fill="${C.text}" font-size="21" font-weight="800">${v === null ? "—" : fmt(v, Math.abs(v) >= 100 ? 0 : 1)}</text>
+  <text x="70" y="86" text-anchor="middle" fill="${C.muted}" font-size="10">${esc(unit)}</text>
+  <text x="70" y="114" text-anchor="middle" fill="${C.muted}" font-size="11">${esc(label)}</text></svg>`;
+}
+
+// ------------------------------------------------------------------ the panel
 class CentroControlPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._tab = "resumen";
-    try { this._tab = localStorage.getItem("centro-control-tab") || "resumen"; } catch (e) { /* storage blocked */ }
-    this._hist = {};
-    this._busy = false;
-    this._timer = null;
+    this._tab = (location.hash || "").replace("#", "") || "resumen";
+    if (!TABS.some((t) => t[0] === this._tab)) this._tab = "resumen";
+    this._cards = new Map();
+    this._layoutKey = "";
+    this._cache = {};
+    this._busy = 0;
     this._last = 0;
+  }
+
+  set hass(h) {
+    this._hass = h;
+    if (this._menu) this._menu.hass = h;
+    this._schedule();
+  }
+  set narrow(n) {
+    this._narrow = n;
+    if (this._menu) {
+      this._menu.narrow = n;
+      this._menu.classList.toggle("show", !!n);
+    }
+  }
+  set panel(p) {
+    this.cfg = p?.config || {};
+    this._schedule(true);
+  }
+  set route(_r) {}
+
+  connectedCallback() {
+    if (this._built) return;
+    this._built = true;
+    const root = this.shadowRoot;
+    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><nav></nav></header><main><div class="grid"></div></main>`;
+    const holder = root.querySelector(".menu");
+    this._menu = document.createElement("ha-menu-button");
+    holder.appendChild(this._menu);
+    this._menu.hass = this._hass;
+    this._menu.narrow = this._narrow;
+    holder.classList.toggle("show", !!this._narrow);
+    this._grid = root.querySelector(".grid");
+    root.addEventListener("click", (e) => this._click(e));
+    root.addEventListener("change", (e) => this._change(e));
+    root.addEventListener("input", () => (this._busy = Date.now() + 2500));
+    window.addEventListener("hashchange", () => {
+      const t = location.hash.replace("#", "");
+      if (TABS.some((x) => x[0] === t) && t !== this._tab) this._go(t);
+    });
+    this._timer = setInterval(() => this._refreshCharts(), 60000);
+    this._schedule(true);
+  }
+  disconnectedCallback() {
+    clearInterval(this._timer);
     this._built = false;
   }
 
-  set panel(panel) { this._panel = panel; this._ctx = (panel && panel.config && panel.config.ctx) || {}; this._schedule(true); }
-  set narrow(v) { this._narrow = v; this.toggleAttribute("narrow", !!v); if (this._menu) this._menu.narrow = v; this._schedule(); }
-  set route(v) { this._route = v; }
-  set hass(hass) {
-    this._hass = hass;
-    if (this._menu) { this._menu.hass = hass; this._menu.narrow = this._narrow; }
-    this._schedule();
+  // ---------------------------------------------------------------- helpers
+  id(key) { return this.cfg.ids?.[key]; }
+  st(e) { return e ? this._hass?.states?.[e] : undefined; }
+  s(e) { return this.st(e)?.state; }
+  n(e, d = null) { return toNum(this.s(e), d); }
+  a(e, attr) { return this.st(e)?.attributes?.[attr]; }
+  S(key) { return this.s(this.id(key)); }
+  N(key, d = null) { return this.n(this.id(key), d); }
+  A(key, attr) { return this.a(this.id(key), attr); }
+  set_(k) { return this.cfg.settings?.[k]; }
+  name(e) { return this.a(e, "friendly_name") || (e || "").split(".").pop(); }
+  unit(e) { return this.a(e, "unit_of_measurement") || ""; }
+  watts(e) {
+    const v = this.n(e);
+    if (v === null) return null;
+    const u = this.unit(e);
+    return u === "kW" ? v * 1000 : u === "MW" ? v * 1e6 : v;
+  }
+  get period() { return this.S("periodo") || "hoy"; }
+  bucket(key, per = this.period) { return this.A(key, per); }
+
+  // ---------------------------------------------------------------- cards
+  card(k, html, { c = C.cyan, w = 12, click = null, cls = "" } = {}) {
+    const span = w === 12 ? "" : `s${w}`;
+    const attrs = click ? ` data-more="${esc(click)}"` : "";
+    return { k, html, c, cls: `card ${span} ${click ? "click" : ""} ${cls}`.trim(), attrs };
+  }
+  title(k, text, sub, ic, c = C.cyan) {
+    return { k, html: `<h2>${icon(ic)}${esc(text)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}`, c, cls: "title", attrs: "" };
+  }
+  kpi(k, entity, value, label, ic, c, w = 6, nav = null) {
+    const html = `<div class="kpi"${nav ? ` data-tab="${nav}"` : ""}><div class="ic">${icon(ic)}</div><div><div class="v">${value}</div><div class="l">${label}</div></div></div>`;
+    const card = this.card(k, html, { c, w, click: nav ? null : entity });
+    if (nav) card.cls += " click";
+    return card;
+  }
+  chartCard(k, title, c, spec, w = 12) {
+    return { k, html: `<h3>${icon("mdi:chart-timeline-variant")}${esc(title)}</h3><div class="chart" data-chart="${esc(k)}"><div class="loading">Cargando historial…</div></div>`, c, cls: `card ${w === 12 ? "" : "s" + w}`, attrs: "", chart: spec };
+  }
+  empty(k, text) {
+    return this.card(k, `<div class="empty">${icon("mdi:information-outline")} ${esc(text)}</div>`, { c: C.muted });
+  }
+  periodChips(k, c = C.cyan) {
+    const per = this.period, sel = this.id("periodo");
+    const chips = Object.entries(PERIODS).map(([v, l]) => `<button class="chip ${v === per ? "on" : ""}" data-select="${sel}" data-option="${v}">${l}</button>`).join("");
+    return this.card(k, `<h3>${icon("mdi:calendar-range")}Periodo</h3><div class="chips">${chips}</div>`, { c });
   }
 
-  connectedCallback() { this._schedule(true); }
-
-  // ------------------------------------------------------------------ data
-  id(key) { return (this._ctx.ids || {})[key]; }
-  st(id) { return id && this._hass ? this._hass.states[id] : undefined; }
-  val(id) { const s = this.st(id); return s ? s.state : undefined; }
-  num(id) { const s = this.st(id); if (!s) return null; const v = parseFloat(s.state); return Number.isNaN(v) ? null : v; }
-  attr(id, a) { const s = this.st(id); return s ? s.attributes[a] : undefined; }
-  k(key) { return this.num(this.id(key)); }
-  ka(key, a) { return this.attr(this.id(key), a); }
-  name(id) { return this.attr(id, "friendly_name") || (id || "").split(".").pop().replace(/_/g, " "); }
-  setting(key) { const v = (this._ctx.settings || {})[key]; return v === "" || v === null || v === undefined ? undefined : v; }
-  period() { return this.val(this.id("periodo")) || "hoy"; }
-
-  // ------------------------------------------------------------------ render loop
-  _schedule(now = false) {
-    if (!this._hass || !this._ctx) return;
-    if (!this._built) { this._build(); }
-    const wait = now ? 0 : Math.max(0, 1500 - (Date.now() - this._last));
-    if (this._timer) return;
-    this._timer = setTimeout(() => { this._timer = null; this._render(); }, wait);
-  }
-
-  _build() {
-    this._built = true;
-    const root = this.shadowRoot;
-    root.innerHTML = `<style>${STYLE}</style>
-      <div class="app">
-        <header>
-          <div class="brand"><span class="menu"></span><ha-icon icon="mdi:atom-variant"></ha-icon><span class="title"></span><span class="clock"></span></div>
-          <nav></nav>
-        </header>
-        <main></main>
-        <footer></footer>
-      </div>`;
-    this._menu = document.createElement("ha-menu-button");
-    this._menu.hass = this._hass;
-    this._menu.narrow = this._narrow;
-    root.querySelector(".menu").appendChild(this._menu);
-    root.addEventListener("click", (ev) => this._click(ev));
-    root.addEventListener("change", (ev) => this._change(ev));
-    root.addEventListener("pointerdown", (ev) => { if (ev.target.matches("input")) this._busy = true; });
-    root.addEventListener("pointerup", () => { setTimeout(() => { this._busy = false; }, 300); });
+  // ---------------------------------------------------------------- render loop
+  _schedule(force = false) {
+    if (!this._built || !this._hass || !this.cfg) return;
+    if (force) this._force = true;
+    if (this._raf) return;
+    const wait = this._force ? 0 : Math.max(0, 1000 - (Date.now() - this._last));
+    this._raf = setTimeout(() => {
+      this._raf = null;
+      this._render();
+    }, wait);
   }
 
   _render() {
-    if (this._busy) { this._schedule(); return; }
+    if (!this._hass || !this.cfg) return;
+    if (!this._force && Date.now() < this._busy) {
+      this._schedule();
+      return;
+    }
+    this._force = false;
     this._last = Date.now();
     const root = this.shadowRoot;
-    const ctx = this._ctx;
-    root.querySelector(".title").textContent = (ctx.title || "Centro de Control").toUpperCase();
-    root.querySelector(".clock").textContent = new Date().toLocaleString("es-ES", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
-    const problems = this.ka("problemas", "lista") || [];
-    const crit = problems.filter((p) => p.nivel === "critico" && !p.reconocido).length;
-    root.querySelector("nav").innerHTML = TABS.map(([key, label, icon, color]) => {
-      const badge = key === "problemas" && problems.filter((p) => !p.reconocido).length
-        ? `<b class="badge" style="background:${crit ? C.red : C.amber}">${problems.filter((p) => !p.reconocido).length}</b>` : "";
-      return `<button class="tab ${key === this._tab ? "on" : ""}" data-action="tab" data-tab="${key}" style="--c:${color}"><ha-icon icon="${icon}"></ha-icon><span>${label}</span>${badge}</button>`;
+    root.querySelector(".brand .t").textContent = this.cfg.title || "Centro de Control";
+    const probs = this.A("problemas", "lista") || [];
+    const crit = probs.filter((p) => p.nivel === "critico" && !p.reconocido).length;
+    const warn = probs.filter((p) => p.nivel === "aviso" && !p.reconocido).length;
+    root.querySelector("nav").innerHTML = TABS.map(([k, l, ic]) => {
+      const badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
+      return `<button class="${k === this._tab ? "on" : ""}" data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
     }).join("");
-    const view = this[`v_${this._tab}`] ? this._tab : "resumen";
-    let html = "";
-    try { html = this[`v_${view}`](); } catch (e) { html = `<div class="card" style="--c:${C.red}">Error dibujando la pestaña: ${esc(e.message)}</div>`; console.error(e); }
-    const main = root.querySelector("main");
-    const scroll = main.scrollTop;
-    main.innerHTML = html;
-    main.scrollTop = scroll;
-    root.querySelector("footer").innerHTML = `<ha-icon icon="mdi:atom-variant"></ha-icon> Centro de Control v${esc(ctx.version || "")} · creado por <a href="${esc(ctx.author_url || "https://github.com/manu8613")}" target="_blank" rel="noopener">${esc(ctx.author || "manu8613")}</a> · <a href="${esc(ctx.repo_url || "")}" target="_blank" rel="noopener">código</a>`;
-  }
-
-  // ------------------------------------------------------------------ events
-  _fire(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true })); }
-  _call(domain, service, data) { return this._hass.callService(domain, service, data).catch((e) => alert(`No se pudo: ${e.message || e}`)); }
-
-  _click(ev) {
-    const el = ev.target.closest("[data-action]");
-    if (!el || el.matches("input")) return;
-    const a = el.dataset.action;
-    const entity = el.dataset.entity;
-    if (a === "tab") {
-      this._tab = el.dataset.tab;
-      try { localStorage.setItem("centro-control-tab", this._tab); } catch (e) { /* ignore */ }
-      this.shadowRoot.querySelector("main").scrollTop = 0;
-      this._render();
-    } else if (a === "more") {
-      if (entity) this._fire("hass-more-info", { entityId: entity });
-    } else if (a === "press") {
-      if (el.dataset.confirm && !confirm(el.dataset.confirm)) return;
-      this._call("button", "press", { entity_id: entity });
-    } else if (a === "toggle") {
-      const domain = entity.split(".")[0];
-      if (domain === "valve") this._call("valve", "toggle", { entity_id: entity });
-      else this._call("homeassistant", "toggle", { entity_id: entity });
-    } else if (a === "select") {
-      this._call("select", "select_option", { entity_id: entity, option: el.dataset.option });
-    } else if (a === "temp") {
-      const s = this.st(entity);
-      const cur = Number(s?.attributes?.temperature ?? 20);
-      const step = Number(s?.attributes?.target_temp_step || 0.5) * Number(el.dataset.step);
-      this._call("climate", "set_temperature", { entity_id: entity, temperature: cur + step });
+    let sections;
+    try {
+      sections = this["v_" + this._tab]();
+    } catch (err) {
+      console.error("Centro de Control", err);
+      sections = [{ cards: [this.empty("err", `Error al dibujar esta pestaña: ${err.message}`)] }];
     }
-    ev.stopPropagation();
-  }
-
-  _change(ev) {
-    const el = ev.target;
-    const a = el.dataset.action;
-    this._busy = false;
-    if (a === "number") this._call("number", "set_value", { entity_id: el.dataset.entity, value: Number(el.value) });
-    if (a === "bright") this._call("light", "turn_on", { entity_id: el.dataset.entity, brightness_pct: Number(el.value) });
-  }
-
-  // ------------------------------------------------------------------ history
-  history(ids, hours = 24) {
-    ids = ids.filter(Boolean);
-    const key = `${hours}|${ids.join(",")}`;
-    const cached = this._hist[key];
-    const fresh = cached && Date.now() - cached.at < 5 * 60 * 1000;
-    if (!fresh && !(cached && cached.loading)) {
-      this._hist[key] = { ...(cached || {}), loading: true, at: cached ? cached.at : 0 };
-      const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
-      this._hass.callWS({ type: "history/history_during_period", start_time: start, entity_ids: ids, minimal_response: true, no_attributes: true, significant_changes_only: false })
-        .then((res) => {
-          const data = {};
-          for (const id of ids) {
-            data[id] = (res[id] || []).map((p) => [1000 * (p.lu || p.lc || 0), parseFloat(p.s)]).filter((p) => !Number.isNaN(p[1]) && p[0] > 0);
+    sections.push({ cls: "wall", cards: [{ k: "foot", html: "", cls: "foot", attrs: "", c: C.muted, foot: true }] });
+    const layout = this._tab + "|" + sections.map((s) => (s.cls || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
+    if (layout !== this._layoutKey) {
+      this._layoutKey = layout;
+      this._cards.clear();
+      this._grid.innerHTML = sections
+        .map((s) => `<div class="sec ${s.cls || ""}">${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.attrs}></div>`).join("")}</div>`)
+        .join("");
+      this._grid.querySelectorAll("[data-k]").forEach((el) => this._cards.set(el.dataset.k, { el, html: null }));
+    }
+    for (const s of sections)
+      for (const c of s.cards) {
+        const slot = this._cards.get(c.k);
+        if (!slot) continue;
+        if (c.foot) {
+          if (slot.html === null) {
+            const cfg = this.cfg;
+            slot.el.innerHTML = `${icon("mdi:atom-variant")} Centro de Control v${esc(cfg.version)} · creado por <a href="${esc(cfg.author_url)}" target="_blank">${esc(cfg.author)}</a> · <a href="${esc(cfg.repo_url)}" target="_blank">código</a>`;
+            slot.html = "foot";
           }
-          this._hist[key] = { at: Date.now(), data, loading: false };
-          this._render();
-        })
-        .catch(() => { this._hist[key] = { at: Date.now(), data: {}, loading: false }; });
-    }
-    return (this._hist[key] && this._hist[key].data) || null;
-  }
-
-  // ------------------------------------------------------------------ building blocks
-  card(body, color = C.cyan, span = 1, cls = "") { return `<section class="card ${cls}" style="--c:${color};--span:${span}">${body}</section>`; }
-  head(text, icon, color = C.cyan, sub = "") {
-    return `<div class="head" style="--c:${color}"><ha-icon icon="${icon}"></ha-icon><div><h2>${esc(text)}</h2>${sub ? `<p>${esc(sub)}</p>` : ""}</div></div>`;
-  }
-  kpi(entity, value, label, icon, color, tab) {
-    const action = tab ? `data-action="tab" data-tab="${tab}"` : entity ? `data-action="more" data-entity="${entity}"` : "";
-    return `<div class="kpi" ${action} style="--c:${color}"><div class="ic"><ha-icon icon="${icon}"></ha-icon></div><div><div class="v">${value}</div><div class="l">${label}</div></div></div>`;
-  }
-  gauge(value, min, max, color, label, unit = "", entity) {
-    const f = clamp(((Number(value) || 0) - min) / ((max - min) || 1), 0, 1);
-    const a = Math.PI * (1 - f);
-    const x = 60 + 46 * Math.cos(a), y = 62 - 46 * Math.sin(a);
-    const v = value === null || value === undefined ? "—" : `${n(value, unit === "%" ? 0 : unit === "W" ? 0 : 1)}${unit ? " " + unit : ""}`;
-    return `<div class="gauge" ${entity ? `data-action="more" data-entity="${entity}"` : ""}><svg viewBox="0 0 120 84">
-      <path d="M14 62 A46 46 0 0 1 106 62" class="track"/>
-      <path d="M14 62 A46 46 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)}" stroke="${color}" class="arc"/>
-      <text x="60" y="57" class="gv">${v}</text><text x="60" y="78" class="gl">${esc(label)}</text></svg></div>`;
-  }
-  bar(v, max, color, width = 100) {
-    const p = max > 0 ? clamp((Number(v) || 0) / max, 0, 1) * 100 : 0;
-    return `<span class="bar" style="width:${width}%"><i style="width:${p}%;background:${color}"></i></span>`;
-  }
-  table(rows, head) {
-    const th = head ? `<tr>${head.map((h) => `<th>${h}</th>`).join("")}</tr>` : "";
-    return `<table>${th}${rows.map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`).join("")}</table>`;
-  }
-  alert(p) {
-    const color = p.nivel === "critico" ? C.red : p.nivel === "aviso" ? C.amber : C.blue;
-    const since = p.desde ? new Date(p.desde).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
-    return `<div class="alert" style="--c:${color}" ${p.entidad ? `data-action="more" data-entity="${p.entidad}"` : ""}>
-      <b>${esc(p.titulo)}${p.reconocido ? " ✓" : ""}</b><span>${esc(p.detalle)}</span><small>${esc(p.area)} · desde ${since}</small></div>`;
-  }
-  btn(entity, label, icon, color, confirmText) {
-    if (!entity) return "";
-    return `<button class="btn" style="--c:${color}" data-action="press" data-entity="${entity}" ${confirmText ? `data-confirm="${esc(confirmText)}"` : ""}><ha-icon icon="${icon}"></ha-icon>${esc(label)}</button>`;
-  }
-  slider(entity, label, color) {
-    const s = this.st(entity);
-    if (!s) return "";
-    const a = s.attributes;
-    return `<label class="slider" style="--c:${color}"><span>${esc(label)}</span>
-      <input type="range" min="${a.min}" max="${a.max}" step="${a.step}" value="${s.state}" data-action="number" data-entity="${entity}">
-      <b>${n(s.state, a.step < 1 ? 2 : 0)} ${esc(a.unit_of_measurement || "")}</b></label>`;
-  }
-  periodChips(color = C.cyan) {
-    const cur = this.period();
-    const ent = this.id("periodo");
-    return `<div class="chips" style="--c:${color}">${Object.entries(PERIODS).map(([k, l]) => `<button class="chip ${k === cur ? "on" : ""}" data-action="select" data-entity="${ent}" data-option="${k}">${l}</button>`).join("")}</div>`;
-  }
-  empty(text) { return `<div class="empty"><ha-icon icon="mdi:information-outline"></ha-icon>${esc(text)}</div>`; }
-
-  // ------------------------------------------------------------------ charts
-  lineChart(series, { hours = 24, height = 220, stacked = false, unit = "", width = 700 } = {}) {
-    const W = window.innerWidth < 760 ? 380 : width, H = height, pad = 34;
-    const end = Date.now(), start = end - hours * 3600 * 1000;
-    const step = hours <= 48 ? 5 * 60 * 1000 : 60 * 60 * 1000;
-    const buckets = Math.ceil((end - start) / step);
-    const resampled = series.map((s) => {
-      const out = new Array(buckets).fill(null);
-      const pts = s.points || [];
-      let j = 0, last = null;
-      for (let b = 0; b < buckets; b++) {
-        const t1 = start + (b + 1) * step;
-        let sum = 0, cnt = 0;
-        while (j < pts.length && pts[j][0] < t1) { if (pts[j][0] >= start + b * step) { sum += pts[j][1]; cnt++; } last = pts[j][1]; j++; }
-        out[b] = cnt ? sum / cnt : last;
+          continue;
+        }
+        if (c.chart) {
+          slot.spec = c.chart;
+          if (slot.html === null) {
+            slot.el.innerHTML = c.html;
+            slot.html = c.html;
+            this._drawChart(c.k, slot);
+          }
+          continue;
+        }
+        if (slot.html !== c.html) {
+          if (slot.el.contains(this.shadowRoot.activeElement) && Date.now() < this._busy) continue;
+          slot.el.innerHTML = c.html;
+          slot.html = c.html;
+        }
       }
-      return { ...s, values: out };
+  }
+
+  _go(tab) {
+    this._tab = tab;
+    history.replaceState(null, "", "#" + tab);
+    this._layoutKey = "";
+    this._schedule(true);
+    window.scrollTo({ top: 0 });
+  }
+
+  // ---------------------------------------------------------------- events
+  _fire(type, detail) {
+    this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
+  }
+  _click(e) {
+    const t = e.target.closest("[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
+    if (!t) return;
+    const d = t.dataset;
+    if (d.tab) return this._go(d.tab);
+    if (d.select) return this._hass.callService("select", "select_option", { entity_id: d.select, option: d.option });
+    if (d.press) {
+      if (d.confirm && !confirm(d.confirm)) return;
+      return this._hass.callService("button", "press", { entity_id: d.press });
+    }
+    if (d.toggle) {
+      const domain = d.toggle.split(".")[0];
+      return this._hass.callService(["light", "switch", "input_boolean", "fan", "valve"].includes(domain) ? domain : "homeassistant", "toggle", { entity_id: d.toggle });
+    }
+    if (d.temp) {
+      const cur = toNum(this.a(d.temp, "temperature"), 20);
+      return this._hass.callService("climate", "set_temperature", { entity_id: d.temp, temperature: Math.round((cur + Number(d.delta)) * 2) / 2 });
+    }
+    if (d.service) {
+      const [domain, service] = d.service.split(".");
+      return this._hass.callService(domain, service, JSON.parse(d.data || "{}"));
+    }
+    if (d.more) return this._fire("hass-more-info", { entityId: d.more });
+  }
+  _change(e) {
+    const t = e.target;
+    this._busy = Date.now() + 1500;
+    if (t.dataset.number) {
+      this._hass.callService("number", "set_value", { entity_id: t.dataset.number, value: Number(t.value) });
+    } else if (t.dataset.bright) {
+      this._hass.callService("light", "turn_on", { entity_id: t.dataset.bright, brightness_pct: Number(t.value) });
+    }
+  }
+
+  // ---------------------------------------------------------------- history
+  async _history(ids, hours) {
+    const key = ids.join(",") + "|" + hours;
+    const hit = this._cache[key];
+    if (hit && Date.now() - hit.t < 55000) return hit.data;
+    const end = new Date(), start = new Date(end - hours * 3600000);
+    const data = await this._hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      entity_ids: ids,
+      minimal_response: true,
+      no_attributes: true,
+      significant_changes_only: false,
     });
-    let lo = 0, hi = 0;
-    const stack = new Array(buckets).fill(0);
-    for (const s of resampled) {
-      s.values.forEach((v, i) => {
-        if (v === null) return;
-        const top = stacked ? (stack[i] += Math.max(v, 0)) : v;
-        hi = Math.max(hi, top); lo = Math.min(lo, v);
-      });
-    }
-    if (hi === lo) hi = lo + 1;
-    const stepY = niceStep(hi - lo);
-    lo = Math.floor(lo / stepY) * stepY; hi = Math.ceil(hi / stepY) * stepY;
-    const span = hi - lo;
-    const X = (i) => pad + (i / (buckets - 1)) * (W - pad - 6);
-    const Y = (v) => 8 + (1 - (v - lo) / span) * (H - 30);
-    let svg = `<svg viewBox="0 0 ${W} ${H}" class="chart">`;
-    for (let v = lo; v <= hi + stepY / 2; v += stepY) {
-      const y = Y(v);
-      svg += `<line x1="${pad}" x2="${W}" y1="${y}" y2="${y}" class="grid"/><text x="${pad - 4}" y="${y + 3}" class="ax" text-anchor="end">${Math.abs(v) >= 1000 ? n(v / 1000, 1) + "k" : n(v, span < 10 ? 1 : 0)}</text>`;
-    }
-    const ticks = hours <= 48 ? 6 : 7;
-    for (let t = 0; t <= ticks; t++) {
-      const time = new Date(start + (t / ticks) * (end - start));
-      const label = hours <= 48 ? time.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : time.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit" });
-      svg += `<text x="${X((t / ticks) * (buckets - 1))}" y="${H - 6}" class="ax" text-anchor="middle">${label}</text>`;
-    }
-    if (lo < 0) svg += `<line x1="${pad}" x2="${W}" y1="${Y(0)}" y2="${Y(0)}" class="zero"/>`;
-    const base = new Array(buckets).fill(0);
-    for (const s of resampled) {
-      let path = "", area = "", started = false, first = 0, lastI = 0;
-      s.values.forEach((v, i) => {
-        if (v === null) return;
-        const yv = stacked ? base[i] + Math.max(v, 0) : v;
-        const pt = `${X(i).toFixed(1)},${Y(yv).toFixed(1)}`;
-        if (!started) { first = i; path += `M${pt}`; started = true; } else path += `L${pt}`;
-        lastI = i;
-      });
-      if (!started) continue;
-      if (s.type === "area" || stacked) {
-        let back = "";
-        for (let i = lastI; i >= first; i--) back += `L${X(i).toFixed(1)},${Y(stacked ? base[i] : Math.max(lo, 0)).toFixed(1)}`;
-        area = `<path d="${path}${back}Z" fill="${s.color}" opacity="${stacked ? 0.35 : 0.18}"/>`;
-      }
-      if (stacked) s.values.forEach((v, i) => { if (v !== null) base[i] += Math.max(v, 0); });
-      svg += `${area}<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2" class="glow"/>`;
-    }
-    svg += `</svg>`;
-    const legend = resampled.map((s) => {
-      const lastV = [...s.values].reverse().find((v) => v !== null);
-      return `<span><i style="background:${s.color}"></i>${esc(s.name)} <b>${lastV === undefined ? "—" : n(lastV, Math.abs(lastV) < 10 ? 1 : 0)}${unit}</b></span>`;
-    }).join("");
-    return svg + `<div class="legend">${legend}</div>`;
+    this._cache[key] = { t: Date.now(), data };
+    return data;
   }
-
-  barChart(labels, series, { height = 200, unit = "", width = 700 } = {}) {
-    const W = window.innerWidth < 760 ? 380 : width, H = height, pad = 34;
-    const count = labels.length || 1;
-    let hi = 0;
-    for (const s of series) for (const v of s.values) hi = Math.max(hi, Number(v) || 0);
-    if (!hi) hi = 1;
-    const stepB = niceStep(hi);
-    hi = Math.ceil(hi / stepB) * stepB;
-    const slot = (W - pad - 6) / count, bw = (slot * 0.8) / series.length;
-    const Y = (v) => 8 + (1 - v / hi) * (H - 30);
-    let svg = `<svg viewBox="0 0 ${W} ${H}" class="chart">`;
-    for (let v = 0; v <= hi + stepB / 2; v += stepB) { svg += `<line x1="${pad}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" class="grid"/><text x="${pad - 4}" y="${Y(v) + 3}" class="ax" text-anchor="end">${n(v, hi < 10 ? 1 : 0)}</text>`; }
-    series.forEach((s, si) => {
-      s.values.forEach((v, i) => {
-        const x = pad + i * slot + slot * 0.1 + si * bw;
-        const y = Y(Number(v) || 0);
-        svg += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(bw - 1, 1).toFixed(1)}" height="${(H - 22 - y).toFixed(1)}" rx="2" fill="${s.color}" opacity=".88"><title>${esc(labels[i])} · ${esc(s.name)}: ${n(v, 2)}${unit}</title></rect>`;
-      });
-    });
-    const every = Math.ceil(count / 8);
-    labels.forEach((l, i) => { if (i % every === 0) svg += `<text x="${(pad + i * slot + slot / 2).toFixed(1)}" y="${H - 6}" class="ax" text-anchor="middle">${esc(l)}</text>`; });
-    svg += `</svg>`;
-    const legend = series.map((s) => `<span><i style="background:${s.color}"></i>${esc(s.name)} <b>${n(s.values.reduce((a, b) => a + (Number(b) || 0), 0), 1)}${unit}</b></span>`).join("");
-    return svg + `<div class="legend">${legend}</div>`;
-  }
-
-  live(title, defs, opts = {}) {
-    const ids = defs.map((d) => d.entity).filter(Boolean);
-    const data = this.history(ids, opts.hours || 24);
-    const body = data
-      ? this.lineChart(defs.map((d) => ({ ...d, points: (data[d.entity] || []).map(([t, v]) => [t, (d.scale || 1) * v]) })), opts)
-      : `<div class="loading">Cargando historial…</div>`;
-    return `<h3>${esc(title)}</h3>${body}`;
-  }
-
-  daily(title, fields, days = 30, width = 700) {
-    const rows = (this.ka("historico", "dias") || []).slice(-days);
-    if (!rows.length) return `<h3>${esc(title)}</h3>${this.empty("El histórico diario aparece a partir de mañana (o importando el de Home Assistant).")}`;
-    const labels = rows.map((r) => r.fecha.slice(8, 10) + "/" + r.fecha.slice(5, 7));
-    return `<h3>${esc(title)}</h3>${this.barChart(labels, fields.map(([k, name, color]) => ({ name, color, values: rows.map((r) => r[k] || 0) })), { unit: fields[0][3] || "", width })}`;
-  }
-
-  monthly(title, fields, months = 12, width = 700) {
-    const rows = (this.ka("historico", "meses") || []).slice(-months);
-    if (!rows.length) return "";
-    const names = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-    const labels = rows.map((r) => names[Number(r.mes.slice(5, 7)) - 1] + " " + r.mes.slice(2, 4));
-    return `<h3>${esc(title)}</h3>${this.barChart(labels, fields.map(([k, name, color]) => ({ name, color, values: rows.map((r) => r[k] || 0) })), { unit: fields[0][3] || "", width })}`;
-  }
-
-  // ------------------------------------------------------------------ flow diagram
-  flow() {
-    const pv = Math.max(this.k("potencia_solar") || 0, 0);
-    const grid = this.k("potencia_red") || 0;
-    const bat = this.k("potencia_bateria") || 0;
-    const load = Math.max(this.k("potencia_consumo") || 0, 0);
-    const hasPv = (this._ctx.strings || []).length || this.setting("solar_potencia");
-    const hasBat = (this._ctx.batteries || []).length;
-    const imp = Math.max(grid, 0), exp = Math.max(-grid, 0), dis = Math.max(bat, 0), chg = Math.max(-bat, 0);
-    const s2g = Math.min(pv, exp), s2b = Math.min(pv - s2g, chg), s2h = Math.max(pv - s2g - s2b, 0);
-    const g2b = Math.max(chg - s2b, 0), g2h = Math.max(imp - g2b, 0);
-    const P = { s: [300, 64], g: [96, 200], b: [504, 200], h: [300, 312] };
-    const line = (a, b, v, color, id) => {
-      const [x1, y1] = P[a], [x2, y2] = P[b];
-      const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
-      const d = `M${x1},${y1} Q${mx + (y2 - y1) * 0.12},${my - (x2 - x1) * 0.12} ${x2},${y2}`;
-      const on = v > 5;
-      const dur = on ? clamp(6 - Math.log10(v + 1) * 1.4, 0.8, 5).toFixed(2) : 0;
-      return `<path id="${id}" d="${d}" class="fl ${on ? "on" : ""}" stroke="${color}"/>` +
-        (on ? [0, 0.33, 0.66].map((o) => `<circle r="4" fill="${color}" class="dot"><animateMotion dur="${dur}s" begin="-${(o * dur).toFixed(2)}s" repeatCount="indefinite"><mpath href="#${id}"/></animateMotion></circle>`).join("") : "");
-    };
-    const node = (key, color, icon, label, value, sub, entity) => {
-      const [x, y] = P[key];
-      return `<g class="node" data-action="more" data-entity="${entity || ""}" style="--c:${color}">
-        <circle cx="${x}" cy="${y}" r="44" class="ring"/><circle cx="${x}" cy="${y}" r="38" class="core"/>
-        <foreignObject x="${x - 14}" y="${y - 30}" width="28" height="28"><ha-icon icon="${icon}" style="color:${color};--mdc-icon-size:26px"></ha-icon></foreignObject>
-        <text x="${x}" y="${y + 10}" class="nv">${value}</text><text x="${x}" y="${y + 25}" class="ns">${sub}</text>
-        <text x="${x}" y="${y + 62}" class="nl">${label}</text></g>`;
-    };
-    let svg = `<svg viewBox="0 0 600 390" class="flow">`;
-    if (hasPv) { svg += line("s", "h", s2h, C.amber, "f1"); svg += line("s", "g", s2g, C.amber, "f2"); }
-    if (hasPv && hasBat) svg += line("s", "b", s2b, C.amber, "f3");
-    svg += line("g", "h", g2h, C.cyan, "f4");
-    if (hasBat) { svg += line("b", "h", dis, C.green, "f5"); svg += line("g", "b", g2b, C.cyan, "f6"); }
-    if (hasPv) svg += node("s", C.amber, "mdi:solar-power-variant", "Solar", w(pv), `${n(this.k("energia_solar"), 1)} kWh hoy`, this.id("potencia_solar"));
-    svg += node("g", C.cyan, "mdi:transmission-tower", grid > 5 ? "Red · importando" : grid < -5 ? "Red · vertiendo" : "Red", w(Math.abs(grid)), `${n(this.k("precio_actual"), 3)} €/kWh`, this.id("potencia_red"));
-    if (hasBat) svg += node("b", C.green, "mdi:home-battery", bat < -5 ? "Batería · cargando" : bat > 5 ? "Batería · descargando" : "Batería", w(Math.abs(bat)), `${n(this.k("soc_bateria"), 0)} %`, this.id("potencia_bateria"));
-    svg += node("h", C.pink, "mdi:home-lightning-bolt", "Casa", w(load), `${n(this.k("autosuficiencia_ahora"), 0)} % propio`, this.id("potencia_consumo"));
-    svg += `</svg>`;
-    const circuits = (this.ka("potencia_consumo", "circuitos") || []).filter((c) => c.en_total !== false).slice(0, 6);
-    const chips = circuits.map((c, i) => `<span class="pill" style="--c:${PALETTE[i % PALETTE.length]}" data-action="tab" data-tab="consumos"><ha-icon icon="${esc(c.icono)}"></ha-icon>${esc(c.nombre)} <b>${w(c.w)}</b></span>`).join("");
-    return svg + (chips ? `<div class="pills">${chips}</div>` : "");
-  }
-
-  // ================================================================== views
-  v_resumen() {
-    const per = this.period();
-    const problems = this.ka("problemas", "lista") || [];
-    const open = problems.filter((p) => !p.reconocido);
-    const crit = open.filter((p) => p.nivel === "critico").length;
-    const status = crit ? `<span style="color:${C.red}">◉ ${crit} crítico${crit > 1 ? "s" : ""}</span>` : open.length ? `<span style="color:${C.amber}">◉ ${open.length} aviso${open.length > 1 ? "s" : ""}</span>` : `<span style="color:${C.green}">◉ Todo en orden</span>`;
-    const grid = this.k("potencia_red") || 0, bat = this.k("potencia_bateria") || 0;
-    const kpis = [
-      this.kpi(this.id("potencia_solar"), w(this.k("potencia_solar")), `Solar · ${n(this.k("energia_solar"), 1)} kWh hoy`, "mdi:solar-power-variant", C.amber, "solar"),
-      this.kpi(this.id("potencia_consumo"), w(this.k("potencia_consumo")), `Consumo · ${n(this.k("energia_consumo"), 1)} kWh hoy`, "mdi:home-lightning-bolt", C.pink, "consumos"),
-      this.kpi(this.id("potencia_red"), `${w(Math.abs(grid))} ${grid > 5 ? "↓" : grid < -5 ? "↑" : ""}`, grid > 5 ? "Importando de la red" : grid < -5 ? "Vertiendo a la red" : "Red en reposo", "mdi:transmission-tower", C.cyan, "red"),
-      (this._ctx.batteries || []).length ? this.kpi(this.id("soc_bateria"), `${n(this.k("soc_bateria"), 0)} %`, `Batería · ${bat > 30 ? "descarga " + w(bat) : bat < -30 ? "carga " + w(-bat) : "en reposo"}`, "mdi:battery-charging-high", C.green, "bateria") : "",
-      this.kpi(this.id("autosuficiencia_ahora"), `${n(this.k("autosuficiencia_ahora"), 0)} %`, `Autosuficiencia · hoy ${n(this.k("autosuficiencia"), 0)} %`, "mdi:shield-sun", C.lime, "co2"),
-      this.kpi(this.id("coste_energia"), `${n(this.k("coste_energia"), 2)} €`, `Coste hoy · ahorro solar ${n(this.ka("ahorro_solar", "hoy"), 2)} €`, "mdi:currency-eur", C.gold, "coste"),
-    ].join("");
-    const at = (key) => this.ka(key, per);
-    const co2 = (this.ka("co2_evitado", per) || {}).evitado_kg;
-    const summary = this.table([
-      [`<span style="color:${C.amber}">☀ Producción</span>`, `<b>${n(at("energia_solar"), 2)} kWh</b>`],
-      [`<span style="color:${C.pink}">⌂ Consumo</span>`, `<b>${n(at("energia_consumo"), 2)} kWh</b>`],
-      [`<span style="color:${C.cyan}">↓ Importado</span>`, `${n(at("energia_importada"), 2)} kWh`],
-      [`<span style="color:${C.cyan}">↑ Vertido</span>`, `${n(at("energia_exportada"), 2)} kWh`],
-      [`<span style="color:${C.gold}">€ Coste energía</span>`, `${n(at("coste_energia"), 2)} €`],
-      [`<span style="color:${C.gold}">€ Ahorro solar</span>`, `${n(at("ahorro_solar"), 2)} €`],
-      [`<span style="color:${C.lime}">♻ CO₂ evitado</span>`, `${n(co2, 1)} kg`],
-    ]);
-    const chart = [
-      { entity: this.id("potencia_solar"), name: "Solar", color: C.amber, type: "area" },
-      { entity: this.id("potencia_consumo"), name: "Consumo", color: C.pink },
-      { entity: this.id("potencia_red"), name: "Red", color: C.cyan },
-    ];
-    if ((this._ctx.batteries || []).length) chart.push({ entity: this.id("potencia_bateria"), name: "Batería", color: C.green });
-    return `<div class="grid">
-      ${this.card(`<div class="hero"><div><h1>${esc((this._ctx.title || "").toUpperCase())}</h1><p>Periodo ${esc(this.val(this.id("periodo_tarifario")) || "—")} · ${n(this.k("precio_actual"), 4)} €/kWh · ${status}</p></div></div>${this.flow()}`, C.cyan, 2, "tall")}
-      <div class="stack" style="--span:1"><div class="kpis">${kpis}</div>
-        ${this.card(`<h3>${PERIODS[per]}</h3>${this.periodChips()}${summary}`, C.cyan)}</div>
-      ${this.card(`<h3 data-action="tab" data-tab="problemas" class="link">Alertas</h3>${open.length ? open.slice(0, 4).map((p) => this.alert(p)).join("") + (open.length > 4 ? `<p class="muted">… y ${open.length - 4} más</p>` : "") : `<div class="ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon>Sin problemas detectados</div>`}`, open.length ? (crit ? C.red : C.amber) : C.green)}
-      ${this.card(this.live("Últimas 24 h (W)", chart, { unit: " W" }), C.cyan, 2)}
-      ${this.card(this.daily("Últimos 30 días (kWh)", [["solar", "Solar", C.amber, " kWh"], ["consumo", "Consumo", C.pink], ["importada", "De la red", C.cyan]]), C.cyan, 2)}
-      </div>`;
-  }
-
-  v_red() {
-    const per = this.period();
-    const price = this.setting("precio_modo") === "sensor" ? this.setting("precio_sensor") : null;
-    let priceChart = "";
-    if (price) {
-      const a = (this.st(price) || {}).attributes || {};
-      const labels = [], today = [], tomorrow = [];
-      for (let h = 0; h < 24; h++) {
-        const k = String(h).padStart(2, "0");
-        labels.push(`${k}h`); today.push(a[`price_${k}h`] ?? null); tomorrow.push(a[`price_next_day_${k}h`] ?? null);
-      }
-      if (today.some((v) => v !== null)) {
-        const series = [{ name: "Hoy", color: C.gold, values: today.map((v) => v || 0) }];
-        if (tomorrow.some((v) => v !== null)) series.push({ name: "Mañana", color: C.orange, values: tomorrow.map((v) => v || 0) });
-        priceChart = this.card(`<h3>Precio por horas (€/kWh)</h3>${this.barChart(labels, series, { unit: " €" })}`, C.gold, 2);
-      }
-    }
-    const extra = [["red_tension", "Tensión", "mdi:sine-wave", "V", 1], ["red_frecuencia", "Frecuencia", "mdi:waveform", "Hz", 2]]
-      .filter(([k]) => this.setting(k)).map(([k, l, i, u, d]) => this.kpi(this.setting(k), `${n(this.num(this.setting(k)), d)} ${u}`, l, i, C.cyan)).join("");
-    return `<div class="grid">
-      ${this.card(`${this.head("Red eléctrica", "mdi:transmission-tower", C.cyan, "Importación, vertido y potencia contratada")}
-        <div class="row">${this.gauge(this.k("uso_potencia_contratada"), 0, 110, C.cyan, `de ${n(this.ka("uso_potencia_contratada", "contratada_kw"), 2)} kW contratados`, "%", this.id("uso_potencia_contratada"))}</div>
-        <div class="kpis">${this.kpi(this.id("potencia_importada"), w(this.k("potencia_importada")), "Importando", "mdi:transmission-tower-import", C.cyan)}
-        ${this.kpi(this.id("potencia_exportada"), w(this.k("potencia_exportada")), "Vertiendo", "mdi:transmission-tower-export", C.lime)}
-        ${this.kpi(this.id("precio_actual"), `${n(this.k("precio_actual"), 4)} €`, `Precio · periodo ${esc(this.val(this.id("periodo_tarifario")) || "—")}`, "mdi:cash-clock", C.gold)}
-        ${this.kpi(this.id("precio_excedentes"), `${n(this.k("precio_excedentes"), 4)} €`, "Precio excedentes", "mdi:cash-plus", C.lime)}${extra}</div>`, C.cyan)}
-      ${this.card(`<h3>${PERIODS[per]}</h3>${this.periodChips()}${this.table([
-        ["Energía", `<b>${n(this.ka("energia_importada", per), 2)} kWh</b>`, `<b>${n(this.ka("energia_exportada", per), 2)} kWh</b>`],
-        ["Importe", `${n(this.ka("coste_energia", per), 2)} €`, `${n(this.ka("compensacion_excedentes", per), 2)} €`]], ["", "Importado", "Vertido"])}`, C.cyan)}
-      ${this.card(this.live("Red 24 h (W)", [{ entity: this.id("potencia_importada"), name: "Importado", color: C.cyan, type: "area" }, { entity: this.id("potencia_exportada"), name: "Vertido", color: C.lime, type: "area" }], { unit: " W" }), C.cyan, 2)}
-      ${priceChart}
-      ${this.card(this.daily("Últimos 30 días (kWh)", [["importada", "Importado", C.cyan, " kWh"], ["exportada", "Vertido", C.lime]]), C.cyan, 2)}
-    </div>`;
-  }
-
-  v_solar() {
-    const strings = this._ctx.strings || [];
-    if (!strings.length && !this.setting("solar_potencia")) return `<div class="grid">${this.card(this.empty("Añade la potencia solar en Configurar → Solar, o cada string con «Añadir string»."), C.amber, 4)}</div>`;
-    const peak = Number(this.setting("solar_pico_wp")) || strings.reduce((a, s) => a + (Number(s.peak_wp) || 0), 0) || 5000;
-    const fc = this.setting("solar_prevision_hoy");
-    const live = this.ka("potencia_solar", "strings") || [];
-    const maxY = Math.max(1, ...live.map((s) => (s.wp && s.w ? (1000 * s.w) / s.wp : 0)));
-    const stringCards = strings.map((s, i) => {
-      const l = live.find((x) => x.id === s.id) || {};
-      const yieldKw = l.wp ? (1000 * (l.w || 0)) / l.wp : null;
-      return `<div class="string" data-action="more" data-entity="${s.power}" style="--c:${[C.amber, C.orange, C.gold, C.lime][i % 4]}">
-        <div class="sn"><ha-icon icon="mdi:solar-panel"></ha-icon><b>${esc(s.name)}</b><small>${esc(l.grupo || "")}</small></div>
-        <div class="sv">${w(l.w)}</div>
-        <div class="muted">${l.v !== null && l.v !== undefined ? n(l.v, 0) + " V · " : ""}${l.a !== null && l.a !== undefined ? n(l.a, 1) + " A · " : ""}${n(l.kwh_hoy, 2)} kWh hoy</div>
-        ${l.wp ? `${this.bar(l.w, l.wp, "var(--c)")}<div class="muted">${n(l.pct, 0)} % de ${n(l.wp, 0)} Wp · ${n(yieldKw, 0)} W/kWp</div>` : ""}
-        ${strings.length > 1 && yieldKw !== null ? `<div class="cmp">${this.bar(yieldKw, maxY, "var(--c)")}</div>` : ""}</div>`;
-    }).join("");
-    const inv = [["inversor_temperatura", "Inversor", "mdi:thermometer"], ["inversor_temperatura_dc", "Inversor DC", "mdi:thermometer-high"]]
-      .filter(([k]) => this.setting(k)).map(([k, l, i]) => this.kpi(this.setting(k), `${n(this.num(this.setting(k)), 1)} °C`, l, i, C.orange)).join("")
-      + [["inversor_estado", "Estado"], ["inversor_fallo", "Fallo"], ["inversor_alarma", "Alarma"]]
-        .filter(([k]) => this.setting(k)).map(([k, l]) => this.kpi(this.setting(k), esc(this.val(this.setting(k)) ?? "—"), l, "mdi:information-outline", C.orange)).join("");
-    return `<div class="grid">
-      ${this.card(`${this.head("Paneles solares", "mdi:solar-power-variant", C.amber, `${n(peak, 0)} Wp instalados`)}
-        <div class="row">${this.gauge(this.k("potencia_solar"), 0, peak, C.amber, "Producción ahora", "W", this.id("potencia_solar"))}</div>
-        <div class="kpis">${this.kpi(this.id("energia_solar"), `${n(this.k("energia_solar"), 2)} kWh`, `Hoy · mes ${n(this.ka("energia_solar", "mes"), 0)} kWh`, "mdi:solar-power-variant-outline", C.amber)}
-        ${this.kpi(this.id("potencia_solar"), `${n(this.ka("potencia_solar", "rendimiento_pct"), 0)} %`, "Rendimiento sobre el pico", "mdi:speedometer", C.amber)}
-        ${this.kpi(this.id("autoconsumo"), `${n(this.k("autoconsumo"), 0)} %`, `Autoconsumo hoy · mes ${n(this.ka("autoconsumo", "mes"), 0)} %`, "mdi:home-import-outline", C.lime)}
-        ${fc ? this.kpi(fc, `${n(this.num(fc), 1)} kWh`, `Previsión hoy · llevas ${n((100 * (this.k("energia_solar") || 0)) / Math.max(this.num(fc) || 0.01, 0.01), 0)} %`, "mdi:weather-sunny-alert", C.amber) : ""}</div>`, C.amber)}
-      ${this.card(`<h3>Strings</h3>${stringCards ? `<div class="strings">${stringCards}</div>` : this.empty("Sin strings: añádelos con «Añadir string».")}${inv ? `<h3>Inversor</h3><div class="kpis">${inv}</div>` : ""}`, C.amber)}
-      ${strings.length ? this.card(this.live("Strings 24 h (W)", strings.map((s, i) => ({ entity: s.power, name: s.name, color: [C.amber, C.orange, C.gold, C.lime, C.pink, C.cyan][i % 6] })), { unit: " W" }), C.amber, 2) : ""}
-      ${this.card(this.daily("Producción 30 días (kWh)", [["solar", "Solar", C.amber, " kWh"]]), C.amber, 2)}
-      ${this.card(this.monthly("Producción por meses (kWh)", [["solar", "Solar", C.amber, " kWh"]]), C.amber, 2)}
-    </div>`;
-  }
-
-  v_bateria() {
-    const bats = this._ctx.batteries || [];
-    if (!bats.length) return `<div class="grid">${this.card(this.empty("Añade tus baterías en la integración → «Añadir batería»."), C.green, 4)}</div>`;
-    const b = this.k("potencia_bateria") || 0;
-    const h = this.k("autonomia_bateria");
-    const per = bats.map((bt) => {
-      const sign = bt.positive_charge ? -1 : 1;
-      const pw = sign * (this.num(bt.power) || 0);
-      const cells = (bt.cells || []).map((c) => this.num(c)).filter((v) => v !== null && v > 1);
-      let cellHtml = "";
-      if (cells.length) {
-        const lo = Math.min(...cells), hi = Math.max(...cells);
-        const span = Math.max(hi - lo, 0.005) + 0.02;
-        cellHtml = `<h3>Celdas · Δ ${n((hi - lo) * 1000, 0)} mV</h3><div class="cells">${cells.map((v, i) => {
-          const color = v < 3.0 || v > 3.6 ? C.red : v < 3.2 || v > 3.45 ? C.amber : C.green;
-          const mark = v === lo ? " ▼" : v === hi ? " ▲" : "";
-          return `<div class="cell" data-action="more" data-entity="${bt.cells[i]}"><span>${String(i + 1).padStart(2, "0")}</span>${this.bar(v - lo + 0.01, span, color)}<b style="color:${color}">${n(v, 3)} V${mark}</b></div>`;
-        }).join("")}</div>`;
-      }
-      const extra = [["voltage", "Tensión", "mdi:sine-wave", "V", 2], ["current", "Corriente", "mdi:current-dc", "A", 1], ["cycles", "Ciclos", "mdi:autorenew", "", 0]]
-        .filter(([k]) => bt[k]).map(([k, l, i, u, d]) => this.kpi(bt[k], `${n(this.num(bt[k]), d)} ${u}`, l, i, C.green)).join("")
-        + (bt.temperatures || []).map((t) => this.kpi(t, `${n(this.num(t), 1)} °C`, esc(this.name(t)), "mdi:thermometer", C.orange)).join("");
-      return this.card(`${this.head(bt.name, "mdi:battery-outline", C.green)}<div class="row">${this.gauge(this.num(bt.soc), 0, 100, C.green, "SOC", "%", bt.soc)}</div>
-        <div class="kpis">${this.kpi(bt.power, w(Math.abs(pw)), pw > 30 ? "Descargando" : pw < -30 ? "Cargando" : "En reposo", "mdi:flash", C.green)}${extra}</div>${cellHtml}`, C.green);
-    }).join("");
-    return `<div class="grid">
-      ${this.card(`${this.head("Baterías", "mdi:home-battery", C.green, `${n(this.ka("potencia_bateria", "capacidad_kwh"), 0)} kWh en total`)}
-        <div class="row">${this.gauge(this.k("soc_bateria"), 0, 100, C.green, "Carga total", "%", this.id("soc_bateria"))}</div>
-        <div class="kpis">${this.kpi(this.id("potencia_bateria"), w(Math.abs(b)), b > 30 ? "Descargando" : b < -30 ? "Cargando" : "En reposo", "mdi:battery-sync", C.green)}
-        ${this.kpi(this.id("energia_almacenada"), `${n(this.k("energia_almacenada"), 1)} kWh`, "Almacenado", "mdi:battery-high", C.green)}
-        ${this.kpi(this.id("autonomia_bateria"), h === null ? "—" : `${n(h, 1)} h`, "Autonomía con el consumo actual", "mdi:timer-sand", C.green)}
-        ${this.kpi(this.id("energia_bateria_carga"), `↓${n(this.k("energia_bateria_carga"), 1)} ↑${n(this.k("energia_bateria_descarga"), 1)}`, "kWh cargados · descargados hoy", "mdi:swap-vertical-bold", C.green)}</div>`, C.green)}
-      ${per}
-      ${this.card(this.live("Batería 24 h", [{ entity: this.id("soc_bateria"), name: "SOC", color: C.green }], { unit: " %" }), C.green, 2)}
-      ${this.card(this.live("Potencia de batería 24 h (W, + descarga)", [{ entity: this.id("potencia_bateria"), name: "Potencia", color: C.lime, type: "area" }], { unit: " W" }), C.green, 2)}
-    </div>`;
-  }
-
-  v_consumos() {
-    const per = this.period();
-    const cs = this.ka("potencia_consumo", "circuitos") || [];
-    const top = Math.max(1, ...cs.map((c) => c.w || 0));
-    const rank = cs.map((c) => `<div class="rank" data-action="more" data-entity="${esc((this._ctx.circuits || []).find((x) => x.id === c.id)?.power || "")}">
-      <ha-icon icon="${esc(c.icono)}"></ha-icon><div><b>${esc(c.nombre)}</b>${c.padre ? ` <small>⤷ ${esc(c.padre)}</small>` : ""}${this.bar(c.w, top, C.pink)}</div>
-      <span><b>${w(c.w)}</b><small>${n(c.pct, 0)} % · ${n(c.periodo_kwh, 2)} kWh</small></span></div>`).join("");
-    const groups = {};
-    for (const c of this._ctx.circuits || []) (groups[c.group] = groups[c.group] || []).push(c);
-    const groupCards = Object.entries(groups).map(([g, items]) => this.card(`<h3>${esc(g)}</h3><div class="kpis">${items.map((c) => {
-      const e = this.id(`${c.id}:energia_circuito`);
-      return this.kpi(c.power, w(this.num(c.power)), `${esc(c.name)} · ${n(this.num(e), 2)} kWh hoy · ${n(this.attr(e, per), 1)} kWh ${PERIODS[per].toLowerCase()}`, c.icon, C.pink);
-    }).join("")}</div>`, C.pink)).join("");
-    const circ = (this._ctx.circuits || []).filter((c) => c.in_total);
-    return `<div class="grid">
-      ${this.card(`${this.head("Consumos", "mdi:home-lightning-bolt", C.pink, "Total y cada circuito por separado")}
-        <div class="kpis">${this.kpi(this.id("potencia_consumo"), w(this.k("potencia_consumo")), `Consumo total · ${n(this.k("energia_consumo"), 2)} kWh hoy`, "mdi:home-lightning-bolt", C.pink)}
-        ${this.kpi(this.id("potencia_no_medida"), w(this.k("potencia_no_medida")), "Sin medir por ningún circuito", "mdi:help-circle-outline", C.violet)}</div>
-        <h3>${PERIODS[per]}</h3>${this.periodChips(C.pink)}${this.table([["Consumido", `<b>${n(this.ka("energia_consumo", per), 2)} kWh</b>`], ["De la red", `${n(this.ka("energia_importada", per), 2)} kWh`], ["Autosuficiencia", `${n((this.ka("autosuficiencia", per)), 0)} %`]])}`, C.pink)}
-      ${this.card(`<h3>Ahora mismo</h3>${rank || this.empty("Añade cada circuito o aparato con «Añadir circuito».")}${cs.length ? `<p class="muted">◌ Sin medir: ${w(this.ka("potencia_consumo", "no_medido_w"))}</p>` : ""}`, C.pink)}
-      ${circ.length ? this.card(this.live("Circuitos 24 h (W, apilado)", circ.map((c, i) => ({ entity: c.power, name: c.name, color: PALETTE[i % PALETTE.length] })), { stacked: true, unit: " W", height: 260 }), C.pink, 2) : ""}
-      ${groupCards}
-      ${this.card(this.daily("Consumo 30 días (kWh)", [["consumo", "Consumo", C.pink, " kWh"], ["importada", "De la red", C.cyan]]), C.pink, 2)}
-    </div>`;
-  }
-
-  v_problemas() {
-    const ps = this.ka("problemas", "lista") || [];
-    const count = (lv) => ps.filter((p) => p.nivel === lv).length;
-    const byArea = {};
-    for (const p of ps) (byArea[p.area] = byArea[p.area] || []).push(p);
-    const order = { critico: 0, aviso: 1, info: 2 };
-    const list = Object.entries(byArea).sort((a, b) => Math.min(...a[1].map((p) => order[p.nivel])) - Math.min(...b[1].map((p) => order[p.nivel])))
-      .map(([area, items]) => `<h3>${esc(area)}</h3>${items.sort((a, b) => order[a.nivel] - order[b.nivel]).map((p) => this.alert(p)).join("")}`).join("");
-    const sources = this._sources().map(([label, e]) => {
-      const s = this.val(e);
-      const bad = s === undefined || s === "unavailable" || s === "unknown";
-      return [esc(label), `<span data-action="more" data-entity="${e}" style="color:${bad ? C.red : C.green}">●</span> ${bad ? `<span style="color:${C.red}">${esc(s ?? "no existe")}</span>` : `${esc(s)} ${esc(this.attr(e, "unit_of_measurement") || "")}`}`];
-    });
-    return `<div class="grid">
-      ${this.card(`${this.head("Diagnóstico", "mdi:alert-decagram", C.red, "Se revisa cada 30 s; un problema solo aparece si dura lo bastante")}
-        <div class="counts"><div style="--c:${C.red}"><b>${count("critico")}</b>Críticos</div><div style="--c:${C.amber}"><b>${count("aviso")}</b>Avisos</div><div style="--c:${C.blue}"><b>${count("info")}</b>Info</div></div>
-        <div class="btns">${this.btn(this.id("reconocer_problemas"), "Reconocer todo", "mdi:check-all", C.green)}${this.btn(this.id("importar_historico"), "Importar histórico", "mdi:database-import", C.cyan, "¿Rellenar el histórico con las estadísticas de Home Assistant?")}</div>`, C.red)}
-      ${this.card(list || `<div class="ok"><ha-icon icon="mdi:check-circle-outline"></ha-icon>Todo en orden: no se ha detectado ningún problema.</div>`, ps.length ? C.red : C.green, 2)}
-      ${this.card(`<h3>Estado de las fuentes</h3>${sources.length ? this.table(sources) : this.empty("Sin fuentes configuradas.")}`, C.cyan)}
-    </div>`;
-  }
-
-  _sources() {
+  _points(hist, entity, { scale = 1, transform = null, bucketMin = 5 } = {}) {
+    const rows = hist?.[entity] || [];
+    const unit = this.unit(entity);
+    const k = unit === "kW" ? 1000 : 1;
     const out = [];
-    for (const [k, l] of [["red_potencia", "Red"], ["consumo_potencia", "Consumo total"], ["solar_potencia", "Solar"], ["red_tension", "Tensión de red"], ["inversor_temperatura", "Temp. inversor"], ["precio_sensor", "Precio"]]) if (this.setting(k)) out.push([l, this.setting(k)]);
-    for (const s of this._ctx.strings || []) out.push([s.name, s.power]);
-    for (const b of this._ctx.batteries || []) { out.push([`${b.name} · SOC`, b.soc]); out.push([`${b.name} · potencia`, b.power]); }
-    for (const c of this._ctx.circuits || []) out.push([c.name, c.power]);
-    for (const z of this._ctx.zones || []) out.push([z.name, z.valve]);
+    let lastBucket = null, acc = 0, cnt = 0;
+    for (const r of rows) {
+      const v = toNum(r.s);
+      const t = (r.lu ?? r.lc ?? 0) * 1000;
+      if (v === null || !t) continue;
+      let val = v * k * scale;
+      if (transform) val = transform(val);
+      const b = Math.floor(t / (bucketMin * 60000));
+      if (lastBucket !== null && b !== lastBucket) {
+        out.push([lastBucket * bucketMin * 60000, acc / cnt]);
+        acc = 0;
+        cnt = 0;
+      }
+      lastBucket = b;
+      acc += val;
+      cnt += 1;
+    }
+    if (cnt) out.push([lastBucket * bucketMin * 60000, acc / cnt]);
+    if (out.length) out.push([Date.now(), out[out.length - 1][1]]);
     return out;
   }
-
-  bill(key, title, icon) {
-    const f = this.st(this.id(key));
-    const a = (f && f.attributes) || {};
-    if (!a.lineas) return `<h3>${title}</h3><p class="muted">Calculando…</p>`;
-    const d = (s) => (s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}` : "—");
-    return `<h3><ha-icon icon="${icon}"></ha-icon> ${title}</h3><p class="muted">${d(a.desde)} – ${d(a.hasta)} · ${a.dias} días · ${n(a.importada_kwh, 1)} kWh</p>
-      ${this.table([...a.lineas.map((l) => [esc(l.concepto), `<small>${esc(l.calculo)}</small>`, `${n(l.importe, 2)} €`]),
-        ["<b>Base imponible</b>", "", `<b>${n(a.base_imponible, 2)} €</b>`], ["IVA", `${n(a.iva_porcentaje, 0)} %`, `${n(a.iva, 2)} €`],
-        [`<b style="color:${C.gold}">TOTAL</b>`, "", `<b class="big" style="color:${C.gold}">${n(a.total, 2)} €</b>`]])}
-      ${Number(a.compensacion_perdida) > 0 ? `<p style="color:${C.amber}">⚠ ${n(a.compensacion_perdida, 2)} € de excedentes no se compensan (superan la energía del periodo).</p>` : ""}`;
+  _refreshCharts() {
+    for (const [k, slot] of this._cards) if (slot.spec) this._drawChart(k, slot);
+  }
+  async _drawChart(k, slot) {
+    const spec = slot.spec;
+    const el = slot.el.querySelector(".chart");
+    if (!el) return;
+    try {
+      let series, opt;
+      if (spec.kind === "history") {
+        const ids = [...new Set(spec.series.map((s) => s.entity).filter(Boolean))];
+        const hist = ids.length ? await this._history(ids, spec.hours || 24) : {};
+        series = spec.series.map((s, i) => ({
+          name: s.name,
+          color: s.color || PALETTE[i % PALETTE.length],
+          type: s.type || "line",
+          step: s.step,
+          points: this._points(hist, s.entity, { scale: s.scale || 1, transform: s.abs ? Math.abs : s.pos ? (v) => Math.max(v, 0) : s.neg ? (v) => Math.max(-v, 0) : null, bucketMin: spec.bucket || 5 }),
+        }));
+        const end = Date.now();
+        opt = { start: end - (spec.hours || 24) * 3600000, end, unit: spec.unit, height: spec.height, min: spec.min, max: spec.max };
+      } else if (spec.kind === "days" || spec.kind === "months") {
+        const rows = this.A("historico", spec.kind === "days" ? "dias" : "meses") || [];
+        const field = spec.kind === "days" ? "fecha" : "mes";
+        const pick = rows.slice(-(spec.count || (spec.kind === "days" ? 30 : 12)));
+        const tt = (r) => new Date(spec.kind === "days" ? r[field] + "T12:00:00" : r[field] + "-15T12:00:00").getTime();
+        series = spec.series.map((s, i) => ({ name: s.name, color: s.color || PALETTE[i], type: "bar", points: pick.map((r) => [tt(r), toNum(r[s.field], 0)]) }));
+        const first = pick.length ? tt(pick[0]) : Date.now(), last = pick.length ? tt(pick[pick.length - 1]) : Date.now();
+        const half = spec.kind === "days" ? 43200000 : 15 * 86400000;
+        opt = { start: first - half, end: last + half, unit: spec.unit, slots: pick.length || 1, height: spec.height, stacked: spec.stacked };
+      } else if (spec.kind === "points") {
+        series = spec.series;
+        opt = spec.opt;
+      }
+      if (!series.some((s) => s.points.length)) {
+        el.innerHTML = `<div class="loading">Todavía no hay datos para esta gráfica.</div>`;
+        return;
+      }
+      drawChart(el, series, opt);
+    } catch (err) {
+      el.innerHTML = `<div class="loading">No se pudo leer el historial (${esc(err.message || err)}).</div>`;
+    }
   }
 
+  // ================================================================ views
+  live() {
+    return {
+      pv: this.N("potencia_solar"),
+      grid: this.N("potencia_red"),
+      bat: this.N("potencia_bateria"),
+      load: this.N("potencia_consumo"),
+      soc: this.N("soc_bateria"),
+    };
+  }
+
+  flowSVG() {
+    const { pv, grid, bat, load, soc } = this.live();
+    const P = Math.max(pv || 0, 0), G = grid || 0, B = bat || 0, H = Math.max(load || 0, 0);
+    const hasPV = (this.cfg.strings || []).length || this.set_("solar_potencia");
+    const hasBat = (this.cfg.batteries || []).length > 0;
+    const sToH = Math.min(P, H), rest = Math.max(P - sToH, 0);
+    const sToB = Math.min(rest, Math.max(-B, 0));
+    const sToG = Math.max(-G, 0);
+    const gToB = G > 0 ? Math.max(Math.max(-B, 0) - sToB, 0) : 0;
+    const bToH = Math.max(B, 0), gToH = Math.max(Math.max(G, 0) - gToB, 0);
+    const nodes = { solar: [300, 80], grid: [90, 210], bat: [510, 210], home: [300, 300] };
+    const line = (a, b, w, color, rev = false) => {
+      if (!(w > 15)) return `<path d="M${a[0]},${a[1]} L${b[0]},${b[1]}" stroke="#14233b" stroke-width="2" fill="none"/>`;
+      const dur = Math.max(0.35, 3 - Math.log10(w) * 0.75);
+      const [p, q] = rev ? [b, a] : [a, b];
+      return `<path d="M${a[0]},${a[1]} L${b[0]},${b[1]}" stroke="#14233b" stroke-width="2" fill="none"/><path class="ln" style="--d:${dur}s;stroke:${color};stroke-width:${1.5 + Math.min(w / 1500, 3)}px;filter:drop-shadow(0 0 4px ${color})" d="M${p[0]},${p[1]} L${q[0]},${q[1]}"/>`;
+    };
+    const node = (key, [x, y], color, ic, value, label, entity) => `
+      <g class="node" data-more="${esc(entity || "")}" style="cursor:pointer;--c:${color}">
+        <circle class="ring" cx="${x}" cy="${y}" r="44" fill="#06101f" stroke="${color}" stroke-width="3"/>
+        <foreignObject x="${x - 14}" y="${y - 32}" width="28" height="28"><div xmlns="http://www.w3.org/1999/xhtml" style="color:${color};display:flex;justify-content:center">${icon(ic)}</div></foreignObject>
+        <text x="${x}" y="${y + 10}" text-anchor="middle" fill="${C.text}" font-size="15" font-weight="800">${value}</text>
+        <text x="${x}" y="${key === "solar" ? y - 54 : y + 66}" text-anchor="middle" fill="${C.muted}" font-size="12.5">${label}</text>
+      </g>`;
+    let svg = `<svg class="flow" viewBox="0 0 600 380" style="width:100%;max-height:420px">`;
+    if (hasPV) svg += line(nodes.solar, nodes.home, sToH, C.amber) + line(nodes.solar, nodes.grid, sToG, C.amber) + (hasBat ? line(nodes.solar, nodes.bat, sToB, C.amber) : "");
+    svg += line(nodes.grid, nodes.home, gToH, C.cyan);
+    if (hasBat) svg += line(nodes.bat, nodes.home, bToH, C.green) + line(nodes.grid, nodes.bat, gToB, C.cyan);
+    if (hasPV) svg += node("solar", nodes.solar, C.amber, "mdi:solar-power-variant", fmtW(P), "Solar", this.id("potencia_solar"));
+    svg += node("grid", nodes.grid, C.cyan, "mdi:transmission-tower", fmtW(Math.abs(G)), G > 15 ? "Red · importando" : G < -15 ? "Red · vertiendo" : "Red", this.id("potencia_red"));
+    if (hasBat) svg += node("bat", nodes.bat, C.green, "mdi:home-battery", fmtW(Math.abs(B)), `Batería ${soc === null ? "" : fmt(soc, 0) + " %"} ${B > 15 ? "↑" : B < -15 ? "↓" : ""}`, this.id("potencia_bateria"));
+    svg += node("home", nodes.home, C.pink, "mdi:home-lightning-bolt", fmtW(H), "Casa", this.id("potencia_consumo"));
+    svg += `</svg>`;
+    const circuits = (this.A("potencia_consumo", "circuitos") || []).filter((c) => c.en_total !== false && isNum(c.w)).slice(0, 6);
+    const chips = circuits.map((c, i) => `<span class="chip" data-more="${esc((this.cfg.circuits || []).find((x) => x.id === c.id)?.power || "")}" style="border-color:${PALETTE[(i + 1) % PALETTE.length]};color:${PALETTE[(i + 1) % PALETTE.length]}">${icon(c.icono || "mdi:flash")} ${esc(c.nombre)} · ${fmtW(c.w)}</span>`).join("");
+    return svg + (chips ? `<div class="chips" style="justify-content:center;margin-top:4px">${chips}</div>` : "");
+  }
+
+  sources24h() {
+    const s = (k) => this.set_(k);
+    const inv = s("red_signo") === "positivo_exporta";
+    const series = [];
+    series.push({ name: "Solar", color: C.amber, type: "area", entity: s("solar_potencia") || this.id("potencia_solar") });
+    series.push({ name: "Consumo", color: C.pink, entity: s("consumo_potencia") || this.id("potencia_consumo") });
+    series.push({ name: "Red", color: C.cyan, entity: s("red_potencia") || this.id("potencia_red"), scale: s("red_potencia") && inv ? -1 : 1 });
+    const bats = this.cfg.batteries || [];
+    if (bats.length === 1) series.push({ name: "Batería", color: C.green, entity: bats[0].power, scale: bats[0].positive_charge ? -1 : 1 });
+    else if (bats.length) series.push({ name: "Batería", color: C.green, entity: this.id("potencia_bateria") });
+    return series;
+  }
+
+  problemsHTML(list, max = 99) {
+    if (!list.length) return `<div class="alert" style="--a:${C.green}"><b>Todo en orden.</b> No se ha detectado ningún problema.</div>`;
+    const col = { critico: C.red, aviso: C.amber, info: C.blue };
+    const more = list.length > max ? `<div class="muted small">… y ${list.length - max} más</div>` : "";
+    return list.slice(0, max).map((p) => `<div class="alert" style="--a:${col[p.nivel] || C.blue}"${p.entidad ? ` data-more="${esc(p.entidad)}"` : ""}><b>${esc(p.titulo)}${p.reconocido ? " ✓" : ""}</b><br>${esc(p.detalle)}<div class="when">${esc(p.area)} · desde ${fmtDate(p.desde, true)}</div></div>`).join("") + more;
+  }
+
+  // ---------------------------------------------------------------- 1 resumen
+  v_resumen() {
+    const { pv, grid, bat, load, soc } = this.live();
+    const per = this.period;
+    const probs = this.A("problemas", "lista") || [];
+    const crit = probs.filter((p) => p.nivel === "critico").length, warn = probs.filter((p) => p.nivel === "aviso").length;
+    const status = crit ? `<span class="pulse" style="color:${C.red}">◉ ${crit} crítico${crit > 1 ? "s" : ""}</span>` : warn ? `<span style="color:${C.amber}">◉ ${warn} aviso${warn > 1 ? "s" : ""}</span>` : `<span style="color:${C.green}">◉ Todo en orden</span>`;
+    const now = new Date();
+    const head = this.card("head", `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><div class="muted small">${now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · periodo ${esc(this.S("periodo_tarifario") || "—")} · ${fmt(this.N("precio_actual"), 4)} €/kWh</div><div style="margin-top:4px;font-size:14px">${status}</div></div><div style="text-align:right"><div class="muted small">Autosuficiencia ahora</div><div class="big" style="--c:${C.lime}">${fmt(this.N("autosuficiencia_ahora"), 0)} %</div></div></div>`, { c: C.cyan });
+    const flow = this.card("flow", this.flowSVG(), { c: C.cyan });
+    const kp = [
+      this.kpi("k1", null, fmtW(pv), `Solar · ${kwh(this.N("energia_solar"))} hoy`, "mdi:solar-power-variant", C.amber, 6, "solar"),
+      this.kpi("k2", null, fmtW(load), `Consumo · ${kwh(this.N("energia_consumo"))} hoy`, "mdi:home-lightning-bolt", C.pink, 6, "consumos"),
+      this.kpi("k3", null, `${fmtW(Math.abs(grid ?? 0))} ${grid > 15 ? "↓" : grid < -15 ? "↑" : ""}`, grid > 15 ? "Importando de la red" : grid < -15 ? "Vertiendo a la red" : "Red en reposo", "mdi:transmission-tower", C.cyan, 6, "red"),
+    ];
+    if ((this.cfg.batteries || []).length) kp.push(this.kpi("k4", null, `${fmt(soc, 0)} %`, `Batería · ${bat > 30 ? "descargando " + fmtW(bat) : bat < -30 ? "cargando " + fmtW(-bat) : "en reposo"}`, "mdi:home-battery", C.green, 6, "bateria"));
+    kp.push(this.kpi("k5", null, eur(this.N("coste_energia")), `Luz hoy · ahorro solar ${eur(this.A("ahorro_solar", "hoy"))}`, "mdi:currency-eur", C.gold, 6, "coste"));
+    const gasCost = this.cfg.gas?.coste_hoy;
+    kp.push(this.kpi("k6", null, gasCost ? eur(this.n(gasCost)) : `${fmt(this.N("co2_evitado"), 1)} kg`, gasCost ? `Gas hoy · ${fmt(this.N("consumo_gas"), 2)} m³` : "CO₂ evitado hoy", gasCost ? "mdi:fire" : "mdi:leaf", gasCost ? C.violet : C.lime, 6, gasCost ? "gas" : "co2"));
+    const row = (c, ic, l, v) => `<tr><td style="color:${c}">${icon(ic)} ${l}</td><td class="r"><b>${v}</b></td></tr>`;
+    const co2 = this.bucket("co2_evitado") || {};
+    const sum = this.card("sum", `<h3>${icon("mdi:chart-donut-variant")}${PERIODS[per]}</h3><table>
+      ${row(C.amber, "mdi:solar-power-variant", "Producción", kwh(this.bucket("energia_solar"), 2))}
+      ${row(C.pink, "mdi:home-lightning-bolt", "Consumo", kwh(this.bucket("energia_consumo"), 2))}
+      ${row(C.cyan, "mdi:transmission-tower-import", "Importado", kwh(this.bucket("energia_importada"), 2))}
+      ${row(C.cyan, "mdi:transmission-tower-export", "Vertido", kwh(this.bucket("energia_exportada"), 2))}
+      ${row(C.gold, "mdi:currency-eur", "Coste de la luz", eur(this.bucket("coste_energia")))}
+      ${row(C.lime, "mdi:piggy-bank-outline", "Ahorro solar", eur(this.bucket("ahorro_solar")))}
+      ${row(C.lime, "mdi:leaf", "CO₂ evitado", `${fmt(co2.evitado_kg, 1)} kg`)}</table>`, { c: C.cyan });
+    const alerts = this.card("alerts", `<h3>${icon("mdi:alert-decagram")}Alertas</h3>${this.problemsHTML(probs, 3)}`, { c: probs.length ? (crit ? C.red : C.amber) : C.green });
+    alerts.cls += " click";
+    alerts.attrs = ` data-tab="problemas"`;
+    return [
+      { cls: "w2", cards: [head, flow] },
+      { cards: [...kp, this.periodChips("per"), sum] },
+      { cards: [alerts, this.chartCard("c24", "Últimas 24 h (W)", C.cyan, { kind: "history", hours: 24, unit: "W", series: this.sources24h(), height: 240 })] },
+    ];
+  }
+
+  // ---------------------------------------------------------------- 2 red
+  v_red() {
+    const imp = this.N("potencia_importada"), exp = this.N("potencia_exportada");
+    const use = this.N("uso_potencia_contratada");
+    const cards = [
+      this.title("t", "Red eléctrica", "Importación, vertido y potencia contratada", "mdi:transmission-tower", C.cyan),
+      this.card("g", gauge(use, 0, 100, use > 90 ? C.red : use > 75 ? C.amber : C.cyan, `de ${fmt(this.A("uso_potencia_contratada", "contratada_kw"), 2)} kW contratados`, "% potencia"), { c: C.cyan, w: 6, click: this.id("uso_potencia_contratada") }),
+      this.kpi("i", this.id("potencia_importada"), fmtW(imp), "Importando", "mdi:transmission-tower-import", C.cyan, 6),
+      this.kpi("e", this.id("potencia_exportada"), fmtW(exp), "Vertiendo", "mdi:transmission-tower-export", C.lime, 6),
+      this.kpi("p", this.id("precio_actual"), `${fmt(this.N("precio_actual"), 4)} €/kWh`, `Periodo ${esc(this.S("periodo_tarifario") || "—")} · excedentes ${fmt(this.N("precio_excedentes"), 4)} €/kWh`, "mdi:cash-clock", C.gold, 12),
+    ];
+    for (const [k, l, ic, u] of [["red_tension", "Tensión", "mdi:sine-wave", "V"], ["red_frecuencia", "Frecuencia", "mdi:waveform", "Hz"]]) {
+      const e = this.set_(k);
+      if (e) cards.push(this.kpi(k, e, `${fmt(this.n(e), k === "red_tension" ? 1 : 2)} ${u}`, l, ic, C.cyan, 6));
+    }
+    const per = this.period;
+    const energy = this.card("en", `<h3>${icon("mdi:counter")}${PERIODS[per]}</h3><table><tr><th></th><th class="r">Importado</th><th class="r">Vertido</th></tr>
+      <tr><td>Energía</td><td class="r"><b>${kwh(this.bucket("energia_importada"), 2)}</b></td><td class="r"><b>${kwh(this.bucket("energia_exportada"), 2)}</b></td></tr>
+      <tr><td>Importe</td><td class="r">${eur(this.bucket("coste_energia"))}</td><td class="r">${eur(this.bucket("compensacion_excedentes"))}</td></tr></table>`, { c: C.cyan });
+    const charts = [];
+    const priceSensor = this.set_("precio_modo") === "sensor" ? this.set_("precio_sensor") : null;
+    if (priceSensor && this.a(priceSensor, "price_00h") !== undefined) {
+      const d = new Date(); d.setHours(0, 0, 0, 0);
+      const pts = [];
+      for (let h = 0; h < 48; h++) {
+        const key = h < 24 ? `price_${String(h).padStart(2, "0")}h` : `price_next_day_${String(h - 24).padStart(2, "0")}h`;
+        const v = this.a(priceSensor, key);
+        if (isNum(v)) pts.push([d.getTime() + h * 3600000 + 1800000, Number(v)]);
+      }
+      charts.push({ k: "price", html: `<h3>${icon("mdi:cash-clock")}Precio hoy y mañana (€/kWh)</h3><div class="chart" data-chart="price"></div>`, c: C.gold, cls: "card", attrs: "", chart: { kind: "points", series: [{ name: "Precio", color: C.gold, type: "bar", points: pts }], opt: { start: d.getTime(), end: d.getTime() + 48 * 3600000, slots: 48, unit: "€/kWh", decimals: 4 } } });
+    }
+    const inv = this.set_("red_signo") === "positivo_exporta";
+    const ge = this.set_("red_potencia") || this.id("potencia_red");
+    charts.push(this.chartCard("g24", "Red 24 h (W)", C.cyan, { kind: "history", hours: 24, unit: "W", series: [{ name: "Importado", color: C.cyan, type: "area", entity: ge, scale: inv ? -1 : 1, pos: true }, { name: "Vertido", color: C.lime, type: "area", entity: ge, scale: inv ? -1 : 1, neg: true }] }));
+    charts.push(this.chartCard("g30", "Últimos 30 días (kWh)", C.cyan, { kind: "days", unit: "kWh", series: [{ name: "Importado", field: "importada", color: C.cyan }, { name: "Vertido", field: "exportada", color: C.lime }] }));
+    return [{ cards }, { cards: [this.periodChips("per"), energy] }, { cls: "w2", cards: charts }];
+  }
+
+  // ---------------------------------------------------------------- 3 solar
+  v_solar() {
+    const strings = this.cfg.strings || [];
+    if (!strings.length && !this.set_("solar_potencia")) return [{ cards: [this.title("t", "Solar", "", "mdi:solar-power-variant", C.amber), this.empty("e", "Añade la potencia solar en Configurar → Solar, o cada string con «Añadir string».")] }];
+    const peak = Number(this.set_("solar_pico_wp")) || strings.reduce((a, s) => a + (Number(s.peak_wp) || 0), 0) || 5000;
+    const pv = this.N("potencia_solar");
+    const head = [
+      this.title("t", "Paneles solares", "Producción, strings e inversor", "mdi:solar-power-variant", C.amber),
+      this.card("g", gauge(pv, 0, peak, C.amber, `de ${fmt(peak, 0)} Wp`, "W"), { c: C.amber, w: 6, click: this.id("potencia_solar") }),
+      this.kpi("hoy", this.id("energia_solar"), kwh(this.N("energia_solar"), 2), `Hoy · mes ${kwh(this.A("energia_solar", "mes"), 0)} · año ${kwh(this.A("energia_solar", "ano"), 0)}`, "mdi:solar-power-variant-outline", C.amber, 6),
+      this.kpi("ac", this.id("autoconsumo"), `${fmt(this.N("autoconsumo"), 0)} %`, `Autoconsumo hoy · mes ${fmt(this.A("autoconsumo", "mes"), 0)} %`, "mdi:home-import-outline", C.lime, 6),
+    ];
+    const fc = this.set_("solar_prevision_hoy");
+    if (fc) head.push(this.kpi("fc", fc, kwh(this.n(fc)), `Previsión hoy · llevas el ${fmt((100 * (this.N("energia_solar") || 0)) / Math.max(this.n(fc) || 0, 0.01), 0)} %`, "mdi:weather-sunny-alert", C.amber, 6));
+    const live = this.A("potencia_solar", "strings") || [];
+    const maxY = Math.max(1, ...live.map((s) => (s.wp && s.w ? (1000 * s.w) / s.wp : 0)));
+    const st = strings.map((s) => {
+      const l = live.find((x) => x.id === s.id) || {};
+      const w = this.watts(s.power);
+      const extra = [s.voltage ? `${fmt(this.n(s.voltage), 0)} V` : "", s.current ? `${fmt(this.n(s.current), 1)} A` : "", s.peak_wp ? `${fmt((100 * (w || 0)) / s.peak_wp, 0)} % de ${fmt(s.peak_wp, 0)} Wp` : ""].filter(Boolean).join(" · ");
+      const spec = s.peak_wp && w !== null ? (1000 * w) / s.peak_wp : null;
+      return this.card("s" + s.id, `<div class="kpi"><div class="ic">${icon("mdi:solar-panel")}</div><div style="flex:1"><div class="v">${fmtW(w)}</div><div class="l">${esc(s.name)} · ${kwh(this.N(s.id + ":energia_string"), 2)} hoy${extra ? " · " + extra : ""}</div>${spec !== null ? `<div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, (100 * spec) / maxY)}%"></i></div><div class="small muted" style="margin-top:3px">${fmt(spec, 0)} W/kWp</div>` : ""}</div></div>`, { c: C.amber, w: 6, click: s.power });
+    });
+    const inv = [];
+    for (const [k, l] of [["inversor_temperatura", "Inversor"], ["inversor_temperatura_dc", "Inversor DC"]]) {
+      const e = this.set_(k);
+      if (e) {
+        const t = this.n(e);
+        inv.push(this.card(k, gauge(t, 0, 80, t > 60 ? C.red : t > 45 ? C.orange : C.green, l, "°C", 130), { c: C.orange, w: 6, click: e }));
+      }
+    }
+    for (const [k, l] of [["inversor_estado", "Estado"], ["inversor_fallo", "Fallo"], ["inversor_alarma", "Alarma"]]) {
+      const e = this.set_(k);
+      if (e) inv.push(this.kpi(k, e, esc(this.s(e) ?? "—"), l, "mdi:information-outline", C.orange, 6));
+    }
+    const charts = [];
+    if (strings.length) charts.push(this.chartCard("st24", "Strings 24 h (W)", C.amber, { kind: "history", hours: 24, unit: "W", series: strings.map((s, i) => ({ name: s.name, entity: s.power, color: PALETTE[i % PALETTE.length] })) }));
+    charts.push(this.chartCard("p30", "Producción 30 días (kWh)", C.amber, { kind: "days", unit: "kWh", series: [{ name: "Solar", field: "solar", color: C.amber }] }));
+    charts.push(this.chartCard("p12", "Producción por meses (kWh)", C.amber, { kind: "months", unit: "kWh", count: 12, series: [{ name: "Solar", field: "solar", color: C.amber }] }));
+    return [
+      { cards: head },
+      { cards: [this.title("ts", "Strings", "", "mdi:solar-panel", C.amber), ...st, ...(inv.length ? [this.title("ti", "Inversor", "", "mdi:power-plug-battery", C.orange), ...inv] : [])] },
+      { cls: "w2", cards: charts },
+    ];
+  }
+
+  // ---------------------------------------------------------------- 4 batería
+  v_bateria() {
+    const bats = this.cfg.batteries || [];
+    if (!bats.length) return [{ cards: [this.title("t", "Batería", "", "mdi:home-battery", C.green), this.empty("e", "Añade tus baterías en la integración → «Añadir batería».")] }];
+    const b = this.N("potencia_bateria");
+    const soc = this.N("soc_bateria");
+    const auto = this.N("autonomia_bateria");
+    const sections = [{
+      cards: [
+        this.title("t", "Baterías", "Carga, flujo y celdas", "mdi:home-battery", C.green),
+        this.card("g", gauge(soc, 0, 100, soc < 20 ? C.red : soc < 40 ? C.amber : C.green, "Carga total", "%"), { c: C.green, w: 6, click: this.id("soc_bateria") }),
+        this.kpi("p", this.id("potencia_bateria"), fmtW(Math.abs(b ?? 0)), b > 30 ? "Descargando" : b < -30 ? "Cargando" : "En reposo", b < -30 ? "mdi:battery-charging-high" : "mdi:battery-arrow-down", C.green, 6),
+        this.kpi("e", this.id("energia_almacenada"), kwh(this.N("energia_almacenada")), `Almacenado de ${fmt(this.A("potencia_bateria", "capacidad_kwh"), 0)} kWh`, "mdi:battery-high", C.green, 6),
+        this.kpi("a", this.id("autonomia_bateria"), auto === null ? "—" : `${fmt(auto, 1)} h`, "Autonomía con el consumo actual", "mdi:timer-sand", C.green, 6),
+        this.kpi("cd", this.id("energia_bateria_carga"), `↓ ${kwh(this.N("energia_bateria_carga"), 2)} · ↑ ${kwh(this.N("energia_bateria_descarga"), 2)}`, "Cargado · descargado hoy", "mdi:swap-vertical-bold", C.green, 12),
+      ],
+    }];
+    for (const bt of bats) {
+      const cards = [this.title("b" + bt.id, bt.name, "", "mdi:battery-outline", C.green)];
+      const w = this.watts(bt.power);
+      const wv = w === null ? null : bt.positive_charge ? -w : w;
+      cards.push(this.card("bs" + bt.id, gauge(this.n(bt.soc), 0, 100, C.green, "SOC", "%", 130), { c: C.green, w: 6, click: bt.soc }));
+      cards.push(this.kpi("bp" + bt.id, bt.power, fmtW(Math.abs(wv ?? 0)), wv > 30 ? "Descargando" : wv < -30 ? "Cargando" : "En reposo", "mdi:flash", C.green, 6));
+      for (const [k, l, ic, u, d] of [["voltage", "Tensión", "mdi:sine-wave", "V", 2], ["current", "Corriente", "mdi:current-dc", "A", 1], ["cycles", "Ciclos", "mdi:autorenew", "", 0]])
+        if (bt[k]) cards.push(this.kpi(k + bt.id, bt[k], `${fmt(this.n(bt[k]), d)} ${u}`, l, ic, C.green, 6));
+      for (const e of bt.temperatures || []) cards.push(this.kpi("bt" + e, e, `${fmt(this.n(e), 1)} °C`, esc(this.name(e)), "mdi:thermometer", C.orange, 6));
+      if ((bt.cells || []).length) {
+        const vals = bt.cells.map((e) => this.n(e));
+        const ok = vals.filter((v) => v !== null && v > 1);
+        const lo = ok.length ? Math.min(...ok) : 0, hi = ok.length ? Math.max(...ok) : 0;
+        const span = Math.max(hi - lo, 0.005) + 0.02;
+        const delta = (hi - lo) * 1000;
+        const cells = vals.map((v, i) => {
+          const c = v === null ? C.muted : v < 3.0 || v > 3.6 ? C.red : v < 3.2 || v > 3.45 ? C.amber : C.green;
+          const mark = v === lo ? " ▼" : v === hi ? " ▲" : "";
+          return `<div class="cell" data-more="${esc(bt.cells[i])}" style="cursor:pointer"><span class="muted">${String(i + 1).padStart(2, "0")}</span><div class="bar"><i style="--b:${c};width:${v === null ? 0 : Math.min(100, (100 * (v - lo + 0.01)) / span)}%"></i></div><span style="color:${c}">${fmt(v, 3)}${mark}</span></div>`;
+        }).join("");
+        cards.push(this.card("cells" + bt.id, `<h3>${icon("mdi:view-grid")}Celdas · Δ <span style="color:${delta > 100 ? C.red : delta > 50 ? C.amber : C.green}">${fmt(delta, 0)} mV</span> · media ${fmt(ok.reduce((a, v) => a + v, 0) / (ok.length || 1), 3)} V</h3><div class="cells">${cells}</div>`, { c: C.green }));
+      }
+      sections.push({ cards });
+    }
+    const series = bats.length === 1 ? [{ name: "SOC", entity: bats[0].soc, color: C.green }] : [{ name: "SOC", entity: this.id("soc_bateria"), color: C.green }];
+    sections.push({ cls: "w2", cards: [
+      this.chartCard("soc", "Carga 48 h (%)", C.green, { kind: "history", hours: 48, unit: "%", min: 0, max: 100, series }),
+      this.chartCard("bw", "Potencia 24 h (W, + descarga)", C.green, { kind: "history", hours: 24, unit: "W", series: bats.map((bt, i) => ({ name: bt.name, entity: bt.power, scale: bt.positive_charge ? -1 : 1, type: "area", color: [C.lime, C.green, C.cyan][i % 3] })) }),
+    ] });
+    return sections;
+  }
+
+  // ---------------------------------------------------------------- 5 consumos
+  v_consumos() {
+    const per = this.period;
+    const circuits = this.A("potencia_consumo", "circuitos") || [];
+    const top = Math.max(1, ...circuits.map((c) => c.w || 0));
+    const rows = circuits.map((c, i) => {
+      const src = (this.cfg.circuits || []).find((x) => x.id === c.id);
+      return `<div class="row" data-more="${esc(src?.power || "")}" style="cursor:pointer"><div class="n">${icon(c.icono || "mdi:flash")} ${esc(c.nombre)}${c.padre ? ` <span class="muted small">⤷ ${esc(c.padre)}</span>` : ""}</div><div class="bar"><i style="--b:${PALETTE[(i + 1) % PALETTE.length]};width:${(100 * (c.w || 0)) / top}%"></i></div><div class="x"><b>${fmtW(c.w)}</b><div class="small muted">${fmt(c.pct, 0)} % · ${kwh(c.periodo_kwh, 2)}</div></div></div>`;
+    }).join("");
+    const nm = this.A("potencia_consumo", "no_medido_w");
+    const rank = this.card("rank", `<h3>${icon("mdi:podium")}Ahora · kWh ${PERIODS[per].toLowerCase()}</h3>${rows || `<div class="empty">Añade circuitos con «Añadir circuito».</div>`}${isNum(nm) ? `<div class="row"><div class="n" style="color:${C.violet}">${icon("mdi:help-circle-outline")} Sin medir</div><div class="bar"><i style="--b:${C.violet};width:${(100 * nm) / top}%"></i></div><div class="x"><b>${fmtW(nm)}</b></div></div>` : ""}`, { c: C.pink });
+    const head = [
+      this.title("t", "Consumos", "Total y cada circuito por separado", "mdi:home-lightning-bolt", C.pink),
+      this.kpi("tot", this.id("potencia_consumo"), fmtW(this.N("potencia_consumo")), `Consumo total · ${kwh(this.N("energia_consumo"), 2)} hoy · ${kwh(this.bucket("energia_consumo"), 1)} ${PERIODS[per].toLowerCase()}`, "mdi:home-lightning-bolt", C.pink, 12),
+      this.periodChips("per", C.pink),
+    ];
+    const groups = {};
+    for (const c of this.cfg.circuits || []) (groups[c.group] = groups[c.group] || []).push(c);
+    const groupSecs = Object.entries(groups).map(([g, items]) => ({
+      cards: [this.title("g" + g, g, "", "mdi:electric-switch", C.pink), ...items.map((c) => this.kpi("c" + c.id, c.power, fmtW(this.watts(c.power)), `${esc(c.name)} · ${kwh(this.N(c.id + ":energia_circuito"), 2)} hoy · ${kwh(this.a(this.id(c.id + ":energia_circuito"), per), 1)} periodo`, c.icon || "mdi:flash", C.pink, 6))],
+    }));
+    const charts = [this.chartCard("d30", "Consumo 30 días (kWh)", C.pink, { kind: "days", unit: "kWh", series: [{ name: "Consumo", field: "consumo", color: C.pink }, { name: "Solar", field: "solar", color: C.amber }] })];
+    const cs = (this.cfg.circuits || []).filter((c) => c.in_total);
+    if (cs.length) charts.unshift(this.chartCard("c24", "Circuitos 24 h (W)", C.pink, { kind: "history", hours: 24, unit: "W", height: 280, series: cs.map((c, i) => ({ name: c.name, entity: c.power, color: PALETTE[(i + 1) % PALETTE.length] })) }));
+    return [{ cards: [...head, rank] }, ...groupSecs, { cls: "w2", cards: charts }];
+  }
+
+  // ---------------------------------------------------------------- 6 problemas
+  v_problemas() {
+    const list = this.A("problemas", "lista") || [];
+    const count = (l) => list.filter((p) => p.nivel === l).length;
+    const big = (n, l, c) => `<div style="text-align:center;flex:1"><div class="big" style="--c:${c}">${n}</div><div class="small muted">${l}</div></div>`;
+    const counts = this.card("cnt", `<div style="display:flex">${big(count("critico"), "CRÍTICOS", C.red)}${big(count("aviso"), "AVISOS", C.amber)}${big(count("info"), "INFO", C.blue)}</div><div class="small muted" style="margin-top:8px">Se revisa cada 30 s. Un problema solo aparece si dura lo bastante, para que una lectura suelta no dispare un aviso.</div>`, { c: C.red });
+    const btns = this.card("btn", `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn full" style="--c:${C.green}" data-press="${this.id("reconocer_problemas")}">${icon("mdi:check-all")}Reconocer todo</button><button class="btn full" data-press="${this.id("regenerar_panel")}">${icon("mdi:refresh")}Regenerar panel</button></div>`, { c: C.cyan });
+    const byArea = {};
+    list.forEach((p) => (byArea[p.area] = byArea[p.area] || []).push(p));
+    const order = { critico: 0, aviso: 1, info: 2 };
+    const listing = Object.keys(byArea).length
+      ? Object.entries(byArea).sort((a, b) => Math.min(...a[1].map((p) => order[p.nivel])) - Math.min(...b[1].map((p) => order[p.nivel]))).map(([a, ps]) => `<h3 style="margin-top:8px">${esc(a)}</h3>${this.problemsHTML(ps)}`).join("")
+      : this.problemsHTML([]);
+    const src = [];
+    const add = (l, e) => e && src.push([l, e]);
+    add("Red", this.set_("red_potencia")); add("Consumo total", this.set_("consumo_potencia")); add("Solar", this.set_("solar_potencia")); add("Precio", this.set_("precio_sensor"));
+    (this.cfg.strings || []).forEach((s) => add(s.name, s.power));
+    (this.cfg.batteries || []).forEach((b) => { add(b.name + " · SOC", b.soc); add(b.name + " · potencia", b.power); });
+    (this.cfg.circuits || []).forEach((c) => add(c.name, c.power));
+    (this.cfg.zones || []).forEach((z) => add(z.name, z.valve));
+    const rows = src.map(([l, e]) => {
+      const s = this.s(e), bad = s === undefined || s === "unavailable" || s === "unknown";
+      return `<tr data-more="${esc(e)}" style="cursor:pointer"><td>${esc(l)}</td><td class="r"><span class="dot" style="--a:${bad ? C.red : C.green}"></span>${bad ? `<span style="color:${C.red}">${s === undefined ? "no existe" : esc(s)}</span>` : `${esc(s)} ${esc(this.unit(e))}`}</td></tr>`;
+    }).join("");
+    return [
+      { cards: [this.title("t", "Diagnóstico", "Problemas detectados en la instalación", "mdi:alert-decagram", C.red), counts, btns] },
+      { cls: "w2", cards: [this.card("list", listing, { c: C.red })] },
+      { cards: [this.card("src", `<h3>${icon("mdi:heart-pulse")}Estado de las fuentes</h3><table>${rows}</table>`, { c: C.cyan })] },
+    ];
+  }
+
+  // ---------------------------------------------------------------- 7 coste (luz + gas)
+  billTable(attrs, { lines = "lineas", kind = "luz" } = {}) {
+    const ls = attrs?.[lines] || [];
+    if (!ls.length) return `<div class="loading">Calculando…</div>`;
+    const rows = ls.map((l) => {
+      const calc = kind === "gas" ? `${fmt(l.cantidad, l.unidad === "días" || l.unidad === "dias" ? 0 : 2)} ${esc(l.unidad || "")} × ${fmt(l.precio, 6)} ${esc(l.unidad_precio || "")}` : esc(l.calculo || "");
+      return `<tr><td>${esc(l.concepto)}</td><td class="small muted">${calc}</td><td class="r">${eur(l.importe)}</td></tr>`;
+    }).join("");
+    return `<table><tr><th>Concepto</th><th>Cálculo</th><th class="r">Importe</th></tr>${rows}
+      <tr><td><b>Base imponible</b></td><td></td><td class="r"><b>${eur(attrs.base_imponible)}</b></td></tr>
+      <tr><td>IVA</td><td class="small muted">${fmt(attrs.iva_porcentaje, 0)} %</td><td class="r">${eur(attrs.iva)}</td></tr>
+      <tr class="tot"><td>TOTAL</td><td></td><td class="r">${eur(attrs.total)}</td></tr></table>`;
+  }
   v_coste() {
-    const nx = this.ka("prevision_factura", "proximas") || [];
-    const months = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-    const sim = this.st(this.id("simulacion_factura"));
-    const sa = (sim && sim.attributes) || {};
-    const s = sa.simulada || {}, b = sa.base || {}, diff = Number(sa.diferencia) || 0;
-    const sliders = [["sim_potencia_p1", "Potencia punta (−1 = la actual)"], ["sim_potencia_p2", "Potencia valle (−1 = la actual)"], ["sim_consumo", "Cambio de consumo"], ["sim_precio", "Cambio del precio"], ["sim_paneles", "Paneles extra"], ["sim_bateria", "Batería extra"], ["sim_excedentes", "Precio excedentes (−1 = el actual)"]]
-      .map(([k, l]) => this.slider(this.id(k), l, C.violet)).join("");
-    const sav = (k) => n(this.ka("ahorro_solar", k), 2);
-    return `<div class="grid">
-      ${this.card(this.bill("factura_actual", "Factura en curso (hasta hoy)", "mdi:receipt-text-clock"), C.gold)}
-      ${this.card(this.bill("prevision_factura", "Previsión al cierre del periodo", "mdi:crystal-ball"), C.gold)}
-      ${this.card(`<h3><ha-icon icon="mdi:calendar-arrow-right"></ha-icon> Próximas facturas</h3>${nx.length ? this.table(nx.map((m) => [`${months[Number(m.mes.slice(5, 7)) - 1]} ${m.mes.slice(0, 4)} <small>${m.fuente === "año_anterior" ? "año pasado" : "modelo"}</small>`, `${n(m.consumo_kwh, 0)} kWh`, `${n(m.importada_kwh, 0)} kWh`, `<b style="color:${C.gold}">${n(m.total, 2)} €</b>`]), ["Mes", "Consumo", "De la red", "Total"]) + this.barChart(nx.map((m) => months[Number(m.mes.slice(5, 7)) - 1]), [{ name: "Factura", color: C.gold, values: nx.map((m) => m.total) }], { unit: " €", height: 150, width: 340 }) : `<p class="muted">Calculando…</p>`}
-        <p class="muted">«modelo»: tu media de los últimos 30 días con la estacionalidad solar · «año pasado»: el mismo periodo del año anterior.</p>`, C.gold)}
-      ${this.card(`<h3><ha-icon icon="mdi:flask-outline"></ha-icon> Simulador «¿y si…?»</h3>${sliders}
-        ${this.table([["Potencia", `${n(b.potencia, 2)} €`, `${n(s.potencia, 2)} €`], ["Energía", `${n(b.energia, 2)} €`, `${n(s.energia, 2)} €`], ["Compensación", `−${n(b.compensacion, 2)} €`, `−${n(s.compensacion, 2)} €`], ["<b>Total</b>", `<b>${n(b.total, 2)} €</b>`, `<b>${n(s.total, 2)} €</b>`]], [`Próxima factura`, "Actual", "Simulada"])}
-        <p class="big" style="color:${diff < 0 ? C.green : diff > 0 ? C.red : C.muted}">${diff < 0 ? "▼ Ahorras" : diff > 0 ? "▲ Pagas" : "="} ${n(Math.abs(diff), 2)} €/mes · ${n(Math.abs(Number(sa.diferencia_anual) || 0), 0)} €/año</p>`, C.violet)}
-      ${this.card(`<h3><ha-icon icon="mdi:piggy-bank-outline"></ha-icon> Lo que te ahorra el sol</h3>${this.table([[`${sav("hoy")} €`, `${sav("mes")} €`, `<b>${sav("ano")} €</b>`, `${sav("total")} €`]], ["Hoy", "Mes", "Año", "Total"])}`, C.lime, 2)}
-      ${this.card(this.daily("Coste diario 30 días (€)", [["coste", "Energía", C.gold, " €"], ["compensacion", "Compensación", C.lime]]), C.gold, 2)}
-      ${this.card(this.monthly("Por meses (€)", [["coste_energia", "Energía", C.gold, " €"], ["compensacion", "Compensación", C.lime]], 12, 1400), C.gold, 4)}
-    </div>`;
+    const fa = this.st(this.id("factura_actual"))?.attributes || {};
+    const pf = this.st(this.id("prevision_factura"))?.attributes || {};
+    const sim = this.st(this.id("simulacion_factura"))?.attributes || {};
+    const lost = toNum(fa.compensacion_perdida, 0);
+    const luzNow = this.card("ln", `<h3>${icon("mdi:receipt-text-clock")}Factura en curso</h3><div class="small muted" style="margin-bottom:6px">${fmtDate(fa.desde)} – ${fmtDate(fa.hasta)} · ${fa.dias ?? "—"} días · ${kwh(fa.importada_kwh)}</div>${this.billTable(fa)}${lost > 0 ? `<div class="small" style="color:${C.amber};margin-top:6px">⚠ ${eur(lost)} de excedentes no se compensan (superan la energía del periodo).</div>` : ""}`, { c: C.gold });
+    const luzEnd = this.card("le", `<div style="display:flex;justify-content:space-between;align-items:center"><h3>${icon("mdi:crystal-ball")}Previsión al cierre</h3><div class="big" style="--c:${C.gold};font-size:26px">${eur(pf.total)}</div></div><div class="small muted">${fmtDate(pf.desde)} – ${fmtDate(pf.hasta)} · ${kwh(pf.importada_kwh, 0)} importados</div>`, { c: C.gold });
+    const nx = (pf.proximas || []).map((m) => `<tr><td>${esc(m.mes)} <span class="small muted">${m.fuente === "año_anterior" ? "📅" : "∿"}</span></td><td class="r">${kwh(m.consumo_kwh, 0)}</td><td class="r">${kwh(m.importada_kwh, 0)}</td><td class="r">${kwh(m.exportada_kwh, 0)}</td><td class="r" style="color:${C.gold}"><b>${eur(m.total)}</b></td></tr>`).join("");
+    const next = this.card("nx", `<h3>${icon("mdi:calendar-arrow-right")}Próximas facturas</h3><table><tr><th>Mes</th><th class="r">Consumo</th><th class="r">Importado</th><th class="r">Vertido</th><th class="r">Total</th></tr>${nx}</table><div class="small muted" style="margin-top:6px">∿ tu media reciente ajustada a la producción solar de cada mes · 📅 mismo periodo del año pasado</div>`, { c: C.gold });
+    // gas
+    const g = this.cfg.gas || {};
+    const gasCards = [];
+    if (g.factura || g.prevision_factura || g.coste_hoy) {
+      const gf = this.st(g.factura)?.attributes || {};
+      if (g.factura) gasCards.push(this.card("gf", `<h3>${icon("mdi:fire")}Factura del gas en curso</h3><div class="small muted" style="margin-bottom:6px">Desde ${fmtDate(gf.fecha_lectura_anterior)} · ${gf.dias ?? "—"} días · ${fmt(gf.m3, 0)} m³ · ${fmt(gf.kwh, 0)} kWh</div>${this.billTable({ ...gf }, { kind: "gas" })}`, { c: C.violet }));
+      const prev = g.prevision_factura ? this.n(g.prevision_factura) : toNum(gf.prevision);
+      if (isNum(prev)) gasCards.push(this.card("gp", `<div style="display:flex;justify-content:space-between;align-items:center"><h3>${icon("mdi:crystal-ball")}Previsión del gas</h3><div class="big" style="--c:${C.violet};font-size:26px">${eur(prev)}</div></div><div class="small muted">Periodo de ${gf.dias_periodo ?? "—"} días · hoy ${eur(this.n(g.coste_hoy))} · mes ${eur(this.n(g.coste_mes))}</div>`, { c: C.violet }));
+    } else gasCards.push(this.empty("ge", "Instala Gas TUR o indica tus sensores de gas en Configurar → Gas."));
+    // total
+    const totalNow = toNum(fa.total, 0) + toNum(this.st(g.factura)?.attributes?.total, 0);
+    const totalCard = this.card("tot", `<div style="display:flex;gap:16px;flex-wrap:wrap;justify-content:space-around;text-align:center">
+      <div><div class="small muted">LUZ · PREVISIÓN</div><div class="big" style="--c:${C.gold}">${eur(pf.total)}</div></div>
+      <div><div class="small muted">GAS · PREVISIÓN</div><div class="big" style="--c:${C.violet}">${eur(g.prevision_factura ? this.n(g.prevision_factura) : this.st(g.factura)?.attributes?.prevision)}</div></div>
+      <div><div class="small muted">GASTADO HASTA HOY</div><div class="big" style="--c:${C.text}">${eur(totalNow)}</div></div>
+      <div><div class="small muted">AHORRO SOLAR · AÑO</div><div class="big" style="--c:${C.lime}">${eur(this.A("ahorro_solar", "ano"), 0)}</div></div></div>`, { c: C.gold });
+    // simulator
+    const simRow = (key, label, min, max, step, unit, neutral) => {
+      const e = this.id(key), v = this.N(key, neutral);
+      return `<div class="sim"><label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-number="${e}"><b>${v === -1 ? "actual" : fmt(v, step < 1 ? (step < 0.01 ? 3 : 2) : 0) + " " + unit}</b></div>`;
+    };
+    const s = sim.simulada || {}, b = sim.base || {}, d = toNum(sim.diferencia, 0);
+    const simCard = this.card("sim", `<h3>${icon("mdi:flask-outline")}Simulador «¿y si…?»</h3>
+      ${simRow("sim_potencia_p1", "Potencia punta (−1 = la actual)", -1, 10, 0.05, "kW", -1)}
+      ${simRow("sim_potencia_p2", "Potencia valle (−1 = la actual)", -1, 10, 0.05, "kW", -1)}
+      ${simRow("sim_consumo", "Cambio de consumo", -50, 100, 5, "%", 0)}
+      ${simRow("sim_precio", "Cambio del precio de la energía", -50, 100, 5, "%", 0)}
+      ${simRow("sim_paneles", "Paneles extra", 0, 10000, 100, "Wp", 0)}
+      ${simRow("sim_bateria", "Batería extra", 0, 40, 1, "kWh", 0)}
+      ${simRow("sim_excedentes", "Precio de excedentes (−1 = el actual)", -1, 0.3, 0.005, "€/kWh", -1)}
+      <table style="margin-top:8px"><tr><th>${esc(s.mes || "")}</th><th class="r">Actual</th><th class="r">Simulada</th></tr>
+      <tr><td>Potencia</td><td class="r">${eur(b.potencia)}</td><td class="r">${eur(s.potencia)}</td></tr>
+      <tr><td>Energía</td><td class="r">${eur(b.energia)}</td><td class="r">${eur(s.energia)}</td></tr>
+      <tr><td>Compensación</td><td class="r">−${eur(b.compensacion)}</td><td class="r">−${eur(s.compensacion)}</td></tr>
+      <tr class="tot"><td>Total</td><td class="r">${eur(b.total)}</td><td class="r">${eur(s.total)}</td></tr></table>
+      <div style="margin-top:8px;font-size:16px;font-weight:700;color:${d < 0 ? C.green : d > 0 ? C.red : C.muted}">${d < 0 ? "▼ Ahorras" : d > 0 ? "▲ Pagas" : "="} ${eur(Math.abs(d))}/mes · ${eur(Math.abs(toNum(sim.diferencia_anual, 0)), 0)}/año</div>`, { c: C.violet });
+    const fcPts = (pf.proximas || []).map((m) => [new Date(m.mes + "-15T12:00:00").getTime(), m.total]);
+    const fcChart = fcPts.length ? { k: "fc", html: `<h3>${icon("mdi:chart-bar")}Previsión luz (€)</h3><div class="chart" data-chart="fc"></div>`, c: C.gold, cls: "card", attrs: "", chart: { kind: "points", series: [{ name: "Factura", color: C.gold, type: "bar", points: fcPts }], opt: { start: fcPts[0][0] - 15 * 86400000, end: fcPts[fcPts.length - 1][0] + 15 * 86400000, slots: fcPts.length, unit: "€", height: 180, decimals: 2 } } } : null;
+    return [
+      { cls: "wall", cards: [this.title("t", "Coste energético", "Luz y gas: facturas en curso, previsiones y simulador", "mdi:cash-multiple", C.gold), totalCard] },
+      { cards: [this.title("tl", "Luz", "", "mdi:flash", C.gold), luzNow, luzEnd] },
+      { cards: [next, ...(fcChart ? [fcChart] : []), this.chartCard("d30", "Coste diario de la luz (€)", C.gold, { kind: "days", unit: "€", series: [{ name: "Energía", field: "coste", color: C.gold }, { name: "Compensación", field: "compensacion", color: C.lime }] })] },
+      { cards: [this.title("tg", "Gas", "", "mdi:fire", C.violet), ...gasCards] },
+      { cards: [simCard] },
+    ];
   }
 
+  // ---------------------------------------------------------------- 8 co2
   v_co2() {
-    const t = this.ka("co2_evitado", "total") || {};
-    const kg = Number(t.evitado_kg) || 0;
-    const big = kg >= 1000 ? `${n(kg / 1000, 2)} t` : `${n(kg, 1)} kg`;
-    const row = (k, label, color) => [`<span style="color:${color}">${label}</span>`, ...["hoy", "mes", "ano", "total"].map((p) => n((this.ka("co2_evitado", p) || {})[k], p === "hoy" || p === "mes" ? 1 : 0))];
-    const aut = (p) => Number(this.ka("autosuficiencia", p)) || 0;
-    return `<div class="grid">
-      ${this.card(`<div class="co2hero"><p>CO₂ EVITADO DESDE QUE MIDES</p><h1>${big}</h1>
-        <div class="eq"><span><ha-icon icon="mdi:tree"></ha-icon><b>${n(t.arboles, 1)}</b> árboles absorbiendo un año</span><span><ha-icon icon="mdi:car"></ha-icon><b>${n(t.km_coche, 0)}</b> km en coche</span></div></div>`, C.lime, 2)}
-      ${this.card(`<h3>Independencia energética</h3><div class="row">${this.gauge(aut("hoy"), 0, 100, C.lime, "Autosuficiencia hoy", "%", this.id("autosuficiencia"))}${this.gauge(this.k("autoconsumo"), 0, 100, C.lime, "Autoconsumo hoy", "%", this.id("autoconsumo"))}</div>
-        <div class="bars"><span>Este mes</span>${this.bar(aut("mes"), 100, C.lime)}<b>${n(aut("mes"), 0)} %</b><span>Este año</span>${this.bar(aut("ano"), 100, C.lime)}<b>${n(aut("ano"), 0)} %</b></div>`, C.lime, 2)}
-      ${this.card(`<h3>Balance de carbono (kg CO₂)</h3>${this.table([row("evitado_kg", "Evitado (solar)", C.lime), row("red_kg", "Red eléctrica", C.cyan), row("gas_kg", "Gas", C.violet), row("neto_kg", "<b>Huella neta</b>", C.text)], ["", "Hoy", "Mes", "Año", "Total"])}
-        <p class="muted">Red: ${n(this.ka("co2_evitado", "factor_red_kg_kwh"), 3)} kg CO₂/kWh. Se cambia en Configurar → CO₂.</p>`, C.lime, 2)}
-      ${this.card(this.monthly("CO₂ por meses (kg)", [["co2_evitado", "Evitado", C.lime, " kg"], ["co2_red", "Red", C.cyan], ["co2_gas", "Gas", C.violet]]) || this.empty("Aparecerá con el histórico."), C.lime, 2)}
-    </div>`;
+    const tot = this.A("co2_evitado", "total") || {};
+    const kg = toNum(tot.evitado_kg, 0);
+    const hero = this.card("hero", `<div style="text-align:center"><div class="small muted">CO₂ EVITADO DESDE QUE MIDES</div><div class="big" style="--c:${C.lime};font-size:46px">${kg >= 1000 ? fmt(kg / 1000, 2) + " t" : fmt(kg, 1) + " kg"}</div>
+      <div style="display:flex;justify-content:center;gap:28px;margin-top:8px;flex-wrap:wrap"><div>${icon("mdi:pine-tree")} <b>${fmt(tot.arboles, 1)}</b> <span class="muted">árboles absorbiendo un año</span></div><div>${icon("mdi:car")} <b>${fmt(tot.km_coche, 0)}</b> <span class="muted">km en coche</span></div></div></div>`, { c: C.lime });
+    const B = ["hoy", "mes", "ano", "total"].map((k) => this.A("co2_evitado", k) || {});
+    const r = (l, f, c, d = 1) => `<tr><td style="color:${c}">${l}</td>${B.map((x, i) => `<td class="r">${fmt(x[f], i >= 2 ? 0 : d)}</td>`).join("")}</tr>`;
+    const table = this.card("tab", `<h3>${icon("mdi:leaf")}Balance de carbono (kg CO₂)</h3><table><tr><th></th><th class="r">Hoy</th><th class="r">Mes</th><th class="r">Año</th><th class="r">Total</th></tr>${r("Evitado (solar)", "evitado_kg", C.lime)}${r("Red eléctrica", "red_kg", C.cyan)}${r("Gas", "gas_kg", C.violet)}${r("Huella neta", "neto_kg", C.text)}</table><div class="small muted" style="margin-top:6px">Red: ${fmt(this.A("co2_evitado", "factor_red_kg_kwh"), 3)} kg CO₂/kWh. Cámbialo en Configurar → CO₂.</div>`, { c: C.lime });
+    const m = toNum(this.A("autosuficiencia", "mes"), 0), y = toNum(this.A("autosuficiencia", "ano"), 0);
+    const indep = this.card("ind", `<h3>${icon("mdi:shield-sun")}Independencia energética</h3><div class="row"><div class="n">Este mes</div><div class="bar"><i style="--b:${C.lime};width:${m}%"></i></div><div class="x"><b>${fmt(m, 0)} %</b></div></div><div class="row"><div class="n">Este año</div><div class="bar"><i style="--b:${C.lime};width:${y}%"></i></div><div class="x"><b>${fmt(y, 0)} %</b></div></div>`, { c: C.lime });
+    return [
+      { cls: "w2", cards: [this.title("t", "Huella de carbono", "Lo que dejas de emitir gracias al sol", "mdi:leaf-circle", C.lime), hero,
+        this.card("g1", gauge(this.N("autosuficiencia"), 0, 100, C.lime, "Autosuficiencia hoy", "%"), { c: C.lime, w: 6, click: this.id("autosuficiencia") }),
+        this.card("g2", gauge(this.N("autoconsumo"), 0, 100, C.lime, "Autoconsumo hoy", "%"), { c: C.lime, w: 6, click: this.id("autoconsumo") }), indep] },
+      { cls: "w2", cards: [table, this.chartCard("m", "CO₂ por meses (kg)", C.lime, { kind: "months", unit: "kg", count: 12, series: [{ name: "Evitado", field: "co2_evitado", color: C.lime }, { name: "Red", field: "co2_red", color: C.cyan }, { name: "Gas", field: "co2_gas", color: C.violet }] })] },
+    ];
   }
 
+  // ---------------------------------------------------------------- 9 gas
   v_gas() {
-    const g = this._ctx.gas || {};
-    if (!Object.keys(g).length) return `<div class="grid">${this.card(this.empty("Instala Gas TUR (se detecta solo) o indica tus sensores en Configurar → Gas."), C.violet, 4)}</div>`;
-    const k = (key, fmt, label, icon, span = "") => (g[key] ? this.kpi(g[key], fmt(this.num(g[key])), label, icon, C.violet) : "");
-    const gk = this.ka("consumo_gas", "kwh") || {};
-    return `<div class="grid">
-      ${this.card(`${this.head("Gas", "mdi:fire", C.violet, "Consumo y coste")}<div class="kpis">
-        ${k("coste_hoy", (v) => `${n(v, 2)} €`, "Gasto de hoy", "mdi:fire")}
-        ${k("coste_mes", (v) => `${n(v, 2)} €`, "Este mes", "mdi:calendar-month")}
-        ${this.kpi(this.id("consumo_gas"), `${n(this.k("consumo_gas"), 2)} m³`, `Hoy · ${n(gk.hoy, 1)} kWh`, "mdi:meter-gas", C.violet)}
-        ${k("caudal", (v) => `${n(v, 3)} m³/h`, "Caudal ahora", "mdi:gauge")}
-        ${k("precio_kwh", (v) => `${n(v, 5)} €`, "Precio por kWh", "mdi:cash")}
-        ${k("factura", (v) => `${n(v, 2)} €`, "Factura en curso", "mdi:receipt-text")}
-        ${k("prevision_factura", (v) => `${n(v, 2)} €`, "Previsión de la factura", "mdi:crystal-ball")}</div>
-        ${g.lectura && g.factor_conversion ? `<p><a class="link" href="/gas-tur">Abrir el panel de Gas TUR →</a></p>` : ""}`, C.violet)}
-      ${g.caudal ? this.card(this.live("Caudal 24 h (m³/h)", [{ entity: g.caudal, name: "Caudal", color: C.violet, type: "area" }], { unit: " m³/h", width: 340, height: 260 }), C.violet) : ""}
-      ${this.card(this.daily("Gas 30 días (m³)", [["gas_m3", "Gas", C.violet, " m³"]]), C.violet, 2)}
-      ${this.card(this.monthly("Gas por meses (m³)", [["gas_m3", "Gas", C.violet, " m³"]]), C.violet, 2)}
-    </div>`;
+    const g = this.cfg.gas || {};
+    if (!Object.keys(g).length) return [{ cards: [this.title("t", "Gas", "", "mdi:fire", C.violet), this.empty("e", "Instala Gas TUR (se detecta solo) o indica tus sensores en Configurar → Gas.")] }];
+    const cards = [this.title("t", "Gas", "Consumo y coste", "mdi:fire", C.violet)];
+    const kwhG = this.A("consumo_gas", "kwh") || {};
+    cards.push(this.kpi("hoy", g.consumo_hoy || this.id("consumo_gas"), `${fmt(g.consumo_hoy ? this.n(g.consumo_hoy) : this.N("consumo_gas"), 2)} m³`, `Hoy · ${fmt(kwhG.hoy, 1)} kWh`, "mdi:meter-gas", C.violet, 6));
+    if (g.coste_hoy) cards.push(this.kpi("ch", g.coste_hoy, eur(this.n(g.coste_hoy)), "Gasto de hoy", "mdi:fire", C.violet, 6));
+    if (g.coste_mes) cards.push(this.kpi("cm", g.coste_mes, eur(this.n(g.coste_mes)), "Este mes", "mdi:calendar-month", C.violet, 6));
+    if (g.caudal) cards.push(this.kpi("cau", g.caudal, `${fmt(this.n(g.caudal), 3)} m³/h`, "Caudal ahora", "mdi:gauge", C.violet, 6));
+    if (g.precio_kwh) cards.push(this.kpi("pr", g.precio_kwh, `${fmt(this.n(g.precio_kwh), 5)} €/kWh`, "Precio del gas", "mdi:cash", C.violet, 6));
+    if (g.lectura) cards.push(this.kpi("lec", g.lectura, `${fmt(this.n(g.lectura), 2)} m³`, "Lectura del contador", "mdi:counter", C.violet, 6));
+    cards.push(this.card("cost", `<button class="btn full" style="--c:${C.gold}" data-tab="coste">${icon("mdi:cash-multiple")}Ver la factura del gas en Coste</button>`, { c: C.gold }));
+    const charts = [];
+    if (g.caudal) charts.push(this.chartCard("cau24", "Caudal 24 h (m³/h)", C.violet, { kind: "history", hours: 24, unit: "m³/h", bucket: 10, series: [{ name: "Caudal", entity: g.caudal, color: C.violet, type: "area" }] }));
+    charts.push(this.chartCard("g30", "Gas 30 días (m³)", C.violet, { kind: "days", unit: "m³", series: [{ name: "Gas", field: "gas_m3", color: C.violet }] }));
+    charts.push(this.chartCard("g12", "Gas por meses (m³)", C.violet, { kind: "months", unit: "m³", count: 12, series: [{ name: "Gas", field: "gas_m3", color: C.violet }] }));
+    return [{ cards }, { cls: "w2", cards: charts }];
   }
 
+  // ---------------------------------------------------------------- 10 luces
   v_luces() {
-    const lights = this._ctx.lights || [];
-    const tile = (l) => {
-      const s = this.st(l.entity);
-      const on = s && s.state === "on";
-      const off = !s || s.state === "unavailable";
-      const pct = on && s.attributes.brightness ? Math.round((s.attributes.brightness / 255) * 100) : 0;
-      return `<div class="light ${on ? "on" : ""} ${off ? "off" : ""}" style="--c:${C.gold}">
-        <button class="lamp" data-action="toggle" data-entity="${l.entity}"><ha-icon icon="${on ? "mdi:lightbulb-on" : "mdi:lightbulb-outline"}"></ha-icon></button>
-        <div data-action="more" data-entity="${l.entity}"><b>${esc(l.name)}</b><small>${off ? "Sin conexión" : on ? (pct ? `${pct} %` : "Encendida") : "Apagada"}</small></div>
-        ${l.dimmable && !off ? `<input type="range" min="1" max="100" value="${pct || 50}" data-action="bright" data-entity="${l.entity}">` : ""}</div>`;
+    const lights = this.cfg.lights || [];
+    const on = lights.filter((l) => this.s(l.entity) === "on");
+    const off = lights.filter((l) => ["unavailable", undefined].includes(this.s(l.entity))).length;
+    const head = [
+      this.title("t", "Iluminación", "Todas las luces de la casa", "mdi:lightbulb-group", C.gold),
+      this.kpi("on", null, `${on.length} / ${lights.length}`, `Encendidas · ${on.filter((l) => !l.outdoor).length} dentro · ${on.filter((l) => l.outdoor).length} fuera`, "mdi:lightbulb-group", C.gold, 6),
+      this.kpi("na", null, String(off), "Sin conexión", "mdi:lan-disconnect", off ? C.red : C.green, 6),
+      this.card("off", `<button class="btn full" style="--c:${C.gold}" data-press="${this.id("apagar_luces")}" data-confirm="¿Apagar todas las luces?">${icon("mdi:lightbulb-group-off")}Apagar todas</button>`, { c: C.gold }),
+    ];
+    const lightCard = (l) => {
+      const s = this.s(l.entity), isOn = s === "on";
+      const br = Math.round(((toNum(this.a(l.entity, "brightness"), 0)) / 255) * 100);
+      const slider = l.dimmable ? `<input type="range" min="1" max="100" value="${isOn ? br : 0}" data-bright="${esc(l.entity)}" style="margin-top:8px">` : "";
+      return this.card("l" + l.entity, `<div class="light ${isOn ? "on" : "off"}"><div class="kpi" style="flex:1"><div class="ic" data-toggle="${esc(l.entity)}">${icon(isOn ? "mdi:lightbulb-on" : "mdi:lightbulb-outline")}</div><div class="grow" data-more="${esc(l.entity)}" style="cursor:pointer"><div style="font-weight:700">${esc(l.name)}</div><div class="l">${s === "unavailable" ? `<span style="color:${C.red}">Sin conexión</span>` : isOn ? (l.dimmable ? `Encendida · ${br} %` : "Encendida") : "Apagada"}</div></div></div></div>${slider}`, { c: isOn ? C.gold : "#2a3b55", w: 6 });
     };
     const inside = lights.filter((l) => !l.outdoor), outside = lights.filter((l) => l.outdoor);
-    const onList = this.ka("luces_encendidas", "encendidas") || [];
-    return `<div class="grid">
-      ${this.card(`${this.head("Iluminación", "mdi:lightbulb-group", C.gold, "Todas las luces de la casa")}
-        <div class="kpis">${this.kpi(this.id("luces_encendidas"), `${this.k("luces_encendidas") ?? 0} / ${this.ka("luces_encendidas", "total") ?? lights.length}`, `Encendidas · ${this.ka("luces_encendidas", "interior") ?? 0} dentro · ${this.ka("luces_encendidas", "exterior") ?? 0} fuera`, "mdi:lightbulb-group", C.gold)}
-        ${this.kpi(this.id("luces_encendidas"), `${this.ka("luces_encendidas", "sin_conexion") ?? 0}`, "Sin conexión", "mdi:lan-disconnect", C.red)}</div>
-        <div class="btns">${this.btn(this.id("apagar_luces"), "Apagar todas", "mdi:lightbulb-group-off", C.gold, "¿Apagar todas las luces?")}</div>
-        <h3>Encendidas ahora</h3>${onList.length ? onList.map((l) => `<span class="pill" style="--c:${C.gold}">${esc(l.nombre)}</span>`).join("") : `<p class="muted">Todas apagadas</p>`}`, C.gold)}
-      ${inside.length ? this.card(`<h3>Interior</h3><div class="lights">${inside.map(tile).join("")}</div>`, C.gold, outside.length ? 2 : 3) : ""}
-      ${outside.length ? this.card(`<h3>Exterior</h3><div class="lights">${outside.map(tile).join("")}</div>`, C.gold) : ""}
-      ${lights.length ? "" : this.card(this.empty("No hay luces. Si las añades a Home Assistant, pulsa «Regenerar panel»."), C.gold, 3)}
-    </div>`;
+    const secs = [{ cards: head }];
+    if (inside.length) secs.push({ cards: [this.title("ti", "Interior", "", "mdi:home-lightbulb", C.gold), ...inside.map(lightCard)] });
+    if (outside.length) secs.push({ cards: [this.title("to", "Exterior", "", "mdi:outdoor-lamp", C.gold), ...outside.map(lightCard)] });
+    if (!lights.length) secs.push({ cards: [this.empty("e", "No hay luces. Si las añades a Home Assistant, pulsa «Regenerar panel».")] });
+    return secs;
   }
 
+  // ---------------------------------------------------------------- 11 clima
   v_clima() {
-    const temps = this._ctx.temperatures || [];
-    const out = this.setting("temperatura_exterior");
-    const outT = out ? (out.startsWith("weather.") ? this.attr(out, "temperature") : this.num(out)) : null;
-    const vals = temps.map((e) => [e, this.num(e)]).filter(([, v]) => v !== null).sort((a, b) => b[1] - a[1]);
-    const color = (v) => (v >= 28 ? C.red : v >= 24 ? C.orange : v >= 19 ? C.green : v >= 14 ? C.blue : C.violet);
-    const heat = vals.map(([e, v]) => `<div class="heat" data-action="more" data-entity="${e}">${this.bar(v - 5, 30, color(v))}<b style="color:${color(v)}">${n(v, 1)} °C</b><span>${esc(this.name(e))}</span></div>`).join("");
-    const climates = (this._ctx.climates || []).map((e) => {
-      const s = this.st(e);
-      if (!s) return "";
-      const a = s.attributes;
-      const action = a.hvac_action || s.state;
-      const col = action === "heating" ? C.orange : action === "cooling" ? C.blue : s.state === "off" ? C.muted : C.green;
-      return `<div class="thermo" style="--c:${col}">
-        <div data-action="more" data-entity="${e}"><b>${esc(a.friendly_name || e)}</b><small>${esc({ heating: "calentando", cooling: "enfriando", idle: "en espera", off: "apagado" }[action] || action || "")}</small></div>
-        <div class="tt"><button data-action="temp" data-entity="${e}" data-step="-1">−</button><span><b>${a.temperature !== undefined && a.temperature !== null ? n(a.temperature, 1) : "—"}°</b><small>actual ${n(a.current_temperature, 1)}°</small></span><button data-action="temp" data-entity="${e}" data-step="1">+</button></div></div>`;
-    }).join("");
-    return `<div class="grid">
-      ${this.card(`${this.head("Temperaturas", "mdi:thermometer", C.orange, "Clima de cada estancia")}
-        <div class="kpis">${this.kpi(this.id("temperatura_interior"), `${n(this.k("temperatura_interior"), 1)} °C`, `Media interior · ▲ ${n(this.ka("temperatura_interior", "maxima"), 1)} ${esc(this.ka("temperatura_interior", "maxima_nombre") || "")} · ▼ ${n(this.ka("temperatura_interior", "minima"), 1)} ${esc(this.ka("temperatura_interior", "minima_nombre") || "")}`, "mdi:home-thermometer", C.orange)}
-        ${this.kpi(this.id("humedad_interior"), `${n(this.k("humedad_interior"), 0)} %`, "Humedad media", "mdi:water-percent", C.blue)}
-        ${out ? this.kpi(out, `${n(outT, 1)} °C`, "Exterior", "mdi:thermometer", C.blue) : ""}</div>
-        <h3>Mapa de calor</h3>${heat || this.empty("Sin sensores de temperatura.")}`, C.orange)}
-      ${climates ? this.card(`<h3>Calefacción y climatización</h3><div class="thermos">${climates}</div>`, C.orange) : ""}
-      ${temps.length ? this.card(this.live("Temperaturas 24 h (°C)", temps.slice(0, 12).map((e, i) => ({ entity: e, name: this.name(e), color: PALETTE[i % PALETTE.length] })), { unit: " °C", height: 260 }), C.orange, 2) : ""}
-      ${(this._ctx.humidities || []).length ? this.card(this.live("Humedad 24 h (%)", this._ctx.humidities.slice(0, 8).map((e, i) => ({ entity: e, name: this.name(e), color: [C.blue, C.cyan, C.violet, C.green, C.lime, C.pink, C.gold, C.orange][i % 8] })), { unit: " %" }), C.blue, 2) : ""}
-    </div>`;
+    const temps = this.cfg.temperatures || [];
+    const ext = this.set_("temperatura_exterior");
+    const extV = ext ? (ext.startsWith("weather.") ? toNum(this.a(ext, "temperature")) : this.n(ext)) : null;
+    const head = [
+      this.title("t", "Temperaturas", "Clima de cada estancia", "mdi:thermometer", C.orange),
+      this.kpi("avg", this.id("temperatura_interior"), `${fmt(this.N("temperatura_interior"), 1)} °C`, `Media interior · ▲ ${fmt(this.A("temperatura_interior", "maxima"), 1)} ${esc(this.A("temperatura_interior", "maxima_nombre") || "")} · ▼ ${fmt(this.A("temperatura_interior", "minima"), 1)} ${esc(this.A("temperatura_interior", "minima_nombre") || "")}`, "mdi:home-thermometer", C.orange, 12),
+      this.kpi("hum", this.id("humedad_interior"), `${fmt(this.N("humedad_interior"), 0)} %`, "Humedad media", "mdi:water-percent", C.blue, 6),
+    ];
+    if (ext) head.push(this.kpi("ext", ext, `${fmt(extV, 1)} °C`, "Exterior", "mdi:thermometer", C.blue, 6));
+    const list = temps.map((e) => ({ e, n: this.name(e), v: this.n(e) })).filter((x) => x.v !== null).sort((a, b) => b.v - a.v);
+    const col = (v) => (v >= 28 ? C.red : v >= 24 ? C.orange : v >= 19 ? C.green : v >= 14 ? C.blue : C.violet);
+    const heat = list.length ? this.card("heat", `<h3>${icon("mdi:thermometer-lines")}Mapa de calor</h3>${list.map((x) => `<div class="row" data-more="${esc(x.e)}" style="cursor:pointer"><div class="n">${esc(x.n)}</div><div class="bar"><i style="--b:${col(x.v)};width:${Math.max(3, Math.min(100, ((x.v + 5) / 40) * 100))}%"></i></div><div class="x" style="color:${col(x.v)}"><b>${fmt(x.v, 1)} °C</b></div></div>`).join("")}`, { c: C.orange }) : null;
+    const climates = (this.cfg.climates || []).map((e) => {
+      const st = this.st(e);
+      if (!st) return null;
+      const a = st.attributes, cur = toNum(a.current_temperature), tgt = toNum(a.temperature), act = a.hvac_action || st.state;
+      const heating = ["heating", "heat"].includes(act);
+      return this.card("cl" + e, `<div class="thermo"><div style="font-weight:700;cursor:pointer" data-more="${esc(e)}">${esc(this.name(e))}</div>
+        ${gauge(cur, 5, 30, heating ? C.orange : C.blue, act === "off" ? "Apagado" : heating ? "Calentando" : act === "idle" ? "En espera" : act, "°C actual", 130)}
+        <div class="ctr"><button class="btn" style="--c:${C.blue}" data-temp="${esc(e)}" data-delta="-0.5">−</button><div><div class="small muted">Objetivo</div><div style="font-size:20px;font-weight:800;color:${C.orange}">${tgt === null ? "—" : fmt(tgt, 1) + " °C"}</div></div><button class="btn" style="--c:${C.orange}" data-temp="${esc(e)}" data-delta="0.5">+</button></div>
+        ${isNum(a.current_humidity) ? `<div class="small muted" style="margin-top:6px">Humedad ${fmt(a.current_humidity, 0)} %</div>` : ""}</div>`, { c: heating ? C.orange : C.blue, w: 6 });
+    }).filter(Boolean);
+    const secs = [{ cards: [...head, ...(heat ? [heat] : [])] }];
+    if (climates.length) secs.push({ cls: climates.length > 2 ? "w2" : "", cards: [this.title("tc", "Calefacción y climatización", "", "mdi:radiator", C.orange), ...climates] });
+    const charts = [];
+    if (temps.length) charts.push(this.chartCard("t24", "Temperaturas 24 h (°C)", C.orange, { kind: "history", hours: 24, unit: "°C", bucket: 15, height: 280, series: temps.slice(0, 12).map((e, i) => ({ name: this.name(e), entity: e, color: PALETTE[i % PALETTE.length] })) }));
+    if ((this.cfg.humidities || []).length) charts.push(this.chartCard("h24", "Humedad 24 h (%)", C.blue, { kind: "history", hours: 24, unit: "%", bucket: 15, series: this.cfg.humidities.slice(0, 8).map((e, i) => ({ name: this.name(e), entity: e, color: PALETTE[(i + 6) % PALETTE.length] })) }));
+    if (charts.length) secs.push({ cls: "w2", cards: charts });
+    return secs;
   }
 
+  // ---------------------------------------------------------------- 12 riego
   v_riego() {
-    const zones = this._ctx.zones || [];
-    if (!zones.length) return `<div class="grid">${this.card(this.empty("Añade cada zona en la integración → «Añadir zona de riego»."), C.blue, 4)}</div>`;
-    const rain = this.setting("lluvia_sensor");
-    const skip = this.id("omitir_si_llueve");
-    const cards = zones.map((z) => {
-      const v = this.st(z.valve);
-      const open = v && ["on", "open", "opening"].includes(v.state);
-      const rem = this.id(`${z.id}:riego_restante`);
-      const r = this.num(rem) || 0;
-      const last = this.attr(rem, "ultimo_riego");
-      const soil = z.soil ? this.num(z.soil) : null;
-      return this.card(`<div class="zone ${open ? "on" : ""}">
-        ${this.head(z.name, "mdi:sprinkler", C.blue, open ? (r > 0 ? `Regando · quedan ${Math.round(r)} min` : "Válvula abierta") : `Parada · último riego ${last ? new Date(last).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—"}`)}
-        <div class="btns"><button class="btn ${open ? "active" : ""}" style="--c:${C.blue}" data-action="toggle" data-entity="${z.valve}"><ha-icon icon="mdi:valve"></ha-icon>${open ? "Cerrar" : "Abrir"}</button>${this.btn(this.id(`${z.id}:regar`), "Regar", "mdi:sprinkler", C.blue)}</div>
-        ${this.slider(this.id(`${z.id}:minutos_riego`), "Minutos", C.blue)}
-        ${soil !== null ? `<div class="row">${this.gauge(soil, 0, 100, C.blue, "Humedad del suelo", "%", z.soil)}</div>` : ""}</div>`, C.blue);
-    }).join("");
+    const zones = this.cfg.zones || [];
+    if (!zones.length) return [{ cards: [this.title("t", "Riego", "", "mdi:sprinkler-variant", C.blue), this.empty("e", "Añade cada zona en la integración → «Añadir zona de riego».")] }];
+    const watering = this.S("riego_activo") === "on";
+    const skip = this.S("omitir_si_llueve") === "on";
+    const rain = this.set_("lluvia_sensor");
+    const head = [
+      this.title("t", "Riego", "Zonas, humedad del suelo y lluvia", "mdi:sprinkler-variant", C.blue),
+      this.kpi("act", this.id("riego_activo"), watering ? "Regando" : "Parado", watering ? "Hay alguna válvula abierta" : "Todas las válvulas cerradas", watering ? "mdi:sprinkler-variant" : "mdi:water-off-outline", watering ? C.blue : C.muted, 6),
+      this.card("skip", `<div class="kpi" data-toggle="${this.id("omitir_si_llueve")}" style="cursor:pointer"><div class="ic">${icon(skip ? "mdi:weather-pouring" : "mdi:weather-sunny")}</div><div><div class="v">${skip ? "Sí" : "No"}</div><div class="l">Omitir si llueve${rain ? ` · ahora ${["on", "rain", "rainy"].includes(this.s(rain)) ? "llueve" : "no llueve"}` : ""}</div></div></div>`, { c: C.blue, w: 6 }),
+      this.card("stop", `<button class="btn full" style="--c:${C.red}" data-press="${this.id("parar_riego")}" data-confirm="¿Cerrar todas las válvulas?">${icon("mdi:water-off")}Parar todo</button>`, { c: C.red }),
+    ];
+    const secs = [{ cards: head }];
+    for (const z of zones) {
+      const open = ["on", "open", "opening"].includes(this.s(z.valve));
+      const rem = this.N(z.id + ":riego_restante", 0);
+      const minE = this.id(z.id + ":minutos_riego");
+      const mins = this.n(minE, 10);
+      const remE = this.id(z.id + ":riego_restante");
+      const last = this.a(remE, "ultimo_riego"), lastMin = this.a(remE, "ultimo_riego_minutos");
+      const soil = z.soil ? this.n(z.soil) : null;
+      const html = `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><div class="kpi"><div class="ic ${open ? "pulse" : ""}" data-toggle="${esc(z.valve)}" style="cursor:pointer">${icon(open ? "mdi:sprinkler-variant" : "mdi:sprinkler")}</div><div><div class="v">${esc(z.name)}</div><div class="l">${open ? (rem > 0 ? `Regando · quedan ${fmt(rem, 0)} min` : "Válvula abierta") : "Cerrada"} · último ${last ? fmtDate(last, true) : "—"}${lastMin ? ` (${fmt(lastMin, 0)} min)` : ""}</div></div></div>
+        ${soil !== null ? `<div style="width:110px" data-more="${esc(z.soil)}">${gauge(soil, 0, 100, soil < 20 ? C.amber : C.blue, "Suelo", "%", 110)}</div>` : ""}</div>
+        <div class="sim"><label>Minutos de riego</label><input type="range" min="1" max="60" step="1" value="${mins}" data-number="${minE}"><b>${fmt(mins, 0)} min</b></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${open ? `<button class="btn full" style="--c:${C.red}" data-toggle="${esc(z.valve)}">${icon("mdi:stop")}Cerrar</button>` : `<button class="btn full" data-press="${this.id(z.id + ":regar")}">${icon("mdi:play")}Regar ${fmt(mins, 0)} min</button>`}<button class="btn full" style="--c:${C.muted}" data-more="${esc(z.valve)}">${icon("mdi:history")}Historial</button></div>`;
+      secs[0].cards.push(this.card("z" + z.id, html, { c: C.blue, cls: open ? "" : "" }));
+    }
     const soils = zones.filter((z) => z.soil);
-    return `<div class="grid">
-      ${this.card(`${this.head("Riego", "mdi:sprinkler-variant", C.blue, "Zonas, humedad del suelo y lluvia")}
-        <div class="kpis">${this.kpi(this.id("riego_activo"), this.val(this.id("riego_activo")) === "on" ? "Regando" : "Parado", "Riego", "mdi:sprinkler-variant", C.blue)}
-        ${rain ? this.kpi(rain, ["on", "rain", "rainy", "pouring"].includes(this.val(rain)) ? "Lloviendo" : "Seco", "Lluvia", "mdi:weather-rainy", C.blue) : ""}</div>
-        <div class="btns"><button class="btn ${this.val(skip) === "on" ? "active" : ""}" style="--c:${C.blue}" data-action="toggle" data-entity="${skip}"><ha-icon icon="mdi:weather-pouring"></ha-icon>Omitir si llueve: ${this.val(skip) === "on" ? "sí" : "no"}</button>
-        ${this.btn(this.id("parar_riego"), "Parar todo", "mdi:water-off", C.red, "¿Cerrar todas las válvulas?")}</div>`, C.blue)}
-      ${cards}
-      ${soils.length ? this.card(this.live("Humedad del suelo 7 días (%)", soils.map((z, i) => ({ entity: z.soil, name: z.name, color: [C.blue, C.cyan, C.green, C.lime, C.violet, C.pink][i % 6] })), { hours: 168, unit: " %" }), C.blue, 2) : ""}
-    </div>`;
+    if (soils.length) secs.push({ cls: "w2", cards: [this.chartCard("soil", "Humedad del suelo 7 días (%)", C.blue, { kind: "history", hours: 168, unit: "%", bucket: 60, min: 0, max: 100, series: soils.map((z, i) => ({ name: z.name, entity: z.soil, color: PALETTE[(i + 6) % PALETTE.length] })) })] });
+    secs.push({ cls: "w2", cards: [this.chartCard("valves", "Válvulas 7 días", C.blue, { kind: "history", hours: 168, unit: "", bucket: 5, min: 0, max: zones.length, series: zones.map((z, i) => ({ name: z.name, entity: z.valve, color: PALETTE[(i + 6) % PALETTE.length], step: true })) })] });
+    return secs;
   }
 }
 
-const STYLE = `
-:host{display:block;height:100%;--c:${C.cyan};color:${C.text};font-family:var(--ha-font-family-body, Roboto, "Segoe UI", sans-serif);
-  background:radial-gradient(1200px 600px at 8% -10%, rgba(0,229,255,.16), transparent 60%),radial-gradient(900px 500px at 110% 0%, rgba(255,79,216,.10), transparent 60%),
-  repeating-linear-gradient(0deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),repeating-linear-gradient(90deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),linear-gradient(180deg,#030712,#060d20);}
-*{box-sizing:border-box}
-.app{display:flex;flex-direction:column;height:100%}
-header{position:sticky;top:0;z-index:2;background:rgba(3,8,20,.86);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
-.brand{display:flex;align-items:center;gap:10px;padding:8px 16px 0;color:${C.cyan}}
-.brand .title{font-weight:700;letter-spacing:4px;text-shadow:0 0 10px ${C.cyan}aa}
-.brand .clock{margin-left:auto;color:${C.muted};font-size:12px;font-variant-numeric:tabular-nums}
-.menu{display:none}:host([narrow]) .menu{display:block}
-nav{display:flex;gap:2px;padding:6px 10px;overflow-x:auto;scrollbar-width:none}
-.tab{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 11px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
-.tab ha-icon{--mdc-icon-size:18px}.tab:hover{color:${C.text};background:#ffffff0d}
-.tab.on{color:var(--c);background:color-mix(in srgb,var(--c) 12%,transparent);box-shadow:inset 0 -2px var(--c);text-shadow:0 0 8px var(--c)}
-.badge{font-size:10px;color:#000;border-radius:9px;padding:0 5px;margin-left:2px}
-main{flex:1;overflow-y:auto;padding:14px}
-footer{padding:10px;text-align:center;color:${C.muted};font-size:12px}footer a{color:${C.cyan}}
-.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;align-items:start}
-.stack{display:flex;flex-direction:column;gap:14px;grid-column:span var(--span,1)}
-@media (max-width:1300px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.card[style*="--span:4"],.card[style*="--span:3"]{grid-column:span 2}}
-@media (max-width:760px){.grid{grid-template-columns:1fr}.card,.stack{grid-column:span 1 !important}main{padding:8px}}
-.card{grid-column:span var(--span,1);position:relative;background:linear-gradient(150deg,rgba(10,20,44,.92),rgba(3,8,20,.94));border:1px solid color-mix(in srgb,var(--c) 35%,transparent);
-  border-radius:16px;padding:14px;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 8%,transparent),0 0 22px color-mix(in srgb,var(--c) 16%,transparent),0 8px 24px rgba(0,0,0,.45);overflow:hidden;min-width:0}
-.card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,transparent,var(--c),transparent)}
-.card::after{content:"";position:absolute;top:8px;right:10px;width:14px;height:14px;border-top:2px solid var(--c);border-right:2px solid var(--c);opacity:.6;border-radius:0 4px 0 0}
-h1{margin:0;font-size:22px;letter-spacing:5px;color:${C.cyan};text-shadow:0 0 12px ${C.cyan}aa}
-h2{margin:0;font-size:16px;letter-spacing:3px;text-transform:uppercase;color:var(--c);text-shadow:0 0 10px var(--c)}
-h3{margin:10px 0 8px;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:6px}h3:first-child{margin-top:0}
-h3 ha-icon{--mdc-icon-size:18px}
-p{margin:6px 0}.muted{color:${C.muted};font-size:12px}small{color:${C.muted};font-size:11px}.big{font-size:18px;font-weight:700;white-space:nowrap}td:last-child{white-space:nowrap}
-.link{cursor:pointer;color:${C.cyan}}
-.head{display:flex;gap:10px;align-items:center;margin-bottom:12px}.head ha-icon{color:var(--c);--mdc-icon-size:28px;filter:drop-shadow(0 0 6px var(--c))}.head p{margin:2px 0 0;color:${C.muted};font-size:12px}
-.hero{display:flex;justify-content:space-between;align-items:flex-start}.hero p{color:${C.muted};font-size:13px}
-.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}
-.kpi{display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;background:#0a1630;border:1px solid color-mix(in srgb,var(--c) 22%,transparent);cursor:pointer;transition:.2s}
-.kpi:hover{background:color-mix(in srgb,var(--c) 10%,#0a1630);box-shadow:0 0 14px color-mix(in srgb,var(--c) 30%,transparent)}
-.ic{width:38px;height:38px;flex:none;border-radius:50%;display:grid;place-items:center;color:var(--c);background:color-mix(in srgb,var(--c) 15%,transparent);box-shadow:0 0 12px color-mix(in srgb,var(--c) 30%,transparent)}
-.kpi .v{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}.kpi .l{color:${C.muted};font-size:11.5px;line-height:1.3}
-.row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
-.gauge{width:180px;max-width:100%;cursor:pointer}.gauge svg{width:100%}
-.track{stroke:${C.dim};stroke-width:10;fill:none;stroke-linecap:round}.arc{stroke-width:10;fill:none;stroke-linecap:round;filter:drop-shadow(0 0 5px currentColor)}
-.gv{fill:${C.text};font-size:15px;font-weight:700;text-anchor:middle}.gl{fill:${C.muted};font-size:8px;text-anchor:middle}
-table{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}td,th{padding:5px 4px;border-bottom:1px solid #12223a;text-align:right}
-td:first-child,th:first-child{text-align:left}th{color:${C.muted};font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:1px}
-.bar{display:inline-block;height:8px;background:${C.dim};border-radius:5px;overflow:hidden;vertical-align:middle}.bar i{display:block;height:100%;border-radius:5px;box-shadow:0 0 8px currentColor}
-.chips{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}.chip{all:unset;cursor:pointer;padding:4px 10px;border-radius:14px;background:#0d1c33;color:${C.muted};font-size:12px}
-.chip.on{background:var(--c);color:#02101c;font-weight:700;box-shadow:0 0 10px var(--c)}
-.alert{border-left:3px solid var(--c);background:color-mix(in srgb,var(--c) 10%,transparent);border-radius:8px;padding:8px 10px;margin:6px 0;display:flex;flex-direction:column;gap:2px;font-size:12.5px;cursor:pointer}
-.alert b{color:var(--c)}
-.ok{display:flex;gap:8px;align-items:center;color:${C.green};padding:10px;border-radius:10px;background:${C.green}14}
-.empty{display:flex;gap:8px;align-items:center;color:${C.muted};padding:10px}
-.loading{color:${C.muted};padding:30px;text-align:center}
-.chart{width:100%;height:auto;display:block}.chart line.grid{stroke:${C.line};stroke-dasharray:3}.chart .zero{stroke:${C.muted};stroke-width:1}
-.chart .ax{fill:${C.muted};font-size:10px}.glow{filter:drop-shadow(0 0 3px currentColor)}
-.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:${C.muted};margin-top:4px}.legend i{display:inline-block;width:10px;height:3px;margin-right:5px;vertical-align:middle;border-radius:2px}.legend b{color:${C.text}}
-.flow{width:100%;max-height:420px;display:block}
-.fl{fill:none;stroke-width:2;opacity:.18;stroke-dasharray:4 6}.fl.on{opacity:.75;stroke-width:3}.dot{filter:drop-shadow(0 0 4px currentColor)}
-.node{cursor:pointer}.ring{fill:none;stroke:var(--c);stroke-width:3;filter:drop-shadow(0 0 8px var(--c))}.core{fill:#06112a}
-.nv{fill:${C.text};font-size:15px;font-weight:700;text-anchor:middle}.ns{fill:${C.muted};font-size:10px;text-anchor:middle}.nl{fill:var(--c);font-size:12px;text-anchor:middle;letter-spacing:1px}
-.pills{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
-.pill{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--c);color:var(--c);border-radius:20px;padding:3px 10px;font-size:12px;margin:2px;cursor:pointer}.pill ha-icon{--mdc-icon-size:15px}.pill b{color:${C.text}}
-.strings{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
-.string{padding:10px;border-radius:12px;background:#0a1630;border:1px solid color-mix(in srgb,var(--c) 25%,transparent);cursor:pointer;display:flex;flex-direction:column;gap:4px}
-.string .sn{display:flex;gap:6px;align-items:center;color:var(--c)}.string .sv{font-size:20px;font-weight:700}.string .bar{width:100%}
-.cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:3px 12px}
-.cell{display:grid;grid-template-columns:22px 1fr 78px;gap:6px;align-items:center;font-size:12px;cursor:pointer}.cell .bar{width:100%}.cell span{color:${C.muted}}
-.rank{display:grid;grid-template-columns:24px 1fr auto;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid #12223a;cursor:pointer}
-.rank ha-icon{color:${C.pink}}.rank .bar{width:100%;margin-top:4px}.rank span{text-align:right;display:flex;flex-direction:column}
-.counts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}.counts div{padding:10px;border-radius:12px;background:color-mix(in srgb,var(--c) 10%,transparent);color:var(--c);font-size:12px}
-.counts b{display:block;font-size:30px;text-shadow:0 0 12px var(--c)}
-.btns{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
-.btn{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:12px;border:1px solid var(--c);color:var(--c);font-size:13px;transition:.2s}
-.btn:hover,.btn.active{background:var(--c);color:#02101c;box-shadow:0 0 14px var(--c)}
-.slider{display:grid;grid-template-columns:1fr 1.2fr 80px;gap:8px;align-items:center;font-size:12px;margin:6px 0}.slider b{text-align:right}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:4px;background:${C.dim};outline:none}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer}
-input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer;border:none}
-.co2hero{text-align:center;padding:10px}.co2hero p{color:${C.muted};letter-spacing:3px;font-size:12px}.co2hero h1{font-size:54px;color:${C.lime};text-shadow:0 0 20px ${C.lime}}
-.eq{display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-top:8px}.eq span{display:flex;gap:6px;align-items:center}.eq ha-icon{color:${C.lime}}
-.bars{display:grid;grid-template-columns:80px 1fr 50px;gap:8px;align-items:center;font-size:12px;margin-top:8px}.bars .bar{width:100%}
-.lights{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px}
-.light{padding:10px;border-radius:12px;background:#0a1630;border:1px solid #1d2d4a;display:grid;grid-template-columns:40px 1fr;gap:4px 8px;align-items:center}
-.light div{cursor:pointer;display:flex;flex-direction:column}.light input{grid-column:1/3}
-.light.on{border-color:var(--c);box-shadow:0 0 14px color-mix(in srgb,var(--c) 35%,transparent)}.light.off{opacity:.45}
-.lamp{all:unset;cursor:pointer;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:#0d1c33;color:${C.muted}}
-.light.on .lamp{background:var(--c);color:#201600;box-shadow:0 0 16px var(--c)}
-.heat{display:grid;grid-template-columns:1fr 70px 1.2fr;gap:8px;align-items:center;font-size:12.5px;padding:3px 0;cursor:pointer}.heat .bar{width:100%}
-.thermos{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
-.thermo{padding:10px;border-radius:12px;background:#0a1630;border:1px solid color-mix(in srgb,var(--c) 40%,transparent);display:flex;flex-direction:column;gap:6px}
-.thermo > div:first-child{cursor:pointer;display:flex;flex-direction:column}
-.tt{display:flex;align-items:center;justify-content:space-between}.tt span{text-align:center;display:flex;flex-direction:column}.tt b{font-size:24px;color:var(--c);text-shadow:0 0 10px var(--c)}
-.tt button{all:unset;cursor:pointer;width:34px;height:34px;border-radius:50%;border:1px solid var(--c);color:var(--c);display:grid;place-items:center;font-size:18px}.tt button:hover{background:var(--c);color:#000}
-.zone.on .head ha-icon{animation:pulse 1.2s infinite}
-@keyframes pulse{50%{opacity:.4}}
-`;
+// Valve states are text: map on/open to 1 for the valve chart.
+const _origPoints = CentroControlPanel.prototype._points;
+CentroControlPanel.prototype._points = function (hist, entity, opts) {
+  const rows = hist?.[entity] || [];
+  if (rows.length && rows.every((r) => !isNum(r.s))) {
+    const idx = (this.cfg.zones || []).findIndex((z) => z.valve === entity);
+    const on = (s) => ["on", "open", "opening"].includes(s);
+    const pts = rows.map((r) => [(r.lu ?? r.lc ?? 0) * 1000, on(r.s) ? idx + 0.8 : idx]);
+    if (pts.length) pts.push([Date.now(), pts[pts.length - 1][1]]);
+    return pts;
+  }
+  return _origPoints.call(this, hist, entity, opts);
+};
 
 if (!customElements.get("centro-control-panel")) customElements.define("centro-control-panel", CentroControlPanel);

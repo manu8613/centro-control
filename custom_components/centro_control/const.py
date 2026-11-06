@@ -15,7 +15,7 @@ NAME: Final = "Centro de Control"
 AUTHOR: Final = "manu8613"
 AUTHOR_URL: Final = "https://github.com/manu8613"
 REPO_URL: Final = "https://github.com/manu8613/centro-control"
-VERSION: Final = "2.0.0"
+VERSION: Final = "2.1.0"
 
 DEFAULT_TITLE: Final = "Centro de Control"
 DASHBOARD_URL: Final = "centro-control"
@@ -213,7 +213,7 @@ DEFAULTS: Final[dict[str, object]] = {
     CONF_GAS_AUTO: True,
     CONF_GAS_FACTOR: 11.0,
     CONF_OUTDOOR_PATTERN: "porche|patio|jard[ií]n|terraza|fachada|exterior|piscina|foco|calle",
-    CONF_TEMP_EXCLUDE_PATTERN: "bms|inversor|inverter|cpu|mos|celda|cell|dc_|bateria|battery|nevera|frigo|congelador|device_temperature|chip|soc_temp",
+    CONF_TEMP_EXCLUDE_PATTERN: "bms|inversor|inverter|cpu|mos|celda|cell|dc_|bateria|battery|nevera|frigo|congelador|device_temperature|chip|soc_temp|forecast|previsi[oó]n|pron[oó]stico|aemet",
     CONF_TEMP_MAX: 32.0,
     CONF_TEMP_MIN: 10.0,
     CONF_HUMIDITY_MAX: 75.0,

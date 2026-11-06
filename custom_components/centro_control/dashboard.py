@@ -1,14 +1,13 @@
-"""Create the Centro de Control dashboard in the sidebar.
+"""Register the Centro de Control panel in the sidebar.
 
-The dashboard is a YAML-mode Lovelace dashboard generated from the real entity
-ids, so it always matches the installed entities. It is rebuilt on every load
-(and with the "Regenerar panel" button), and the YAML is kept in
-``config/centro_control/`` so it can be copied into another dashboard.
+The panel is the integration's own JavaScript web component
+(``frontend/centro-control-panel.js``). It receives the real entity ids and the
+user's layout as panel config. A Lovelace version of the same panel is still
+written to ``config/centro_control/`` for whoever prefers cards.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict
 import logging
 from pathlib import Path
 from typing import Any
@@ -144,95 +143,91 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
-def _dashboards(hass: HomeAssistant) -> dict[str | None, Any] | None:
-    data = hass.data.get("lovelace")
-    if data is None:
-        return None
-    return data.dashboards if hasattr(data, "dashboards") else data["dashboards"]
-
-
-STATIC_URL = f"/{DOMAIN}_static"
+FRONTEND_URL = f"/{DOMAIN}_static"
 PANEL_ELEMENT = "centro-control-panel"
+_STATIC = f"{DOMAIN}_static_registered"
 
 
-async def _async_register_static(hass: HomeAssistant) -> bool:
-    """Serve the panel's JavaScript once per Home Assistant run."""
-    if hass.data.get(f"{DOMAIN}_static"):
-        return True
-    if getattr(hass, "http", None) is None:
-        return False
-    from homeassistant.components.http import StaticPathConfig
-
-    folder = Path(__file__).parent / "frontend"
-    await hass.http.async_register_static_paths([StaticPathConfig(STATIC_URL, str(folder), False)])
-    hass.data[f"{DOMAIN}_static"] = True
-    return True
-
-
-def panel_config(hass: HomeAssistant, entry: CentroConfigEntry) -> dict[str, Any]:
-    ctx = asdict(build_context(hass, entry.runtime_data))
-    ctx.update({"version": VERSION, "author": AUTHOR, "author_url": AUTHOR_URL, "repo_url": REPO_URL})
+def panel_config(hass: HomeAssistant, manager: CentroManager) -> dict[str, Any]:
+    """Everything the JavaScript panel needs (entity ids and the user's layout)."""
+    ctx = build_context(hass, manager)
     return {
-        "_panel_custom": {
-            "name": PANEL_ELEMENT,
-            "module_url": f"{STATIC_URL}/centro-control-panel.js?v={VERSION}",
-            "embed_iframe": False,
-            "trust_external": False,
-        },
-        "ctx": ctx,
+        "entry_id": manager.config_entry.entry_id,
+        "title": ctx.title,
+        "version": VERSION,
+        "author": AUTHOR,
+        "author_url": AUTHOR_URL,
+        "repo_url": REPO_URL,
+        "ids": ctx.ids,
+        "settings": {k: v for k, v in ctx.settings.items() if isinstance(v, (str, int, float, bool, list)) and v not in ("", [])},
+        "strings": ctx.strings,
+        "batteries": ctx.batteries,
+        "circuits": ctx.circuits,
+        "zones": ctx.zones,
+        "lights": [{"entity": li.entity, "name": li.name, "outdoor": li.outdoor, "dimmable": li.dimmable} for li in ctx.lights],
+        "climates": ctx.climates,
+        "temperatures": ctx.temperatures,
+        "humidities": ctx.humidities,
+        "gas": ctx.gas,
     }
 
 
-async def async_setup_dashboard(hass: HomeAssistant, entry: CentroConfigEntry, force: bool = False) -> None:
-    """Register the Centro de Control panel in the sidebar (and keep a Lovelace copy on disk)."""
-    url = dashboard_url(hass, entry)
-    path = panel_path(hass, entry.entry_id)
-    context = build_context(hass, entry.runtime_data)
-    # A Lovelace version with HACS cards stays in config/centro_control/ for whoever prefers it.
-    await hass.async_add_executor_job(_write, path, dump(build_panel(context, url)))
+async def _register_static(hass: HomeAssistant) -> None:
+    if hass.data.get(_STATIC):
+        return
+    from homeassistant.components.http import StaticPathConfig
 
-    if not await _async_register_static(hass):
-        _LOGGER.warning("HTTP no está disponible; no se puede registrar el panel")
+    await hass.http.async_register_static_paths([StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), False)])
+    hass.data[_STATIC] = True
+
+
+async def async_setup_dashboard(hass: HomeAssistant, entry: CentroConfigEntry, force: bool = False) -> None:
+    """Register the Centro de Control panel in the sidebar (and keep a Lovelace YAML copy)."""
+    url = dashboard_url(hass, entry)
+    manager = entry.runtime_data
+    path = panel_path(hass, entry.entry_id)
+    try:
+        yaml_config = build_panel(build_context(hass, manager), url)
+        await hass.async_add_executor_job(_write, path, dump(yaml_config))
+    except Exception:  # noqa: BLE001 - the YAML copy is only a bonus
+        _LOGGER.exception("No se pudo escribir la copia YAML del panel")
+    if hass.http is None:
         return
     ours: set[str] = hass.data.setdefault(_OURS, set())
     if url not in ours and frontend.async_panel_exists(hass, url):
         _notify(hass, entry, url, path)
         return
-    dashboards = _dashboards(hass)
-    if dashboards is not None and url in dashboards and url in ours:
-        dashboards.pop(url, None)  # Lovelace panel of version 1.1 in this same run
     try:
-        frontend.async_register_built_in_panel(
+        from homeassistant.components import panel_custom
+
+        await _register_static(hass)
+        if url in ours:
+            frontend.async_remove_panel(hass, url, warn_if_unknown=False)
+        await panel_custom.async_register_panel(
             hass,
-            component_name="custom",
+            frontend_url_path=url,
+            webcomponent_name=PANEL_ELEMENT,
             sidebar_title=entry.title,
             sidebar_icon=DASHBOARD_ICON,
-            frontend_url_path=url,
-            config=panel_config(hass, entry),
+            module_url=f"{FRONTEND_URL}/centro-control-panel.js?v={VERSION}",
+            config=panel_config(hass, manager),
             require_admin=False,
-            update=url in ours or force,
         )
     except Exception:  # noqa: BLE001 - never break the integration for the panel
         _LOGGER.exception("No se pudo registrar el panel")
-        _notify(hass, entry, url, path)
         return
     ours.add(url)
 
 
 @callback
 def async_remove_dashboard(hass: HomeAssistant, entry: CentroConfigEntry) -> None:
-    """Take the dashboard out of the sidebar (the YAML file stays)."""
+    """Take the panel out of the sidebar."""
     url = dashboard_url(hass, entry)
     ours: set[str] = hass.data.get(_OURS, set())
     if url not in ours:
         return
     ours.discard(url)
-    try:
-        frontend.async_remove_panel(hass, url, warn_if_unknown=False)
-    except TypeError:  # Home Assistant before warn_if_unknown existed
-        frontend.async_remove_panel(hass, url)
-    if (dashboards := _dashboards(hass)) is not None:
-        dashboards.pop(url, None)
+    frontend.async_remove_panel(hass, url, warn_if_unknown=False)
 
 
 @callback

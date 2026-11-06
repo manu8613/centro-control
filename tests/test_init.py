@@ -270,9 +270,9 @@ async def test_panel_builds_with_real_entities(hass: HomeAssistant) -> None:
 
     from custom_components.centro_control.dashboard import panel_config
 
-    config = panel_config(hass, entry)
-    assert config["_panel_custom"]["name"] == "centro-control-panel"
-    assert config["ctx"]["ids"]["potencia_solar"] == ctx.ids["potencia_solar"]
+    config = panel_config(hass, entry.runtime_data)
+    assert config["ids"]["potencia_solar"] == ctx.ids["potencia_solar"]
+    assert config["author"] == "manu8613"
     json.dumps(config)  # must reach the browser as JSON
 
 
@@ -296,3 +296,61 @@ async def test_import_history_without_recorder(hass: HomeAssistant) -> None:
     await hass.async_block_till_done()
     notes = hass.states.async_entity_ids("persistent_notification")
     assert isinstance(notes, list)
+
+
+async def test_api_inventory_and_configuration(hass: HomeAssistant, hass_client) -> None:
+    entry = make_entry()
+    await setup(hass, entry)
+    client = await hass_client()
+
+    resp = await client.get("/api/centro_control/inventario")
+    assert resp.status == 200
+    inv = await resp.json()
+    assert any(s["entity_id"] == "sensor.red" for s in inv["estados"])
+    assert inv["centro_control"]["entradas"][0]["entry_id"] == entry.entry_id
+
+    resp = await client.get("/api/centro_control/configuracion")
+    config = await resp.json()
+    item = config["entradas"][0]
+    assert len(item["elementos"]) == 5
+    item["opciones"]["precio_unico"] = 0.3
+    item["elementos"].append(
+        {
+            "tipo": "circuito",
+            "titulo": "Horno",
+            "datos": {"nombre": "Horno", "potencia": "sensor.no_existe", "grupo": "Cuadro", "suma_en_total": False},
+        }
+    )
+
+    resp = await client.post("/api/centro_control/configuracion", json={**config, "simular": True})
+    body = await resp.json()
+    assert body["simulado"] and "No existe sensor.no_existe" in body["avisos"]
+    assert entry.options["precio_unico"] == 0.20  # nothing changed
+
+    resp = await client.post("/api/centro_control/configuracion", json=config)
+    body = await resp.json()
+    assert body["ok"], body
+    await hass.async_block_till_done()
+    assert entry.options["precio_unico"] == 0.3
+    assert len(entry.subentries) == 6
+    assert entry.state is ConfigEntryState.LOADED
+    assert body["copia"].endswith(".json")
+
+
+async def test_api_requires_admin(hass: HomeAssistant, hass_client, hass_admin_user) -> None:
+    entry = make_entry()
+    await setup(hass, entry)
+    hass_admin_user.groups = []
+    client = await hass_client()
+    resp = await client.get("/api/centro_control/inventario")
+    assert resp.status == 403
+
+
+async def test_api_status(hass: HomeAssistant, hass_client) -> None:
+    entry = make_entry()
+    await setup(hass, entry)
+    client = await hass_client()
+    resp = await client.get("/api/centro_control/estado")
+    body = await resp.json()
+    assert body["entidades"] > 30
+    assert body["entradas"][0]["solar_w"] == 2200

@@ -8,6 +8,29 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.1.0] - 2026-11-06
+
+### Añadido
+- **Copias y configuración por API** (solo administradores):
+  `/api/centro_control/inventario`, `/api/centro_control/configuracion`
+  (leer, simular, aplicar y restaurar; guarda una copia antes de cada cambio)
+  y `/api/centro_control/estado`.
+- Script de Windows `tools/centro-control.ps1` para exportar, aplicar un plan,
+  restaurar y comprobar con un token, con copia completa de Home Assistant
+  antes de tocar nada.
+- Pestaña **Coste** con luz y gas juntos: total previsto, factura en curso de
+  cada uno y previsión del gas (Gas TUR).
+
+### Cambiado
+- Panel rehecho: actualiza solo las tarjetas que cambian (sin parpadeos),
+  gráficas con valores al pasar el ratón y ejes legibles, celdas en rejilla,
+  termostatos con ±, luces con brillo, riego con deslizador y aviso en la
+  pestaña Problemas.
+- Las gráficas de 24 h leen el historial de tus sensores originales, así que
+  muestran lo de siempre aunque Centro de Control sea nuevo.
+- Los sensores de servicios meteorológicos (AEMET, Met.no…) y de previsión ya
+  no entran en «Temperaturas» ni avisan de frío o calor.
+
 ## [2.0.0] - 2026-11-06
 
 ### Cambiado

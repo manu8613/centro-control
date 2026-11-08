@@ -322,9 +322,20 @@ async def test_api_inventory_and_configuration(hass: HomeAssistant, hass_client)
         }
     )
 
+    hass.states.async_set("sensor.jk1_soc", "55", {"friendly_name": "BMS 1 SOC", "unit_of_measurement": "%"})
+    item["elementos"].append(
+        {
+            "tipo": "bateria",
+            "titulo": "JK 2",
+            "datos": {"nombre": "JK 2", "soc": "~sensor:BMS 1 SOC", "potencia": "~BMS 1 Potencia", "capacidad_kwh": 5, "suma_al_banco": False},
+        }
+    )
+
     resp = await client.post("/api/centro_control/configuracion", json={**config, "simular": True})
     body = await resp.json()
     assert body["simulado"] and "No existe sensor.no_existe" in body["avisos"]
+    assert body["resueltas"] == {"~sensor:BMS 1 SOC": "sensor.jk1_soc"}
+    assert any("BMS 1 Potencia" in w for w in body["avisos"])
     assert entry.options["precio_unico"] == 0.20  # nothing changed
 
     resp = await client.post("/api/centro_control/configuracion", json={**config, "reiniciar_contadores": True, "importar_historico": 30})
@@ -333,7 +344,12 @@ async def test_api_inventory_and_configuration(hass: HomeAssistant, hass_client)
     assert body["dias_importados"] == {entry.entry_id: 0}  # no recorder in this test
     await hass.async_block_till_done()
     assert entry.options["precio_unico"] == 0.3
-    assert len(entry.subentries) == 6
+    assert len(entry.subentries) == 7
+    # same type + title: updated in place, so entities and history are kept
+    assert {"S1", "S2", "B1", "C1", "Z1"} <= set(entry.subentries)
+    jk = next(s for s in entry.subentries.values() if s.title == "JK 2")
+    assert jk.data["soc"] == "sensor.jk1_soc" and "potencia" not in jk.data
+    assert value(hass, entry, "diferencia_soc") is not None
     assert entry.state is ConfigEntryState.LOADED
     assert body["copia"].endswith(".json")
 

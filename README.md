@@ -22,7 +22,7 @@ evitado. Se configura entero desde la interfaz y crea el panel solo.
 | **Puente de mando** | Flujo de energía animado, indicadores clave, resumen del periodo elegido, alertas y gráfica de 24 h. |
 | **Red** | Importación y vertido, uso de la potencia contratada, tensión y frecuencia, precio de hoy y mañana, 30 días. |
 | **Solar** | Producción frente a la potencia pico, cada string (W, V, A, % de Wp), comparativa W/kWp, inversor, histórico diario y mensual. |
-| **Batería** | Carga total, flujo, energía almacenada, autonomía, cada batería y sus celdas una a una. |
+| **Batería** | Carga total, flujo, energía almacenada, autonomía, cada batería y sus celdas una a una, comunicación con cada BMS y diferencia de SOC entre baterías. |
 | **Consumos** | Total, consumo sin medir, ranking de circuitos y aparatos, tarjetas por grupo y gráfica apilada. |
 | **Problemas** | Críticos, avisos e información con el detalle de cada uno, estado de todas las fuentes e historial. |
 | **Coste** | Luz y gas juntos: total previsto, factura en curso de cada uno línea a línea, previsiones, las tres siguientes facturas de luz y simulador «¿y si…?». |
@@ -79,6 +79,12 @@ Todo se cambia desde la integración, sin YAML:
   - Un circuito puede **colgar de otro** (por ejemplo, el frigorífico dentro de
     la línea de cocina): desactiva «Cuenta para el total» para no contarlo dos
     veces.
+  - **Varias baterías detrás de un inversor**: crea una batería «banco» con el
+    SOC y la potencia que da el inversor y una batería por cada BMS con
+    «Cuenta para el banco» desactivado. El total sale del inversor; cada BMS
+    muestra sus celdas, temperaturas, alarmas y comunicación, y el panel
+    compara sus SOC (sensor «Diferencia de SOC entre baterías», con aviso y
+    crítico configurables).
 - Si no das un contador de energía, la integración integra la potencia. Si das
   uno (total o diario), usa sus lecturas y descarta saltos imposibles.
 - Las luces, termostatos y sensores de temperatura y humedad se cogen todos
@@ -135,7 +141,8 @@ producción solar de cada mes.
 ## Problemas que detecta
 
 Fuentes que no responden · strings sin producción o que rinden menos que los de
-su grupo · celdas desequilibradas o fuera de rango · alarmas del BMS · batería
+su grupo · celdas desequilibradas o fuera de rango · alarmas del BMS · BMS sin
+comunicación · baterías con SOC muy distinto entre sí · batería
 baja, caliente o cargando con frío · temperatura, fallo o alarma del inversor ·
 tensión o frecuencia de red fuera de rango · cerca del límite de potencia ·
 importar con la batería cargada · consumo sin medir o circuitos que suman más
@@ -167,7 +174,10 @@ confirmación y al final comprueban que todo responde.
 Usan una API solo para administradores:
 `GET /api/centro_control/inventario`, `GET|POST /api/centro_control/configuracion`
 y `GET /api/centro_control/estado`. El formato de `plan.json` es el mismo que
-devuelve `GET /api/centro_control/configuracion`.
+devuelve `GET /api/centro_control/configuracion`. Los elementos con el mismo
+tipo y título se actualizan sin cambiar de identificador, así que sus
+entidades y su histórico se conservan. Una entidad cuyo id aún no conoces se
+puede indicar por su nombre: `"~sensor:BMS 1 SOC"` (o `"~BMS 1 SOC"`).
 
 ## Privacidad
 

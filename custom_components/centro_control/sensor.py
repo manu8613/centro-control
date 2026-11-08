@@ -101,6 +101,10 @@ def _batteries(m: CentroManager) -> dict[str, Any]:
     }
 
 
+def _soc_pair(m: CentroManager) -> dict[str, Any]:
+    return {"baterias": [{"nombre": n, "soc": v} for n, v in m.live.get("soc_pair", [])]}
+
+
 def _problems_attrs(m: CentroManager) -> dict[str, Any]:
     problems = m.problems
     return {
@@ -259,6 +263,15 @@ MAIN: tuple[CentroSensorDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         value=_live("soc", 1),
+    ),
+    CentroSensorDescription(
+        key="diferencia_soc",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:scale-unbalanced",
+        value=_live("soc_diff", 1),
+        attrs=_soc_pair,
     ),
     CentroSensorDescription(
         key="energia_almacenada",

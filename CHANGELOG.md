@@ -8,6 +8,26 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.3.0] - 2026-11-08
+
+### Añadido
+- Baterías de detalle: opción «Cuenta para el banco» en cada batería. Las que
+  no cuentan muestran sus datos (celdas, temperaturas, alarmas, ciclos) sin
+  sumarse al SOC, la potencia ni la energía del banco, que pueden venir del
+  inversor.
+- «Comunicación del BMS» (sensor binario de conectividad) en cada batería: se
+  ve en el panel y avisa cuando el BMS deja de contestar.
+- Sensor «Diferencia de SOC entre baterías» y marcador en las pestañas
+  Batería y Puente de mando, con gráfica de 48 h. Umbrales de aviso (5 puntos)
+  y crítico (15) en *Detección de problemas*.
+- La API de configuración acepta entidades por su nombre (`"~sensor:BMS 1
+  SOC"`) y devuelve las encontradas en `resueltas`.
+
+### Cambiado
+- Al aplicar un plan, los elementos con el mismo tipo y título se actualizan
+  en su sitio en vez de borrarse y crearse de nuevo: conservan sus entidades,
+  su histórico y sus contadores.
+
 ## [2.2.0] - 2026-11-06
 
 ### Añadido

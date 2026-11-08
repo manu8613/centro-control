@@ -64,6 +64,8 @@ from .const import (
     CONF_CREATE_DASHBOARD,
     CONF_CURRENT,
     CONF_CYCLES,
+    CONF_LINK,
+    CONF_BANK,
     CONF_DEVICE_BATTERY_MIN,
     CONF_ELECTRICITY_TAX,
     CONF_ENERGY,
@@ -127,6 +129,8 @@ from .const import (
     CONF_PV_POWER,
     CONF_RAIN_SENSOR,
     CONF_SOC,
+    CONF_SOC_DIFF_CRIT,
+    CONF_SOC_DIFF_WARN,
     CONF_SOC_MIN,
     CONF_SOIL,
     CONF_SOIL_MIN,
@@ -282,6 +286,8 @@ SECTIONS: dict[str, Fields] = {
         CONF_CELL_MAX: (_number(2, 5, "any", "V"), True),
         CONF_BATTERY_TEMP_MAX: (_number(20, 80, 1, "°C"), True),
         CONF_SOC_MIN: (_number(0, 100, 1, "%"), True),
+        CONF_SOC_DIFF_WARN: (_number(1, 100, 0.5, "%"), True),
+        CONF_SOC_DIFF_CRIT: (_number(1, 100, 0.5, "%"), True),
         CONF_INV_TEMP_WARN: (_number(20, 120, 1, "°C"), True),
         CONF_INV_TEMP_CRIT: (_number(20, 120, 1, "°C"), True),
         CONF_VOLTAGE_MIN: (_number(100, 260, 1, "V"), True),
@@ -476,8 +482,10 @@ class BatteryFlow(_ItemFlow):
         CONF_CELL_DIFF: (SENSOR, False),
         CONF_ALARMS: (ANY_STATUS, False),
         CONF_CYCLES: (SENSOR, False),
+        CONF_LINK: (_entity("binary_sensor"), False),
+        CONF_BANK: (BooleanSelector(), True),
     }
-    DEFAULTS = {CONF_BATTERY_SIGN: BAT_POSITIVE_DISCHARGE, CONF_CAPACITY: 5.0}
+    DEFAULTS = {CONF_BATTERY_SIGN: BAT_POSITIVE_DISCHARGE, CONF_CAPACITY: 5.0, CONF_BANK: True}
 
 
 class CircuitFlow(_ItemFlow):

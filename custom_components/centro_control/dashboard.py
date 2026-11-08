@@ -123,6 +123,11 @@ def build_context(hass: HomeAssistant, manager: CentroManager) -> PanelContext:
                 "cells": list(b.cells),
                 "cycles": b.cycles,
                 "positive_charge": b.positive_charge,
+                "capacity_kwh": b.capacity_kwh,
+                "cell_diff": b.cell_diff,
+                "alarms": b.alarms,
+                "link": b.link,
+                "in_total": b.in_total,
             }
             for b in m.batteries
         ],
@@ -162,6 +167,7 @@ def panel_config(hass: HomeAssistant, manager: CentroManager) -> dict[str, Any]:
         "settings": {k: v for k, v in ctx.settings.items() if isinstance(v, (str, int, float, bool, list)) and v not in ("", [])},
         "strings": ctx.strings,
         "batteries": ctx.batteries,
+        "soc_pair": [b.id for b in manager.model.soc_pair],
         "circuits": ctx.circuits,
         "zones": ctx.zones,
         "lights": [{"entity": li.entity, "name": li.name, "outdoor": li.outdoor, "dimmable": li.dimmable} for li in ctx.lights],

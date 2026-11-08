@@ -15,6 +15,7 @@ from typing import Any
 from .const import (
     BAT_POSITIVE_CHARGE,
     CONF_ALARMS,
+    CONF_BANK,
     CONF_BATTERY_SIGN,
     CONF_CAPACITY,
     CONF_CELL_DIFF,
@@ -31,6 +32,7 @@ from .const import (
     CONF_ICON,
     CONF_IN_TOTAL,
     CONF_LIGHTS,
+    CONF_LINK,
     CONF_LIGHTS_EXCLUDE,
     CONF_MAX_MINUTES,
     CONF_MINUTES,
@@ -103,6 +105,8 @@ class Battery:
     cell_diff: str | None = None
     alarms: str | None = None
     cycles: str | None = None
+    link: str | None = None
+    in_total: bool = True
 
 
 @dataclass(frozen=True)
@@ -159,7 +163,7 @@ class Model:
                     PVString(
                         id=sub_id,
                         name=name,
-                        power=sub[CONF_POWER],
+                        power=sub.get(CONF_POWER) or "",
                         voltage=sub.get(CONF_VOLTAGE) or None,
                         current=sub.get(CONF_CURRENT) or None,
                         energy=sub.get(CONF_ENERGY) or None,
@@ -172,8 +176,8 @@ class Model:
                     Battery(
                         id=sub_id,
                         name=name,
-                        soc=sub[CONF_SOC],
-                        power=sub[CONF_POWER],
+                        soc=sub.get(CONF_SOC) or "",
+                        power=sub.get(CONF_POWER) or "",
                         positive_charge=sub.get(CONF_BATTERY_SIGN) == BAT_POSITIVE_CHARGE,
                         voltage=sub.get(CONF_VOLTAGE) or None,
                         current=sub.get(CONF_CURRENT) or None,
@@ -185,6 +189,8 @@ class Model:
                         cell_diff=sub.get(CONF_CELL_DIFF) or None,
                         alarms=sub.get(CONF_ALARMS) or None,
                         cycles=sub.get(CONF_CYCLES) or None,
+                        link=sub.get(CONF_LINK) or None,
+                        in_total=bool(sub.get(CONF_BANK, True)),
                     )
                 )
             elif kind == SUB_CIRCUIT:
@@ -192,7 +198,7 @@ class Model:
                     Circuit(
                         id=sub_id,
                         name=name,
-                        power=sub[CONF_POWER],
+                        power=sub.get(CONF_POWER) or "",
                         energy=sub.get(CONF_ENERGY) or None,
                         group=str(sub.get(CONF_GROUP) or "Cuadro"),
                         parent=sub.get(CONF_PARENT) or None,
@@ -205,14 +211,14 @@ class Model:
                     Zone(
                         id=sub_id,
                         name=name,
-                        valve=sub[CONF_VALVE],
+                        valve=sub.get(CONF_VALVE) or "",
                         soil=sub.get(CONF_SOIL) or None,
                         minutes=float(sub.get(CONF_MINUTES) or 10),
                         max_minutes=float(sub.get(CONF_MAX_MINUTES) or 60),
                     )
                 )
         model.strings.sort(key=lambda s: s.name)
-        model.batteries.sort(key=lambda b: b.name)
+        model.batteries.sort(key=lambda b: (not b.in_total, b.name))
         model.circuits.sort(key=lambda c: (c.group, c.name))
         model.zones.sort(key=lambda z: z.name)
         return model
@@ -233,8 +239,23 @@ class Model:
         return self.get(CONF_GRID_SIGN) == GRID_POSITIVE_EXPORT
 
     @property
+    def bank(self) -> list[Battery]:
+        """Batteries that count for the totals (SOC, power, energy)."""
+        return [b for b in self.batteries if b.in_total]
+
+    @property
+    def soc_pair(self) -> list[Battery]:
+        """Batteries whose SOCs are compared: the detail-only ones (e.g. each
+        BMS behind an inverter that already gives the bank SOC) or, if there
+        are fewer than two of those, every battery."""
+        detail = [b for b in self.batteries if not b.in_total]
+        if len(detail) >= 2:
+            return detail
+        return list(self.batteries) if len(self.batteries) >= 2 else []
+
+    @property
     def capacity_kwh(self) -> float:
-        return sum(b.capacity_kwh for b in self.batteries)
+        return sum(b.capacity_kwh for b in self.bank)
 
     @property
     def peak_wp(self) -> float:
@@ -289,7 +310,7 @@ class Model:
         for s in self.strings:
             found.update(e for e in (s.power, s.voltage, s.current, s.energy) if e)
         for b in self.batteries:
-            found.update(e for e in (b.soc, b.power, b.voltage, b.current, b.cell_low, b.cell_high, b.cell_diff, b.alarms, b.cycles) if e)
+            found.update(e for e in (b.soc, b.power, b.voltage, b.current, b.cell_low, b.cell_high, b.cell_diff, b.alarms, b.cycles, b.link) if e)
             found.update(b.temperatures)
             found.update(b.cells)
         for c in self.circuits:

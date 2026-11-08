@@ -214,6 +214,8 @@
           "celda_max": "Tensión máxima de celda (V)",
           "bateria_temp_max": "Temperatura máxima de batería",
           "soc_min": "SOC mínimo",
+          "diferencia_soc_aviso": "Diferencia de SOC entre baterías: aviso (%)",
+          "diferencia_soc_critico": "Diferencia de SOC entre baterías: crítico (%)",
           "inversor_temp_aviso": "Inversor: aviso a partir de",
           "inversor_temp_critico": "Inversor: crítico a partir de",
           "tension_min": "Tensión de red mínima",
@@ -228,6 +230,7 @@
         "data_description": {
           "tolerancia_strings": "Aviso si un string rinde este % menos que los de su grupo.",
           "soc_min": "Por debajo, aviso. También es la reserva para la autonomía.",
+          "diferencia_soc_aviso": "Entre las baterías de detalle (o todas, si no hay dos de detalle).",
           "revisar_seguridad": "Sensores binarios de fuga, humo, gas y monóxido."
         }
       }
@@ -303,15 +306,19 @@
             "celda_maxima": "Celda máxima",
             "diferencia_celdas": "Diferencia entre celdas",
             "alarmas": "Alarmas del BMS",
-            "ciclos": "Ciclos"
+            "ciclos": "Ciclos",
+            "comunicacion": "Comunicación del BMS",
+            "suma_al_banco": "Cuenta para el banco"
           },
           "data_description": {
             "potencia": "Sensor en W o kW.",
             "celdas": "Opcional: todas las celdas, en orden.",
             "celda_minima": "Si no das las celdas una a una.",
-            "diferencia_celdas": "En V o mV."
+            "diferencia_celdas": "En V o mV.",
+            "comunicacion": "Sensor binario de conectividad (encendido = comunica). Avisa si se pierde.",
+            "suma_al_banco": "Su SOC y su potencia forman el total. Desactívalo en las baterías de detalle (p. ej. cada BMS) si el inversor ya da el total, para no contarlas dos veces."
           },
-          "description": "Una batería o banco con su BMS."
+          "description": "Una batería o banco con su BMS. Si el inversor ya da el SOC y la potencia del banco, crea el banco con esos datos y una batería de detalle por cada BMS con «Cuenta para el banco» desactivado: se ven sus celdas y se compara su SOC."
         },
         "reconfigure": {
           "title": "Editar batería",
@@ -329,15 +336,19 @@
             "celda_maxima": "Celda máxima",
             "diferencia_celdas": "Diferencia entre celdas",
             "alarmas": "Alarmas del BMS",
-            "ciclos": "Ciclos"
+            "ciclos": "Ciclos",
+            "comunicacion": "Comunicación del BMS",
+            "suma_al_banco": "Cuenta para el banco"
           },
           "data_description": {
             "potencia": "Sensor en W o kW.",
             "celdas": "Opcional: todas las celdas, en orden.",
             "celda_minima": "Si no das las celdas una a una.",
-            "diferencia_celdas": "En V o mV."
+            "diferencia_celdas": "En V o mV.",
+            "comunicacion": "Sensor binario de conectividad (encendido = comunica). Avisa si se pierde.",
+            "suma_al_banco": "Su SOC y su potencia forman el total. Desactívalo en las baterías de detalle (p. ej. cada BMS) si el inversor ya da el total, para no contarlas dos veces."
           },
-          "description": "Una batería o banco con su BMS."
+          "description": "Una batería o banco con su BMS. Si el inversor ya da el SOC y la potencia del banco, crea el banco con esos datos y una batería de detalle por cada BMS con «Cuenta para el banco» desactivado: se ven sus celdas y se compara su SOC."
         }
       },
       "abort": {
@@ -495,6 +506,9 @@
       },
       "soc_bateria": {
         "name": "Carga de la batería"
+      },
+      "diferencia_soc": {
+        "name": "Diferencia de SOC entre baterías"
       },
       "energia_almacenada": {
         "name": "Energía almacenada"

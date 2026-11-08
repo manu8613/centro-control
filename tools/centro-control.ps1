@@ -169,8 +169,12 @@ function Aplicar([string]$Ruta) {
   Titulo "Simulación"
   $sim = Pedir "POST" "/api/centro_control/configuracion" ('{"simular":true,' + $raw.Substring(1)) | ConvertFrom-Json
   foreach ($e in $plan.entradas) { Write-Host "  «$($e.titulo)»: $(@($e.elementos).Count) elementos" }
+  if ($sim.resueltas) {
+    $n = @($sim.resueltas.PSObject.Properties).Count
+    if ($n) { Ok "$n entidades encontradas por su nombre:"; $sim.resueltas.PSObject.Properties | ForEach-Object { Write-Host "     $($_.Name.Substring(1)) -> $($_.Value)" } }
+  }
   if ($sim.avisos -and @($sim.avisos).Count) {
-    Aviso "Entidades que no existen (se guardarán igual, pero no darán datos):"
+    Aviso "Avisos (las entidades que no existen se guardan igual, pero no darán datos):"
     $sim.avisos | ForEach-Object { Write-Host "     - $_" }
   } else { Ok "Todas las entidades del plan existen" }
   $r = Read-Host "¿Aplicar? (escribe SI)"

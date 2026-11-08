@@ -17,7 +17,7 @@ IDS = {
     k: f"sensor.cc_{k}"
     for k in (
         "potencia_solar potencia_red potencia_importada potencia_exportada potencia_bateria potencia_consumo potencia_no_medida "
-        "soc_bateria energia_almacenada autonomia_bateria autosuficiencia_ahora uso_potencia_contratada precio_actual precio_excedentes "
+        "soc_bateria diferencia_soc energia_almacenada autonomia_bateria autosuficiencia_ahora uso_potencia_contratada precio_actual precio_excedentes "
         "periodo_tarifario energia_solar energia_importada energia_exportada energia_consumo energia_bateria_carga energia_bateria_descarga "
         "coste_energia compensacion_excedentes ahorro_solar factura_actual prevision_factura simulacion_factura autoconsumo autosuficiencia "
         "co2_evitado co2_emitido consumo_gas problemas luces_encendidas temperatura_interior humedad_interior historico"

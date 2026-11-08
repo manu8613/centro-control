@@ -77,6 +77,50 @@ def _write(path: Path, data: dict[str, Any]) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _resolve_names(hass: HomeAssistant, data: Any, warnings: list[str], resolved: dict[str, str]) -> Any:
+    """Replace ``"~[domain:]Entity name"`` with the entity id that has that name.
+
+    Lets a plan point at entities whose id is not known in advance (e.g. the
+    ones a new ESPHome device has just created). Names that match no entity,
+    or more than one, are dropped with a warning.
+    """
+    if isinstance(data, dict):
+        out = {}
+        for key, value in data.items():
+            new = _resolve_names(hass, value, warnings, resolved)
+            if new is not None:
+                out[key] = new
+        return out
+    if isinstance(data, list):
+        return [v for v in (_resolve_names(hass, v, warnings, resolved) for v in data) if v is not None]
+    if not (isinstance(data, str) and data.startswith("~")):
+        return data
+    wanted = data[1:].strip()
+    domain = None
+    if ":" in wanted and wanted.split(":", 1)[0].isidentifier():
+        domain, wanted = wanted.split(":", 1)
+    target = wanted.strip().casefold()
+    matches: set[str] = set()
+    for entry in er.async_get(hass).entities.values():
+        if domain and entry.domain != domain:
+            continue
+        names = {n.casefold() for n in (entry.name, entry.original_name) if n}
+        if target in names:
+            matches.add(entry.entity_id)
+    if not matches:
+        for state in hass.states.async_all(domain) if domain else hass.states.async_all():
+            if str(state.attributes.get("friendly_name", "")).casefold() == target:
+                matches.add(state.entity_id)
+    if len(matches) == 1:
+        resolved[data] = next(iter(matches))
+        return resolved[data]
+    if matches:
+        warnings.append(f"«{wanted}» coincide con varias entidades ({', '.join(sorted(matches))}): no se usa")
+    else:
+        warnings.append(f"No hay ninguna entidad llamada «{wanted}»: no se usa")
+    return None
+
+
 def _referenced(data: Any) -> set[str]:
     """Every value that looks like an entity id."""
     found: set[str] = set()
@@ -210,6 +254,8 @@ class ConfigView(_Admin):
             return self.json_message("Falta la lista «entradas».", HTTPStatus.BAD_REQUEST)
 
         warnings: list[str] = []
+        resolved: dict[str, str] = {}
+        wanted = [_resolve_names(hass, item, warnings, resolved) for item in wanted]
         for item in wanted:
             for entity in sorted(_referenced({"o": item.get("opciones", {}), "e": item.get("elementos", [])})):
                 if hass.states.get(entity) is None and not entity.startswith(("notify.", "persistent_notification")):
@@ -218,7 +264,7 @@ class ConfigView(_Admin):
                 if element.get("tipo") not in SUBENTRY_TYPES:
                     return self.json_message(f"Tipo de elemento desconocido: {element.get('tipo')}", HTTPStatus.BAD_REQUEST)
         if simulate:
-            return self.json({"ok": True, "simulado": True, "avisos": warnings})
+            return self.json({"ok": True, "simulado": True, "avisos": warnings, "resueltas": resolved})
 
         backup = backups_dir(hass) / f"config_{datetime.now():%Y%m%d_%H%M%S}.json"
         await hass.async_add_executor_job(_write, backup, current_config(hass))
@@ -237,7 +283,7 @@ class ConfigView(_Admin):
                 manager.imported = False
             if days := int(body.get("importar_historico") or 0):
                 imported[entry.entry_id] = await manager.async_import_history(min(days, 800))
-        return self.json({"ok": True, "copia": str(backup), "entradas": applied, "avisos": warnings, "dias_importados": imported})
+        return self.json({"ok": True, "copia": str(backup), "entradas": applied, "avisos": warnings, "resueltas": resolved, "dias_importados": imported})
 
     async def _entry_for(self, hass: HomeAssistant, item: dict[str, Any]) -> ConfigEntry:
         entries = hass.config_entries.async_entries(DOMAIN)
@@ -262,21 +308,27 @@ class ConfigView(_Admin):
 
     async def _apply(self, hass: HomeAssistant, entry: ConfigEntry, item: dict[str, Any]) -> None:
         manager = hass.config_entries
-        # Subentries: replace them all (each change reloads, so do it with
-        # the entry unloaded and reload once at the end).
+        # Subentries: the ones with the same type and title are updated in
+        # place (same id, so their entities, history and counters are kept);
+        # new ones are added and the rest removed. Each change reloads, so do
+        # it with the entry unloaded and reload once at the end.
         await manager.async_unload(entry.entry_id)
-        for sub_id in list(entry.subentries):
-            manager.async_remove_subentry(entry, sub_id)
+        existing = {(s.subentry_type, s.title): s for s in entry.subentries.values()}
+        keep: set[str] = set()
         for element in item.get("elementos", []):
-            manager.async_add_subentry(
-                entry,
-                ConfigSubentry(
-                    data=dict(element.get("datos", {})),
-                    subentry_type=element["tipo"],
-                    title=str(element.get("titulo") or element.get("datos", {}).get("nombre") or element["tipo"]),
-                    unique_id=None,
-                ),
-            )
+            title = str(element.get("titulo") or element.get("datos", {}).get("nombre") or element["tipo"])
+            data = dict(element.get("datos", {}))
+            current = existing.get((element["tipo"], title))
+            if current is not None and current.subentry_id not in keep:
+                keep.add(current.subentry_id)
+                if dict(current.data) != data:
+                    manager.async_update_subentry(entry, current, data=data)
+                continue
+            new = ConfigSubentry(data=data, subentry_type=element["tipo"], title=title, unique_id=None)
+            manager.async_add_subentry(entry, new)
+            keep.add(new.subentry_id)
+        for sub_id in [s for s in entry.subentries if s not in keep]:
+            manager.async_remove_subentry(entry, sub_id)
         manager.async_update_entry(
             entry,
             title=item.get("titulo") or entry.title,

@@ -649,7 +649,11 @@ class CentroControlPanel extends HTMLElement {
       this.kpi("k2", null, fmtW(load), `Consumo · ${kwh(this.N("energia_consumo"))} hoy`, "mdi:home-lightning-bolt", C.pink, 6, "consumos"),
       this.kpi("k3", null, `${fmtW(Math.abs(grid ?? 0))} ${grid > 15 ? "↓" : grid < -15 ? "↑" : ""}`, grid > 15 ? "Importando de la red" : grid < -15 ? "Vertiendo a la red" : "Red en reposo", "mdi:transmission-tower", C.cyan, 6, "red"),
     ];
-    if ((this.cfg.batteries || []).length) kp.push(this.kpi("k4", null, `${fmt(soc, 0)} %`, `Batería · ${bat > 30 ? "descargando " + fmtW(bat) : bat < -30 ? "cargando " + fmtW(-bat) : "en reposo"}`, "mdi:home-battery", C.green, 6, "bateria"));
+    if ((this.cfg.batteries || []).length) {
+      const d = (this.cfg.soc_pair || []).length >= 2 ? this.N("diferencia_soc") : null;
+      const dTxt = d === null ? "" : ` · <span style="color:${this.socDiffColor(d)}">Δ ${fmt(d, 0)} %</span>`;
+      kp.push(this.kpi("k4", null, `${fmt(soc, 0)} %`, `Batería · ${bat > 30 ? "descargando " + fmtW(bat) : bat < -30 ? "cargando " + fmtW(-bat) : "en reposo"}${dTxt}`, "mdi:home-battery", C.green, 6, "bateria"));
+    }
     kp.push(this.kpi("k5", null, eur(this.N("coste_energia")), `Luz hoy · ahorro solar ${eur(this.A("ahorro_solar", "hoy"))}`, "mdi:currency-eur", C.gold, 6, "coste"));
     const gasCost = this.cfg.gas?.coste_hoy;
     kp.push(this.kpi("k6", null, gasCost ? eur(this.n(gasCost)) : `${fmt(this.N("co2_evitado"), 1)} kg`, gasCost ? `Gas hoy · ${fmt(this.N("consumo_gas"), 2)} m³` : "CO₂ evitado hoy", gasCost ? "mdi:fire" : "mdi:leaf", gasCost ? C.violet : C.lime, 6, gasCost ? "gas" : "co2"));
@@ -757,7 +761,34 @@ class CentroControlPanel extends HTMLElement {
     ];
   }
 
-  // ---------------------------------------------------------------- 4 batería
+  socDiffColor(d) {
+    const warn = toNum(this.set_("diferencia_soc_aviso"), 5), crit = toNum(this.set_("diferencia_soc_critico"), 15);
+    return d === null ? C.muted : d >= crit ? C.red : d >= warn ? C.amber : C.green;
+  }
+
+  /** Marker comparing the SOC of the batteries in cfg.soc_pair. */
+  socDiffCard(k) {
+    const pair = (this.cfg.soc_pair || []).map((id) => (this.cfg.batteries || []).find((b) => b.id === id)).filter(Boolean);
+    if (pair.length < 2) return null;
+    const warn = toNum(this.set_("diferencia_soc_aviso"), 5), crit = toNum(this.set_("diferencia_soc_critico"), 15);
+    const d = this.N("diferencia_soc");
+    const c = this.socDiffColor(d);
+    const verdict = d === null ? "Sin datos de alguna batería" : d >= crit ? "Desequilibradas" : d >= warn ? "Vigilar" : "Equilibradas";
+    const colors = [C.lime, C.cyan, C.violet, C.amber];
+    const rows = pair.map((b, i) => {
+      const v = this.n(b.soc);
+      return `<div class="row" data-more="${esc(b.soc)}" style="cursor:pointer"><div class="n">${esc(b.name)}</div><div class="bar"><i style="--b:${colors[i % colors.length]};width:${v === null ? 0 : Math.max(0, Math.min(100, v))}%"></i></div><div class="x"><b>${fmt(v, 0)} %</b></div></div>`;
+    }).join("");
+    const top = Math.max(crit * 1.5, (d || 0) * 1.1, 10);
+    const pos = (x) => `${Math.min(100, (100 * x) / top)}%`;
+    const scale = `<div style="position:relative;height:12px;border-radius:6px;margin:14px 0 4px;background:linear-gradient(90deg,${C.green}55 0 ${pos(warn)},${C.amber}55 ${pos(warn)} ${pos(crit)},${C.red}55 ${pos(crit)} 100%)">
+        ${d === null ? "" : `<div style="position:absolute;top:-5px;left:calc(${pos(d)} - 2px);width:4px;height:22px;border-radius:2px;background:${c};box-shadow:0 0 10px ${c}"></div>`}
+      </div><div class="small muted" style="display:flex;justify-content:space-between"><span>0</span><span>aviso ${fmt(warn, 0)}</span><span>crítico ${fmt(crit, 0)}</span><span>${fmt(top, 0)} pts</span></div>`;
+    return this.card(k, `<h3>${icon("mdi:scale-unbalanced")}Diferencia de SOC entre baterías</h3>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:6px"><div class="big" style="--c:${c}">${d === null ? "—" : `Δ ${fmt(d, 1)}`}</div><div class="muted">puntos · <b style="color:${c}">${verdict}</b></div></div>
+      ${rows}${scale}`, { c, click: this.id("diferencia_soc") });
+  }
+
   v_bateria() {
     const bats = this.cfg.batteries || [];
     if (!bats.length) return [{ cards: [this.title("t", "Batería", "", "mdi:home-battery", C.green), this.empty("e", "Añade tus baterías en la integración → «Añadir batería».")] }];
@@ -774,14 +805,28 @@ class CentroControlPanel extends HTMLElement {
         this.kpi("cd", this.id("energia_bateria_carga"), `↓ ${kwh(this.N("energia_bateria_carga"), 2)} · ↑ ${kwh(this.N("energia_bateria_descarga"), 2)}`, "Cargado · descargado hoy", "mdi:swap-vertical-bold", C.green, 12),
       ],
     }];
+    const diff = this.socDiffCard("sd");
+    if (diff) sections[0].cards.push(diff);
     for (const bt of bats) {
-      const cards = [this.title("b" + bt.id, bt.name, "", "mdi:battery-outline", C.green)];
+      const detail = bt.in_total === false;
+      const link = bt.link ? this.s(bt.link) : null;
+      const sub = [detail ? "Detalle del BMS" : "Banco · cuenta para el total", bt.capacity_kwh ? `${fmt(bt.capacity_kwh, 1)} kWh` : ""].filter(Boolean).join(" · ");
+      const cards = [this.title("b" + bt.id, bt.name, sub, detail ? "mdi:battery-outline" : "mdi:home-battery-outline", C.green)];
+      if (bt.link) {
+        const [lv, ll, lc, li] = link === "on" ? ["Comunicando", "BMS · RS485", C.green, "mdi:lan-connect"] : link === "off" ? ["Sin comunicación", "BMS · datos congelados", C.red, "mdi:lan-disconnect"] : ["Sin datos", "BMS · ESP32 no disponible", C.amber, "mdi:lan-pending"];
+        cards.push(this.kpi("lk" + bt.id, bt.link, lv, ll, li, lc, 12));
+      }
       const w = this.watts(bt.power);
       const wv = w === null ? null : bt.positive_charge ? -w : w;
       cards.push(this.card("bs" + bt.id, gauge(this.n(bt.soc), 0, 100, C.green, "SOC", "%", 130), { c: C.green, w: 6, click: bt.soc }));
       cards.push(this.kpi("bp" + bt.id, bt.power, fmtW(Math.abs(wv ?? 0)), wv > 30 ? "Descargando" : wv < -30 ? "Cargando" : "En reposo", "mdi:flash", C.green, 6));
       for (const [k, l, ic, u, d] of [["voltage", "Tensión", "mdi:sine-wave", "V", 2], ["current", "Corriente", "mdi:current-dc", "A", 1], ["cycles", "Ciclos", "mdi:autorenew", "", 0]])
         if (bt[k]) cards.push(this.kpi(k + bt.id, bt[k], `${fmt(this.n(bt[k]), d)} ${u}`, l, ic, C.green, 6));
+      if (bt.alarms) {
+        const al = this.s(bt.alarms);
+        const bad = al !== null && al !== undefined && !["0", "0.0", "off", "ok", "normal", "unknown", "unavailable"].includes(String(al).toLowerCase());
+        cards.push(this.kpi("al" + bt.id, bt.alarms, bad ? esc(al) : "Sin alarmas", "Alarmas del BMS", bad ? "mdi:alert-octagon" : "mdi:shield-check", bad ? C.red : C.green, 6));
+      }
       for (const e of bt.temperatures || []) cards.push(this.kpi("bt" + e, e, `${fmt(this.n(e), 1)} °C`, esc(this.name(e)), "mdi:thermometer", C.orange, 6));
       if ((bt.cells || []).length) {
         const vals = bt.cells.map((e) => this.n(e));
@@ -798,9 +843,15 @@ class CentroControlPanel extends HTMLElement {
       }
       sections.push({ cards });
     }
-    const series = bats.length === 1 ? [{ name: "SOC", entity: bats[0].soc, color: C.green }] : [{ name: "SOC", entity: this.id("soc_bateria"), color: C.green }];
+    const pairIds = this.cfg.soc_pair || [];
+    const palette = [C.lime, C.cyan, C.violet, C.amber];
+    const series = bats.length === 1
+      ? [{ name: "SOC", entity: bats[0].soc, color: C.green }]
+      : [{ name: "Banco", entity: this.id("soc_bateria"), color: C.green }, ...bats.filter((b) => pairIds.includes(b.id)).map((b, i) => ({ name: b.name, entity: b.soc, color: palette[i % palette.length] }))];
+    const charts = [this.chartCard("soc", "Carga 48 h (%)", C.green, { kind: "history", hours: 48, unit: "%", min: 0, max: 100, series })];
+    if (pairIds.length >= 2) charts.push(this.chartCard("sdh", "Diferencia de SOC 48 h (puntos)", C.amber, { kind: "history", hours: 48, unit: "%", min: 0, series: [{ name: "Δ SOC", entity: this.id("diferencia_soc"), color: C.amber, type: "area" }] }));
     sections.push({ cls: "w2", cards: [
-      this.chartCard("soc", "Carga 48 h (%)", C.green, { kind: "history", hours: 48, unit: "%", min: 0, max: 100, series }),
+      ...charts,
       this.chartCard("bw", "Potencia 24 h (W, + descarga)", C.green, { kind: "history", hours: 24, unit: "W", series: bats.map((bt, i) => ({ name: bt.name, entity: bt.power, scale: bt.positive_charge ? -1 : 1, type: "area", color: [C.lime, C.green, C.cyan][i % 3] })) }),
     ] });
     return sections;

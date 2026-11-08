@@ -15,7 +15,7 @@ NAME: Final = "Centro de Control"
 AUTHOR: Final = "manu8613"
 AUTHOR_URL: Final = "https://github.com/manu8613"
 REPO_URL: Final = "https://github.com/manu8613/centro-control"
-VERSION: Final = "2.2.0"
+VERSION: Final = "2.3.0"
 
 DEFAULT_TITLE: Final = "Centro de Control"
 DASHBOARD_URL: Final = "centro-control"
@@ -138,6 +138,8 @@ CONF_CELL_MIN: Final = "celda_min"
 CONF_CELL_MAX: Final = "celda_max"
 CONF_BATTERY_TEMP_MAX: Final = "bateria_temp_max"
 CONF_SOC_MIN: Final = "soc_min"
+CONF_SOC_DIFF_WARN: Final = "diferencia_soc_aviso"
+CONF_SOC_DIFF_CRIT: Final = "diferencia_soc_critico"
 CONF_INV_TEMP_WARN: Final = "inversor_temp_aviso"
 CONF_INV_TEMP_CRIT: Final = "inversor_temp_critico"
 CONF_VOLTAGE_MIN: Final = "tension_min"
@@ -169,6 +171,8 @@ CONF_CELL_HIGH: Final = "celda_maxima"
 CONF_CELL_DIFF: Final = "diferencia_celdas"
 CONF_ALARMS: Final = "alarmas"
 CONF_CYCLES: Final = "ciclos"
+CONF_LINK: Final = "comunicacion"
+CONF_BANK: Final = "suma_al_banco"
 CONF_PARENT: Final = "padre"
 CONF_IN_TOTAL: Final = "suma_en_total"
 CONF_ICON: Final = "icono"
@@ -229,6 +233,8 @@ DEFAULTS: Final[dict[str, object]] = {
     CONF_CELL_MAX: 3.60,
     CONF_BATTERY_TEMP_MAX: 45.0,
     CONF_SOC_MIN: 10.0,
+    CONF_SOC_DIFF_WARN: 5.0,
+    CONF_SOC_DIFF_CRIT: 15.0,
     CONF_INV_TEMP_WARN: 60.0,
     CONF_INV_TEMP_CRIT: 70.0,
     CONF_VOLTAGE_MIN: 207.0,

@@ -125,3 +125,51 @@ def test_debouncer():
     assert d.update(problems, NOW + timedelta(minutes=11))[0][1] == NOW
     assert d.update([], NOW + timedelta(minutes=12)) == []
     assert d.first_seen == {}
+
+
+def bank_model(**options) -> Model:
+    subs = [
+        ("bank", "bateria", {"nombre": "Banco", "soc": "sensor.deye_soc", "potencia": "sensor.deye_w", "capacidad_kwh": 32}),
+        (
+            "j1",
+            "bateria",
+            {
+                "nombre": "JK 1",
+                "soc": "sensor.j1_soc",
+                "potencia": "sensor.j1_w",
+                "signo": "positivo_carga",
+                "capacidad_kwh": 16,
+                "comunicacion": "binary_sensor.j1_rs485",
+                "suma_al_banco": False,
+            },
+        ),
+        ("j2", "bateria", {"nombre": "JK 2", "soc": "sensor.j2_soc", "potencia": "sensor.j2_w", "capacidad_kwh": 16, "suma_al_banco": False}),
+    ]
+    return Model.build({}, {"red_potencia": "sensor.grid", **options}, subs)
+
+
+def test_bank_and_detail_batteries():
+    m = bank_model()
+    assert [b.name for b in m.batteries] == ["Banco", "JK 1", "JK 2"]
+    assert [b.name for b in m.bank] == ["Banco"]
+    assert [b.name for b in m.soc_pair] == ["JK 1", "JK 2"]
+    assert m.capacity_kwh == 32
+    assert "binary_sensor.j1_rs485" in m.energy_entities()
+
+
+def test_soc_difference_and_link():
+    m = bank_model(diferencia_soc_aviso=5, diferencia_soc_critico=15)
+    base = {"sensor.grid": 0, "sensor.deye_soc": 6, "sensor.deye_w": 0, "sensor.j1_w": 0, "sensor.j2_w": 0}
+    get, states = make({**base, "sensor.j1_soc": 7, "sensor.j2_soc": 5, "binary_sensor.j1_rs485": "on"})
+    found = evaluate(m, get, states, Live(), NOW)
+    # only the bank warns about low SOC; 2 points of difference is fine
+    assert "bat_soc_bank" in ids(found)
+    assert not {"bat_soc_j1", "bat_soc_j2", "bat_soc_diferencia", "bat_link_j1"} & ids(found)
+    get, states = make({**base, "sensor.j1_soc": 60, "sensor.j2_soc": 52, "binary_sensor.j1_rs485": "off"})
+    found = {p.id: p for p in evaluate(m, get, states, Live(), NOW)}
+    assert found["bat_soc_diferencia"].level == "aviso"
+    assert "JK 1 60 %" in found["bat_soc_diferencia"].detail
+    assert "bat_link_j1" in found
+    get, states = make({**base, "sensor.j1_soc": 80, "sensor.j2_soc": 60, "binary_sensor.j1_rs485": "on"})
+    found = {p.id: p for p in evaluate(m, get, states, Live(), NOW)}
+    assert found["bat_soc_diferencia"].level == "critico"

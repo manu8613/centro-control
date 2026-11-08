@@ -35,6 +35,8 @@ from .const import (
     CONF_INV_TEMP2,
     CONF_INV_TEMP_CRIT,
     CONF_INV_TEMP_WARN,
+    CONF_SOC_DIFF_CRIT,
+    CONF_SOC_DIFF_WARN,
     CONF_SOC_MIN,
     CONF_SOIL_MIN,
     CONF_STRING_TOLERANCE,
@@ -373,10 +375,24 @@ def _batteries(model: Model, get: Callable[[str], StateLike | None], live: Live)
     vmin, vmax = model.num(CONF_CELL_MIN, 2.9), model.num(CONF_CELL_MAX, 3.6)
     tmax = model.num(CONF_BATTERY_TEMP_MAX, 45)
     soc_min = model.num(CONF_SOC_MIN, 10)
+    has_bank = bool(model.bank) and len(model.bank) < len(model.batteries)
     for b in model.batteries:
         key = slug(b.id)
         soc = _num(get(b.soc))
-        if soc is not None and soc <= soc_min:
+        if b.link and (link := get(b.link)) is not None and link.state == "off":
+            out.append(
+                Problem(
+                    f"bat_link_{key}",
+                    "aviso",
+                    "Batería",
+                    f"{b.name}: sin comunicación con el BMS",
+                    "El BMS no contesta (RS485/CAN). Sus datos están congelados o no disponibles: revisa el cable, el conversor y la dirección.",
+                    b.link,
+                    120,
+                )
+            )
+        # With a bank (e.g. the inverter's SOC), its low-SOC warning is enough.
+        if soc is not None and soc <= soc_min and (b.in_total or not has_bank):
             out.append(
                 Problem(
                     f"bat_soc_{key}",
@@ -472,7 +488,41 @@ def _batteries(model: Model, get: Callable[[str], StateLike | None], live: Live)
             out.append(
                 Problem(f"bat_alarma_{key}", "critico", "Batería", f"{b.name}: alarma del BMS", f"El BMS indica: {text}.", b.alarms, 30)
             )
+    out += _soc_difference(model, get)
     return out
+
+
+def soc_difference(model: Model, get: Callable[[str], StateLike | None]) -> tuple[float, Any, Any] | None:
+    """``(difference, highest, lowest)`` between the compared batteries."""
+    pair = model.soc_pair
+    values = [(b, _num(get(b.soc))) for b in pair]
+    if len(values) < 2 or any(v is None for _, v in values):
+        return None
+    high = max(values, key=lambda x: x[1])
+    low = min(values, key=lambda x: x[1])
+    return high[1] - low[1], high, low
+
+
+def _soc_difference(model: Model, get: Callable[[str], StateLike | None]) -> list[Problem]:
+    found = soc_difference(model, get)
+    if found is None:
+        return []
+    diff, (bh, vh), (bl, vl) = found
+    warn, crit = model.num(CONF_SOC_DIFF_WARN, 5), model.num(CONF_SOC_DIFF_CRIT, 15)
+    if diff < warn:
+        return []
+    return [
+        Problem(
+            "bat_soc_diferencia",
+            "critico" if diff >= crit else "aviso",
+            "Batería",
+            "Baterías desequilibradas entre sí",
+            f"{bh.name} {vh:.0f} % y {bl.name} {vl:.0f} %: {diff:.0f} puntos de diferencia (aviso {warn:.0f}). "
+            "Si persiste, revisa conexiones y cables del paralelo, y el calibrado del SOC de cada BMS (una carga completa los iguala).",
+            bl.soc,
+            900,
+        )
+    ]
 
 
 def _consumption(model: Model, live: Live) -> list[Problem]:

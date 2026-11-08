@@ -449,7 +449,12 @@ class CentroManager(DataUpdateCoordinator[None]):
             if w is not None and b.positive_charge:
                 w = -w
             soc = self._num(b.soc)
-            batteries[b.id] = {"nombre": b.name, "w": w, "soc": soc, "kwh": b.capacity_kwh}
+            batteries[b.id] = {"nombre": b.name, "w": w, "soc": soc, "kwh": b.capacity_kwh, "en_total": b.in_total}
+            if b.link:
+                st = self.hass.states.get(b.link)
+                batteries[b.id]["comunicacion"] = None if st is None or st.state in ("unknown", "unavailable") else st.state == "on"
+            if not b.in_total:
+                continue
             if w is not None:
                 bat_total = (bat_total or 0.0) + w
             if soc is not None:
@@ -458,6 +463,9 @@ class CentroManager(DataUpdateCoordinator[None]):
                 soc_sum += soc * weight
                 stored += b.capacity_kwh * soc / 100
         soc_avg = soc_sum / soc_weight if soc_weight else None
+        pair = [(b.name, batteries[b.id]["soc"]) for b in m.soc_pair]
+        socs = [v for _, v in pair if v is not None]
+        soc_diff = round(max(socs) - min(socs), 1) if len(socs) >= 2 and len(socs) == len(pair) else None
 
         # ---------------- load
         load = self._watts(m.get(CONF_LOAD_POWER))
@@ -509,7 +517,9 @@ class CentroManager(DataUpdateCoordinator[None]):
             "export_w": exp,
             "battery_w": bat_total,
             "soc": round(soc_avg, 1) if soc_avg is not None else None,
-            "battery_kwh": round(stored, 2) if m.batteries else None,
+            "battery_kwh": round(stored, 2) if m.bank else None,
+            "soc_diff": soc_diff,
+            "soc_pair": pair,
             "autonomy_h": autonomy,
             "load_w": load,
             "circuits_w": in_total if any_circuit else None,

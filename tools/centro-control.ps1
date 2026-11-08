@@ -166,6 +166,10 @@ function Aplicar([string]$Ruta) {
   try { $plan = $raw | ConvertFrom-Json } catch { Fallo "El fichero no es JSON válido: $($_.Exception.Message)"; exit 1 }
   if (-not $plan.entradas) { Fallo "El fichero no tiene «entradas»."; exit 1 }
 
+  if ($raw -match '"~') {
+    $ver = (Pedir "GET" "/api/centro_control/estado" | ConvertFrom-Json).version
+    if ([version]$ver -lt [version]"2.3.0") { Fallo "El plan busca entidades por su nombre y necesita Centro de Control 2.3.0 o posterior (tienes $ver). Actualízalo en HACS y reinicia Home Assistant."; exit 1 }
+  }
   Titulo "Simulación"
   $sim = Pedir "POST" "/api/centro_control/configuracion" ('{"simular":true,' + $raw.Substring(1)) | ConvertFrom-Json
   foreach ($e in $plan.entradas) { Write-Host "  «$($e.titulo)»: $(@($e.elementos).Count) elementos" }

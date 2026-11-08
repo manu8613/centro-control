@@ -1,4 +1,6 @@
-# ⚛ Centro de Control
+<p align="center"><img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/logo.png" alt="Centro de Control" width="480"></p>
+
+# Centro de Control
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
 [![CI](https://github.com/manu8613/centro-control/actions/workflows/ci.yml/badge.svg)](https://github.com/manu8613/centro-control/actions/workflows/ci.yml)
@@ -14,6 +16,24 @@ evitado. Se configura entero desde la interfaz y crea el panel solo.
 
 > Pensado para instalaciones en España (peaje 2.0TD, PVPC, compensación de
 > excedentes). La interfaz está en español.
+
+
+## Capturas
+
+Datos de ejemplo, no de ninguna casa real.
+
+| Puente de mando | Batería |
+|---|---|
+| ![Puente de mando](https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/resumen.jpg) | ![Batería](https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/bateria.jpg) |
+| **Consumos** | **Coste de luz y gas** |
+| ![Consumos](https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/consumos.jpg) | ![Coste](https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/coste.jpg) |
+| **Solar** | **Problemas** |
+| ![Solar](https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/solar.jpg) | ![Problemas](https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/problemas.jpg) |
+
+<p align="center"><img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/movil.jpg" alt="En el móvil" width="260"> <img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/movil_bateria.jpg" alt="Batería en el móvil" width="260"></p>
+
+El botón **Diseño** permite mover y redimensionar secciones, tarjetas y
+gráficas; cada dispositivo guarda su propio diseño.
 
 ## Las 12 pestañas
 

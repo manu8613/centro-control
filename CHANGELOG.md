@@ -8,6 +8,17 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.5.0] - 2026-11-09
+
+### Añadido
+- Logo e icono propios (carpeta `brand/`): se ven en Integraciones y en HACS
+  con Home Assistant 2026.3 o posterior.
+- Capturas de ejemplo en el README, con datos genéricos.
+
+### Corregido
+- En el móvil, el título y el botón Diseño ya no tapan las pestañas: en
+  pantallas estrechas solo queda el logo y el icono de Diseño.
+
 ## [2.4.0] - 2026-11-08
 
 ### Añadido

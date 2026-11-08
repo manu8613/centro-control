@@ -64,7 +64,7 @@ const CSS = `
 header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(3,8,20,.88);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
 .menu{display:none}.menu.show{display:block}
 .brand{display:flex;align-items:center;gap:8px;color:${C.cyan};font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:14px;white-space:nowrap;text-shadow:0 0 10px ${C.cyan}aa;margin-right:6px}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
 nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 11px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
 nav button ha-icon{--mdc-icon-size:18px}
 nav button:hover{color:${C.text};background:#0b1a30}
@@ -82,7 +82,8 @@ main{padding:16px;max-width:1800px;margin:0 auto;container-type:inline-size}
 @container (max-width:900px){.sec.charts>.card{grid-column:span 12}}
 @container (max-width:690px){.sec.w2,.sec.w3{grid-column:span 1}.card.u6,.card.u4,.card.u3{grid-column:span 12!important}}
 @media(max-width:720px){.sec.w2,.sec.w3{grid-column:span 1}}
-.laybtn{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;border:1px solid #12304d}
+@media(max-width:760px){header{gap:4px;padding:6px}.brand{letter-spacing:0;margin-right:0}.brand .t{display:none}.laybtn span{display:none}.laybtn{padding:7px}nav button{padding:8px 9px}}
+.laybtn{all:unset;flex:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;border:1px solid #12304d}
 .laybtn:hover,.laybtn.on{color:${C.amber};border-color:${C.amber}88;background:${C.amber}14}
 .layinfo{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px;border:1px dashed ${C.amber}aa;border-radius:14px;color:${C.amber};background:${C.amber}0d;font-size:13px}
 .layinfo button,.lay button{all:unset;cursor:pointer;padding:5px 9px;border-radius:8px;border:1px solid ${C.amber}77;color:${C.amber};font-size:12px;display:inline-flex;align-items:center;gap:4px;background:#0a1222}

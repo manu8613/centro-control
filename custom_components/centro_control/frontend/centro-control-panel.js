@@ -71,11 +71,27 @@ nav button:hover{color:${C.text};background:#0b1a30}
 nav button.on{color:${C.cyan};background:${C.cyan}14;box-shadow:inset 0 -2px ${C.cyan}}
 nav .badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;background:${C.red};color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 0 8px ${C.red}}
 nav .badge.warn{background:${C.amber};color:#221}
-main{padding:16px;max-width:1800px;margin:0 auto}
+main{padding:16px;max-width:1800px;margin:0 auto;container-type:inline-size}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start}
 .sec{display:grid;grid-template-columns:repeat(12,1fr);gap:10px;align-content:start}
-.sec.w2{grid-column:span 2}.sec.wall{grid-column:1/-1}
-@media(max-width:720px){.sec.w2{grid-column:span 1}}
+.sec{position:relative}
+.sec.w2{grid-column:span 2}.sec.w3{grid-column:span 3}.sec.wall,.sec.charts{grid-column:1/-1}
+.sec.charts>.card{grid-column:span 6}
+.card.u12{grid-column:span 12!important}.card.u6{grid-column:span 6!important}.card.u4{grid-column:span 4!important}.card.u3{grid-column:span 3!important}
+@container (max-width:1040px){.sec.w3{grid-column:span 2}}
+@container (max-width:900px){.sec.charts>.card{grid-column:span 12}}
+@container (max-width:690px){.sec.w2,.sec.w3{grid-column:span 1}.card.u6,.card.u4,.card.u3{grid-column:span 12!important}}
+@media(max-width:720px){.sec.w2,.sec.w3{grid-column:span 1}}
+.laybtn{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;border:1px solid #12304d}
+.laybtn:hover,.laybtn.on{color:${C.amber};border-color:${C.amber}88;background:${C.amber}14}
+.layinfo{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px;border:1px dashed ${C.amber}aa;border-radius:14px;color:${C.amber};background:${C.amber}0d;font-size:13px}
+.layinfo button,.lay button{all:unset;cursor:pointer;padding:5px 9px;border-radius:8px;border:1px solid ${C.amber}77;color:${C.amber};font-size:12px;display:inline-flex;align-items:center;gap:4px;background:#0a1222}
+.layinfo button:hover,.lay button:hover{background:${C.amber}22}
+main.edit .sec{outline:1px dashed ${C.amber}55;outline-offset:4px;border-radius:12px;padding-top:34px}
+.lay{position:absolute;top:0;right:0;z-index:3;display:flex;gap:4px;align-items:center}
+.lay.sl{left:0;right:auto;top:0;color:${C.amber};font-size:11px;letter-spacing:1px;text-transform:uppercase}
+.card .lay{top:6px;right:6px}.card .lay button{padding:3px 7px;background:#060d20ee}
+main.edit .card,main.edit .title{cursor:default}main.edit .card{padding-top:34px}
 .card{--c:${C.cyan};position:relative;grid-column:span 12;background:linear-gradient(150deg,rgba(10,20,44,.92),rgba(3,8,20,.94));border:1px solid color-mix(in srgb,var(--c) 34%,transparent);
  border-radius:16px;padding:12px 14px;font-size:13px;overflow:hidden;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 8%,transparent),0 0 22px color-mix(in srgb,var(--c) 14%,transparent),0 8px 24px rgba(0,0,0,.45)}
 .card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,transparent,var(--c),transparent)}
@@ -285,7 +301,7 @@ class CentroControlPanel extends HTMLElement {
     if (this._built) return;
     this._built = true;
     const root = this.shadowRoot;
-    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><nav></nav></header><main><div class="grid"></div></main>`;
+    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><nav></nav><button class="laybtn" data-lay="toggle" title="Mover y redimensionar tarjetas y gráficas en este dispositivo">${icon("mdi:view-dashboard-edit-outline")}<span>Diseño</span></button></header><main><div class="grid"></div></main>`;
     const holder = root.querySelector(".menu");
     this._menu = document.createElement("ha-menu-button");
     holder.appendChild(this._menu);
@@ -392,13 +408,16 @@ class CentroControlPanel extends HTMLElement {
       console.error("Centro de Control", err);
       sections = [{ cards: [this.empty("err", `Error al dibujar esta pestaña: ${err.message}`)] }];
     }
+    sections = this._applyLayout(sections);
+    if (this._edit)
+      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: mueve las secciones y las gráficas con las flechas y cambia su ancho con ⤢. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
     sections.push({ cls: "wall", cards: [{ k: "foot", html: "", cls: "foot", attrs: "", c: C.muted, foot: true }] });
-    const layout = this._tab + "|" + sections.map((s) => (s.cls || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
+    const layout = (this._edit ? "E" : "") + this._tab + "|" + sections.map((s) => (s.cls || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
     if (layout !== this._layoutKey) {
       this._layoutKey = layout;
       this._cards.clear();
       this._grid.innerHTML = sections
-        .map((s) => `<div class="sec ${s.cls || ""}">${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.attrs}></div>`).join("")}</div>`)
+        .map((s) => `<div class="sec ${s.cls || ""}">${s.tools || ""}${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.attrs}></div>`).join("")}</div>`)
         .join("");
       this._grid.querySelectorAll("[data-k]").forEach((el) => this._cards.set(el.dataset.k, { el, html: null }));
     }
@@ -431,6 +450,98 @@ class CentroControlPanel extends HTMLElement {
       }
   }
 
+  // ---------------------------------------------------------------- layout (per device)
+  _layLoad() {
+    if (this._lay) return this._lay;
+    try {
+      this._lay = JSON.parse(localStorage.getItem("centro_control_diseno") || "{}") || {};
+    } catch (e) {
+      this._lay = {};
+    }
+    return this._lay;
+  }
+  _laySave() {
+    try {
+      localStorage.setItem("centro_control_diseno", JSON.stringify(this._lay || {}));
+    } catch (e) {
+      /* private mode: the layout lasts until the page is reloaded */
+    }
+  }
+  _layTab() {
+    const all = this._layLoad();
+    return (all[this._tab] = all[this._tab] || { order: [], w: {}, cards: {}, cw: {} });
+  }
+  _applyLayout(sections) {
+    const L = this._layTab();
+    sections.forEach((s, i) => {
+      s.id = s.id || (s.cards[0] && s.cards[0].k) || "s" + i;
+      s._i = i;
+      if (s.cards.length && s.cards.every((c) => c.chart) && s.cls !== "wall") s.cls = "charts";
+    });
+    const rank = (s) => (L.order.includes(s.id) ? L.order.indexOf(s.id) : s._i - 0.5);
+    sections.sort((a, b) => rank(a) - rank(b) || a._i - b._i);
+    const WIDTHS = { "1": "", "2": "w2", "3": "w3", all: "wall" };
+    this._secIds = sections.map((s) => s.id);
+    this._cardIds = {};
+    sections.forEach((s, si) => {
+      if (L.w[s.id] !== undefined) s.cls = WIDTHS[L.w[s.id]] ?? s.cls;
+      const order = L.cards[s.id] || [];
+      const cr = (c, i) => (order.includes(c.k) ? order.indexOf(c.k) : i - 0.5);
+      const idx = new Map(s.cards.map((c, i) => [c, i]));
+      s.cards.sort((a, b) => cr(a, idx.get(a)) - cr(b, idx.get(b)) || idx.get(a) - idx.get(b));
+      this._cardIds[s.id] = s.cards.map((c) => c.k);
+      for (const c of s.cards) {
+        const w = L.cw[c.k];
+        if (w) c.cls = c.cls.replace(/\bu\d+\b/g, "") + " u" + w;
+        if (this._edit && !c.foot && c.cls.split(" ").includes("card")) {
+          const tools = `<div class="lay"><button data-lay="card-prev" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Antes">◀</button><button data-lay="card-next" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Después">▶</button><button data-lay="card-w" data-id="${esc(c.k)}" title="Ancho">⤢</button></div>`;
+          c.html += tools;
+        }
+      }
+      if (this._edit) {
+        const wl = { "": "1 col", w2: "2 col", w3: "3 col", wall: "completa", charts: "gráficas" }[s.cls || ""] || "";
+        s.tools = `<div class="lay sl">S${si + 1} · ${wl}</div><div class="lay"><button data-lay="sec-prev" data-id="${esc(s.id)}" title="Mover antes">◀</button><button data-lay="sec-next" data-id="${esc(s.id)}" title="Mover después">▶</button><button data-lay="sec-w" data-id="${esc(s.id)}" title="Ancho de la sección">⤢ Ancho</button></div>`;
+      }
+    });
+    return sections;
+  }
+  _layAction(d) {
+    const L = this._layTab();
+    const move = (list, id, delta) => {
+      const i = list.indexOf(id), j = i + delta;
+      if (i < 0 || j < 0 || j >= list.length) return null;
+      [list[i], list[j]] = [list[j], list[i]];
+      return list;
+    };
+    if (d.lay === "toggle") {
+      this._edit = !this._edit;
+      this.shadowRoot.querySelector("main").classList.toggle("edit", this._edit);
+      this.shadowRoot.querySelector(".laybtn").classList.toggle("on", this._edit);
+    } else if (d.lay === "reset") {
+      delete this._layLoad()[this._tab];
+    } else if (d.lay === "sec-prev" || d.lay === "sec-next") {
+      const list = move([...this._secIds], d.id, d.lay === "sec-prev" ? -1 : 1);
+      if (list) L.order = list;
+    } else if (d.lay === "card-prev" || d.lay === "card-next") {
+      const list = move([...(this._cardIds[d.sec] || [])], d.id, d.lay === "card-prev" ? -1 : 1);
+      if (list) L.cards[d.sec] = list;
+    } else if (d.lay === "sec-w") {
+      const seq = ["1", "2", "3", "all"];
+      const el = this._grid.querySelector(`[data-k="${window.CSS.escape(d.id)}"]`)?.parentElement;
+      const cur = L.w[d.id] ?? (el?.classList.contains("wall") || el?.classList.contains("charts") ? "all" : el?.classList.contains("w3") ? "3" : el?.classList.contains("w2") ? "2" : "1");
+      L.w[d.id] = seq[(seq.indexOf(cur) + 1) % seq.length];
+    } else if (d.lay === "card-w") {
+      const seq = [12, 6, 4, 3];
+      const el = this._grid.querySelector(`[data-k="${window.CSS.escape(d.id)}"]`);
+      const span = el ? Math.round(el.getBoundingClientRect().width / Math.max(1, el.parentElement.getBoundingClientRect().width) * 12) : 12;
+      const cur = L.cw[d.id] || seq.reduce((a, b) => (Math.abs(b - span) < Math.abs(a - span) ? b : a));
+      L.cw[d.id] = seq[(seq.indexOf(cur) + 1) % seq.length];
+    }
+    this._laySave();
+    this._layoutKey = "";
+    this._schedule(true);
+  }
+
   _go(tab) {
     this._tab = tab;
     history.replaceState(null, "", "#" + tab);
@@ -444,6 +555,12 @@ class CentroControlPanel extends HTMLElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
   _click(e) {
+    const lay = e.target.closest("[data-lay]");
+    if (lay) {
+      e.stopPropagation();
+      return this._layAction(lay.dataset);
+    }
+    if (this._edit && !e.target.closest("nav")) return;
     const t = e.target.closest("[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
     if (!t) return;
     const d = t.dataset;
@@ -521,6 +638,19 @@ class CentroControlPanel extends HTMLElement {
     if (out.length) out.push([Date.now(), out[out.length - 1][1]]);
     return out;
   }
+  /** max − min of several entities over time (e.g. the SOC gap between batteries). */
+  _spread(hist, ents, bucketMin) {
+    const lines = ents.map((e) => this._points(hist, e, { bucketMin }));
+    const times = [...new Set(lines.flatMap((l) => l.map((p) => p[0])))].sort((a, b) => a - b);
+    const pos = lines.map(() => 0), cur = lines.map(() => null), out = [];
+    for (const t of times) {
+      lines.forEach((l, i) => {
+        while (pos[i] < l.length && l[pos[i]][0] <= t) cur[i] = l[pos[i]++][1];
+      });
+      if (cur.every((v) => v !== null)) out.push([t, Math.max(...cur) - Math.min(...cur)]);
+    }
+    return out;
+  }
   _refreshCharts() {
     for (const [k, slot] of this._cards) if (slot.spec) this._drawChart(k, slot);
   }
@@ -531,14 +661,14 @@ class CentroControlPanel extends HTMLElement {
     try {
       let series, opt;
       if (spec.kind === "history") {
-        const ids = [...new Set(spec.series.map((s) => s.entity).filter(Boolean))];
+        const ids = [...new Set(spec.series.flatMap((s) => (s.spread ? s.spread : [s.entity])).filter(Boolean))];
         const hist = ids.length ? await this._history(ids, spec.hours || 24) : {};
         series = spec.series.map((s, i) => ({
           name: s.name,
           color: s.color || PALETTE[i % PALETTE.length],
           type: s.type || "line",
           step: s.step,
-          points: this._points(hist, s.entity, { scale: s.scale || 1, transform: s.abs ? Math.abs : s.pos ? (v) => Math.max(v, 0) : s.neg ? (v) => Math.max(-v, 0) : null, bucketMin: spec.bucket || 5 }),
+          points: s.spread ? this._spread(hist, s.spread, spec.bucket || 5) : this._points(hist, s.entity, { scale: s.scale || 1, transform: s.abs ? Math.abs : s.pos ? (v) => Math.max(v, 0) : s.neg ? (v) => Math.max(-v, 0) : null, bucketMin: spec.bucket || 5 }),
         }));
         const end = Date.now();
         opt = { start: end - (spec.hours || 24) * 3600000, end, unit: spec.unit, height: spec.height, min: spec.min, max: spec.max };
@@ -813,7 +943,8 @@ class CentroControlPanel extends HTMLElement {
       const sub = [detail ? "Detalle del BMS" : "Banco · cuenta para el total", bt.capacity_kwh ? `${fmt(bt.capacity_kwh, 1)} kWh` : ""].filter(Boolean).join(" · ");
       const cards = [this.title("b" + bt.id, bt.name, sub, detail ? "mdi:battery-outline" : "mdi:home-battery-outline", C.green)];
       if (bt.link) {
-        const [lv, ll, lc, li] = link === "on" ? ["Comunicando", "BMS · RS485", C.green, "mdi:lan-connect"] : link === "off" ? ["Sin comunicación", "BMS · datos congelados", C.red, "mdi:lan-disconnect"] : ["Sin datos", "BMS · ESP32 no disponible", C.amber, "mdi:lan-pending"];
+        const fresh = this.n(bt.soc) !== null;
+        const [lv, ll, lc, li] = link === "on" ? ["Comunicando", "BMS · RS485", C.green, "mdi:lan-connect"] : link !== "off" && fresh ? ["Comunicando", "BMS · datos al día", C.green, "mdi:lan-connect"] : link === "off" ? ["Sin comunicación", "BMS · datos congelados", C.red, "mdi:lan-disconnect"] : ["Sin datos", "BMS · ESP32 no disponible", C.amber, "mdi:lan-pending"];
         cards.push(this.kpi("lk" + bt.id, bt.link, lv, ll, li, lc, 12));
       }
       const w = this.watts(bt.power);
@@ -849,7 +980,7 @@ class CentroControlPanel extends HTMLElement {
       ? [{ name: "SOC", entity: bats[0].soc, color: C.green }]
       : [{ name: "Banco", entity: this.id("soc_bateria"), color: C.green }, ...bats.filter((b) => pairIds.includes(b.id)).map((b, i) => ({ name: b.name, entity: b.soc, color: palette[i % palette.length] }))];
     const charts = [this.chartCard("soc", "Carga 48 h (%)", C.green, { kind: "history", hours: 48, unit: "%", min: 0, max: 100, series })];
-    if (pairIds.length >= 2) charts.push(this.chartCard("sdh", "Diferencia de SOC 48 h (puntos)", C.amber, { kind: "history", hours: 48, unit: "%", min: 0, series: [{ name: "Δ SOC", entity: this.id("diferencia_soc"), color: C.amber, type: "area" }] }));
+    if (pairIds.length >= 2) charts.push(this.chartCard("sdh", "Diferencia de SOC 48 h (puntos)", C.amber, { kind: "history", hours: 48, unit: "%", min: 0, series: [{ name: "Δ SOC", spread: bats.filter((b) => pairIds.includes(b.id)).map((b) => b.soc), color: C.amber, type: "area" }] }));
     sections.push({ cls: "w2", cards: [
       ...charts,
       this.chartCard("bw", "Potencia 24 h (W, + descarga)", C.green, { kind: "history", hours: 24, unit: "W", series: bats.map((bt, i) => ({ name: bt.name, entity: bt.power, scale: bt.positive_charge ? -1 : 1, type: "area", color: [C.lime, C.green, C.cyan][i % 3] })) }),

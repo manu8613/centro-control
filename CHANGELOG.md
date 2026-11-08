@@ -8,6 +8,23 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.4.0] - 2026-11-08
+
+### Añadido
+- Botón **Diseño** en la barra del panel: mueve secciones, tarjetas y gráficas
+  con flechas y cambia su ancho (⤢). Se guarda en cada dispositivo, así la
+  tablet y el PC pueden tener su propio diseño; «Restablecer pestaña» vuelve
+  al original.
+
+### Cambiado
+- Las secciones que solo tienen gráficas ocupan todo el ancho y ponen dos
+  gráficas por fila (una en pantallas estrechas): ya no quedan columnas
+  vacías a la derecha.
+- La gráfica «Diferencia de SOC 48 h» se calcula con el historial de las dos
+  baterías, así que se ve completa desde el primer día.
+- Si el sensor de comunicación del BMS está en «desconocido» pero llegan
+  datos, se muestra «Comunicando».
+
 ## [2.3.0] - 2026-11-08
 
 ### Añadido

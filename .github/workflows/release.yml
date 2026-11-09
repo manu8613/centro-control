@@ -59,7 +59,7 @@ jobs:
       - name: ZIP de la integración
         if: steps.v.outputs.new == 'true'
         run: cd custom_components/centro_control && zip -r ../../centro_control.zip . -x "__pycache__/*"
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         if: steps.v.outputs.new == 'true'
         with:
           tag_name: v${{ steps.v.outputs.version }}

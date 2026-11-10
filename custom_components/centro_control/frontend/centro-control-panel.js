@@ -1024,7 +1024,7 @@ class CentroControlPanel extends HTMLElement {
     if (d === "select" || d === "input_select") return call(d, "select_option", { option: String(value) });
     if (d === "switch" || d === "input_boolean") return call(d, value === true || value === "true" || value === "on" ? "turn_on" : "turn_off", {});
   }
-  _gridOpt(o) { return /(grid|red)/i.test(o) && !/^\s*(no|none|ning|sin|off|disable)/i.test(o); }
+  _gridOpt(o) { return /(grid|red|both|ambos)/i.test(o) && !/^\s*(no|none|ning|sin|off|disable)/i.test(o); }
   _offOpt(o) { return /^\s*(no|none|ning|sin|off|disable)/i.test(o); }
   /** Is "charge from the grid" on for a program (select with a grid option, or a switch)? */
   _chargeOn(entity) {
@@ -1034,14 +1034,15 @@ class CentroControlPanel extends HTMLElement {
   _chargeSet(entity, on) {
     if (entity.startsWith("select.") || entity.startsWith("input_select.")) {
       const opts = this.a(entity, "options") || [];
-      const opt = on ? opts.find((o) => this._gridOpt(o)) : opts.find((o) => this._offOpt(o));
+      const opt = on ? opts.find((o) => /^\s*(grid|red)\s*$/i.test(o)) ?? opts.find((o) => this._gridOpt(o)) : opts.find((o) => this._offOpt(o));
       if (opt) this._write(entity, opt);
     } else this._write(entity, on);
   }
   /** On/off of a flag that can be a switch or a select (Enabled/Disabled...). */
   _flagOn(entity) {
     const st = this.s(entity);
-    return entity.startsWith("select.") || entity.startsWith("input_select.") ? /^\s*(enabled?|on|activ|s[ií]|yes|true)/i.test(st || "") : st === "on";
+    if (entity.startsWith("select.") || entity.startsWith("input_select.")) return !!st && !/^\s*(unavailable|unknown|disabled?|off|desactiv|no|none)/i.test(st);
+    return st === "on";
   }
   _flagSet(entity, on) {
     if (entity.startsWith("select.") || entity.startsWith("input_select.")) {
@@ -1055,8 +1056,12 @@ class CentroControlPanel extends HTMLElement {
     const target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
     const k = (x) => this.set_(x);
     const steps = [];
+    let note = "";
     if (est === "cargar" && Number.isFinite(target)) {
-      if (k("deye_franjas") && !this._flagOn(k("deye_franjas"))) steps.push(["Activar la programación por franjas", () => this._flagSet(k("deye_franjas"), true)]);
+      if (k("deye_franjas") && !this._flagOn(k("deye_franjas"))) {
+        if (/^(select|input_select)\./.test(k("deye_franjas"))) note = "\n\nOjo: la programación por franjas está desactivada. Elige el modo en el desplegable de Solar para que los programas funcionen.";
+        else steps.push(["Activar la programación por franjas", () => this._flagSet(k("deye_franjas"), true)]);
+      }
       if (k("deye_p1_soc")) steps.push([`Programa 1: SOC ${target} %`, () => this._write(k("deye_p1_soc"), target)]);
       if (k("deye_p1_carga")) steps.push(["Programa 1: carga desde la red activada", () => this._chargeSet(k("deye_p1_carga"), true)]);
       if (k("deye_p2_carga")) steps.push(["Programa 2: carga desde la red desactivada", () => this._chargeSet(k("deye_p2_carga"), false)]);
@@ -1065,7 +1070,7 @@ class CentroControlPanel extends HTMLElement {
       steps.push(["Programa 1: carga desde la red desactivada", () => this._chargeSet(k("deye_p1_carga"), false)]);
     }
     if (!steps.length) return alert("No hay nada que aplicar: configura los programas del Deye en Configurar → Inversor Deye.");
-    if (!confirm("Se va a cambiar en el inversor:\n\n• " + steps.map((s2) => s2[0]).join("\n• ") + "\n\n¿Aplicar?")) return;
+    if (!confirm("Se va a cambiar en el inversor:\n\n• " + steps.map((s2) => s2[0]).join("\n• ") + note + "\n\n¿Aplicar?")) return;
     steps.forEach((s2) => s2[1]());
   }
 
@@ -1118,7 +1123,7 @@ class CentroControlPanel extends HTMLElement {
     if (k("deye_franjas")) {
       const f = k("deye_franjas"), on = this._flagOn(f);
       main += /^(select|input_select)\./.test(f)
-        ? `<button class="btn full" style="--c:${on ? C.green : C.muted};margin-bottom:8px" data-set="${esc(f)}" data-flag="${on ? "off" : "on"}">${icon("mdi:calendar-clock")}Programación por franjas: ${on ? "activada" : "desactivada"}</button>`
+        ? `<div class="sim"><label>${icon("mdi:calendar-clock")} Programación por franjas (Time of Use) · ${on ? "activada" : "desactivada"}</label><select data-set="${esc(f)}" style="grid-column:1/-1;background:#0d1c33;color:inherit;border:1px solid ${on ? C.green : "#16304f"};border-radius:8px;padding:6px 8px">${(this.a(f, "options") || []).map((o) => `<option value="${esc(o)}"${o === this.s(f) ? " selected" : ""}>${esc(o)}</option>`).join("")}</select></div>`
         : toggle("Programación por franjas", f, "mdi:calendar-clock");
     }
     main += `<div class="small muted" style="margin-top:6px">Los cambios se envían al inversor al soltar el control. Se respetan los límites que da el propio inversor.</div>`;

@@ -198,6 +198,8 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.solar_plan: dict[str, Any] = {}
         self.weather_days: list[dict[str, Any]] = []
         self._weather_at = 0.0
+        self.weather_info: dict[str, Any] = {}
+        self._weather_warned = False
         self.simulation: dict[str, Any] = {}
         self.insights: dict[str, Any] = {}
         self.gas_entities: dict[str, str] = {}
@@ -588,7 +590,8 @@ class CentroManager(DataUpdateCoordinator[None]):
         if not weather:
             self.solar_plan = {}
             return
-        if ts - self._weather_at > 1800:
+        # every 30 min; every 2 min while there is still no forecast (first start, entity not ready yet)
+        if ts - self._weather_at > (1800 if self.weather_days else 120):
             self._weather_at = ts
             self.hass.async_create_task(self._fetch_weather(str(weather)))
         try:
@@ -610,23 +613,48 @@ class CentroManager(DataUpdateCoordinator[None]):
                 day_share_pct=self.model.num(CONF_DAY_SHARE, 85),
                 forecast=self.weather_days,
                 solar_override=override,
+                weather_info=self.weather_info,
             )
         except Exception:  # noqa: BLE001 - advice must never break the live data
             _LOGGER.exception("No se pudo calcular la recomendación de carga por red")
 
     async def _fetch_weather(self, entity_id: str) -> None:
-        """Daily forecast of the weather entity (cloud_coverage when it has it)."""
+        """Forecast of the weather entity: daily, else twice-daily, else hourly (cloud_coverage when it has it)."""
         raw: list[dict[str, Any]] = []
-        try:
-            response = await self.hass.services.async_call(
-                "weather", "get_forecasts", {"type": "daily"}, target={"entity_id": entity_id}, blocking=True, return_response=True
-            )
-            raw = list((response or {}).get(entity_id, {}).get("forecast") or [])
-        except Exception as err:  # noqa: BLE001 - not every integration offers daily forecasts
-            _LOGGER.debug("Sin previsión diaria de %s: %s", entity_id, err)
+        used, errors = "", []
+        for kind in ("daily", "twice_daily", "hourly"):
+            try:
+                response = await self.hass.services.async_call(
+                    "weather", "get_forecasts", {"type": kind}, target={"entity_id": entity_id}, blocking=True, return_response=True
+                )
+            except Exception as err:  # noqa: BLE001 - not every integration offers every forecast type
+                errors.append(f"{kind}: {err}")
+                continue
+            items = list((response or {}).get(entity_id, {}).get("forecast") or [])
+            if items:
+                raw, used = items, kind
+                break
+            errors.append(f"{kind}: sin datos")
         state = self.hass.states.get(entity_id)
+        if state is None:
+            errors.append("la entidad no existe")
+        elif state.state in ("unavailable", "unknown"):
+            errors.append(f"la entidad está {state.state}")
         current = None if state is None else {**state.attributes, "condition": state.state}
-        self.weather_days = normalize_forecast(raw, current, dt_util.now().date())
+        self.weather_days = normalize_forecast(raw, current, dt_util.now().date(), dt_util.get_default_time_zone())
+        self.weather_info = {
+            "entidad": entity_id,
+            "tipo": used or ("estado actual" if self.weather_days else ""),
+            "error": "" if used else "; ".join(errors)[:300],
+            "actualizado": dt_util.now().isoformat(timespec="seconds"),
+        }
+        if not self.weather_days and not self._weather_warned:
+            self._weather_warned = True
+            _LOGGER.warning("Sin previsión del tiempo de %s: %s", entity_id, self.weather_info["error"] or "sin datos")
+        elif self.weather_days:
+            self._weather_warned = False
+        self._update_solar_plan(dt_util.now(), time.time())
+        self.async_set_updated_data(None)
 
     @callback
     def set_sim(self, key: str, value: float) -> None:

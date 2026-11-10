@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.2] - 2026-11-10
+
+### Cambiado
+- Solar: en los controles numéricos del Deye (potencia y SOC de los programas, intensidad de carga, SOC de inicio) el deslizador ahora va acompañado de una caja con el valor exacto. Se ve el número en tiempo real al arrastrar y se puede escribir a mano; se envía al inversor al soltar, al pulsar Intro o al salir de la caja, respetando los límites de la entidad.
+
 ## [2.7.1] - 2026-11-10
 
 ### Corregido

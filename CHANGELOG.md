@@ -8,6 +8,14 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.1] - 2026-11-10
+
+### Corregido
+- **Aplicar** la recomendación de carga por red trata como programas de
+  madrugada los programas 1 y 2 que empiezan antes de las 08:00 (antes dejaba
+  el 2 sin carga). Con la programación por franjas activa ya no toca el
+  interruptor general de carga por red.
+
 ## [2.7.0] - 2026-11-10
 
 ### Añadido

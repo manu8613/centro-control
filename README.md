@@ -189,8 +189,9 @@ diaria incluye `cloud_coverage`, como Open-Meteo o Met.no; si no, se estima por
 el estado del cielo). La recomendación usa la batería de 08:00 a 00:00 y deja
 la noche (00:00–08:00) para cargar por la red cuando el día siguiente no basta:
 compara la producción estimada con tu consumo medio de los últimos 7 días y el
-SOC actual, y propone un SOC objetivo. El botón **Aplicar** lo escribe en los
-programas 1 y 2 tras pedir confirmación. También queda en el sensor
+SOC actual, y propone un SOC objetivo. El botón **Aplicar** lo escribe, tras
+pedir confirmación, en los programas 1 y 2 que empiezan antes de las 08:00 (los
+de madrugada); los demás programas no se tocan. También queda en el sensor
 `recomendacion_carga_red` para tus automatizaciones. Es una estimación.
 
 ## Configurar desde Windows con un token (opcional)

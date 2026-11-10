@@ -16,6 +16,8 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
 - Carga por red esta noche: junto a lo aconsejado, ahora puedes elegir tú el SOC con el que quieres empezar el día a las 08:00 («Elegir yo el SOC»: deslizador y caja con el valor exacto). Muestra al momento cuánta energía aportaría la red, y la diferencia con lo aconsejado. «Aplicar» usa tu valor, y hay un botón para no cargar por red esta noche. Se recuerda por dispositivo; «Usar lo aconsejado» vuelve al modo automático.
 
+- Solar → Inversor: las tarjetas de Estado, Fallo y Alarma cambian de color según la gravedad: verde si todo es normal, ámbar si es algo a revisar o que se arregla (alarmas, cambio de modo, red, comunicación), rojo si es grave (sobrecorriente, fugas, temperatura excesiva, fallo del inversor) y azul para reposo (standby, autotest). Un fallo desconocido se pinta en rojo por seguridad.
+
 ### Cambiado
 - Programas 1 y 2 del Deye: se quita el deslizador de «Potencia» (en el inversor esa potencia también marca la velocidad de descarga); quedan la hora, el SOC y la carga.
 

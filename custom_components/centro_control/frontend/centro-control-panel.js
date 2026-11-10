@@ -1067,7 +1067,9 @@ class CentroControlPanel extends HTMLElement {
     }
     for (const [k, l] of [["inversor_estado", "Estado"], ["inversor_fallo", "Fallo"], ["inversor_alarma", "Alarma"]]) {
       const e = this.set_(k);
-      if (e) inv.push(this.kpi(k, e, esc(this.s(e) ?? "—"), l, "mdi:information-outline", C.orange, 6));
+      if (!e) continue;
+      const sev = this._invSeverity(k, this.s(e));
+      inv.push(this.kpi(k, e, esc(this.s(e) ?? "—"), l, sev.icon, sev.color, 6));
     }
     const charts = [];
     if (strings.length) charts.push(this.chartCard("st24", "Strings 24 h (W)", C.amber, { kind: "history", hours: 24, unit: "W", series: strings.map((s, i) => ({ name: s.name, entity: s.power, color: PALETTE[i % PALETTE.length] })) }));
@@ -1247,6 +1249,31 @@ class CentroControlPanel extends HTMLElement {
     const warn = over ? `<div class="small" style="grid-column:1/-1;color:${C.red}">⚠ ${fmt(v, 0)} ${unit} supera la potencia contratada menos el consumo de la casa; bájala a ${fmt(cap, 0)} ${unit} o menos.</div>` : "";
     // slider + exact box that stay in sync while dragging/typing; the value is written on release / Enter / leaving the box
     return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb" ${volt ? `data-volt="${volt}"` : ""} ${cap !== null ? `data-cap="${cap}"` : ""}><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.min(v, max)}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span>${watts}</div>${warn}${note}</div>`;
+  }
+  /** Colour of an inverter status / fault / alarm: green = normal, cyan = idle, amber = fixable, red = serious, grey = unknown. */
+  _invSeverity(kind, state) {
+    const ok = { color: C.green, icon: "mdi:check-circle-outline", level: "ok" };
+    const idle = { color: C.cyan, icon: "mdi:power-sleep", level: "idle" };
+    const warn = { color: C.amber, icon: "mdi:alert-outline", level: "warn" };
+    const bad = { color: C.red, icon: "mdi:alert-octagon", level: "bad" };
+    const none = { color: C.muted, icon: "mdi:help-circle-outline", level: "none" };
+    const txt = String(state ?? "").trim(), low = txt.toLowerCase();
+    if (!txt || /^(unavailable|unknown|none|null)$/.test(low)) return none;
+    const grave = /(over-?current|sobre-?corriente|over-?volt|sobre-?tensi|leak|fuga|too high|demasiado|temperatur|insulat|aislamiento|short|cortocircuito|ground|tierra|arc\b|arco|fire|incendio)/i;
+    const mild = /(changed|cambio|communicat|comunicaci|soft start|quality|calidad|grid|red el|meter|contador|battery loss|parallel|paralelo|standby)/i;
+    if (kind === "inversor_estado") {
+      if (/^(normal|ok|on|running|working|online|grid|on-grid|connected|generating|funcionando|correcto)$/i.test(low)) return ok;
+      if (/(standby|stand-by|espera|waiting|idle|self-?test|autotest|check|startup|arranque|sleep|offline|off)/i.test(low)) return idle;
+      if (/(fault|fallo|error|aver[ií]a|falla|critical|cr[ií]tic)/i.test(low)) return bad;
+      if (/(alarm|warn|aviso|alerta|atenci)/i.test(low)) return warn;
+      return warn;
+    }
+    if (/^(ok|normal|0|0\.0|off|false|no|ninguno|ninguna|sin alarmas?|sin fallos?|clear|none)$/i.test(low)) return ok;
+    if (low === "on" || low === "true") return kind === "inversor_fallo" ? bad : warn;
+    if (grave.test(low)) return bad;
+    if (kind === "inversor_alarma") return warn; // alarms: something to look at, the inverter keeps working
+    if (mild.test(low)) return warn; // faults that clear by themselves / are fixed from outside (grid, mode change, communication)
+    return bad;
   }
   deyeCards() {
     const k = (x) => this.set_(x);

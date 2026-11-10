@@ -1056,12 +1056,15 @@ class CentroControlPanel extends HTMLElement {
     }
     return { v: 51.2, nominal: true };
   }
-  /** Highest grid-charge current (A) whose power stays within the contracted power, or null when unknown. */
+  /** Highest grid-charge current (A) that keeps the grid draw within the contracted power: contracted minus what the house consumes right now. */
   _gridCap() {
     const kw = toNum(this.A("uso_potencia_contratada", "contratada_kw"), NaN);
     if (!(kw > 0)) return null;
     const { v, nominal } = this._batVolt();
-    return { amps: Math.floor((kw * 1000) / v), watts: kw * 1000, volt: v, nominal, kw };
+    const loadEntity = this.set_("consumo_potencia");
+    const load = loadEntity ? Math.max(0, this.watts(loadEntity) || 0) : 0;
+    const avail = Math.max(0, kw * 1000 - load);
+    return { amps: Math.floor(avail / v), watts: avail, load, contracted: kw * 1000, volt: v, nominal, kw };
   }
   _gridOpt(o) { return /(grid|red|both|ambos)/i.test(o) && !/^\s*(no|none|ning|sin|off|disable)/i.test(o); }
   _offOpt(o) { return /^\s*(no|none|ning|sin|off|disable)/i.test(o); }
@@ -1162,7 +1165,7 @@ class CentroControlPanel extends HTMLElement {
     const over = cap !== null && v > cap;
     const watts = volt ? `<span class="nrw" style="${over ? `color:${C.red}` : ""}">${wTxt(v)}</span>` : "";
     const note = opt.note ? `<div class="small muted" style="grid-column:1/-1">${opt.note}</div>` : "";
-    const warn = over ? `<div class="small" style="grid-column:1/-1;color:${C.red}">⚠ ${fmt(v, 0)} ${unit} supera la potencia contratada; bájala a ${fmt(cap, 0)} ${unit} o menos.</div>` : "";
+    const warn = over ? `<div class="small" style="grid-column:1/-1;color:${C.red}">⚠ ${fmt(v, 0)} ${unit} supera la potencia contratada menos el consumo de la casa; bájala a ${fmt(cap, 0)} ${unit} o menos.</div>` : "";
     // slider + exact box that stay in sync while dragging/typing; the value is written on release / Enter / leaving the box
     return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb" ${volt ? `data-volt="${volt}"` : ""} ${cap !== null ? `data-cap="${cap}"` : ""}><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.min(v, max)}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span>${watts}</div>${warn}${note}</div>`;
   }
@@ -1179,7 +1182,7 @@ class CentroControlPanel extends HTMLElement {
     if (k("deye_corriente_carga_red")) {
       const g = this._gridCap();
       const { v: volt, nominal } = this._batVolt();
-      const note = `Potencia = intensidad × tensión de la batería (${fmt(volt, 1)} V${nominal ? " nominal" : ""})${g ? `. Máximo ${fmt(g.amps, 0)} A = ${fmt(g.watts, 0)} W, la potencia contratada.` : "."}`;
+      const note = `Potencia = intensidad × tensión de la batería (${fmt(volt, 1)} V${nominal ? " nominal" : ""})${g ? `. Máximo ahora ${fmt(g.amps, 0)} A = ${fmt(g.watts, 0)} W: potencia contratada (${fmt(g.contracted, 0)} W) menos lo que consume la casa (${fmt(g.load, 0)} W).` : "."}`;
       main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A", { cap: g ? g.amps : null, volt, note });
     }
     if (k("deye_carga_red_inicio")) main += this.numRow("Empezar a cargar por red por debajo de", k("deye_carga_red_inicio"), this.unit(k("deye_carga_red_inicio")) || "%");
@@ -1192,14 +1195,13 @@ class CentroControlPanel extends HTMLElement {
     main += `<div class="small muted" style="margin-top:6px">Los cambios se envían al inversor al soltar el control. Se respetan los límites que da el propio inversor.</div>`;
     const cards = [this.card("gc", main, { c: C.green })];
     for (const n of [1, 2]) {
-      const t = k(`deye_p${n}_hora`), pw = k(`deye_p${n}_potencia`), so = k(`deye_p${n}_soc`), ch = k(`deye_p${n}_carga`);
-      if (![t, pw, so, ch].some(Boolean)) continue;
+      const t = k(`deye_p${n}_hora`), so = k(`deye_p${n}_soc`), ch = k(`deye_p${n}_carga`);
+      if (![t, so, ch].some(Boolean)) continue;
       let h = `<h3>${icon("mdi:clock-time-four-outline")}Programa ${n}</h3>`;
       if (t) {
         const v = String(this.s(t) || "").slice(0, 5);
         h += `<div class="sim"><label>Hora de inicio</label><input type="time" value="${esc(v)}" data-set="${esc(t)}" style="background:#0d1c33;color:inherit;border:1px solid #16304f;border-radius:8px;padding:4px 6px"><b>${esc(v || "—")}</b></div>`;
       }
-      if (pw) h += this.numRow("Potencia", pw, this.unit(pw) || "W");
       if (so) h += this.numRow("SOC", so, this.unit(so) || "%");
       if (ch) {
         const sel = ch.startsWith("select.") || ch.startsWith("input_select.");

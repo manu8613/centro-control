@@ -1057,17 +1057,25 @@ class CentroControlPanel extends HTMLElement {
     const k = (x) => this.set_(x);
     const steps = [];
     let note = "";
+    // Night programs: those of 1 and 2 that start before 08:00 (the battery is meant to be used from 08:00 to 00:00).
+    const night = [1, 2].filter((n) => {
+      const t = k(`deye_p${n}_hora`);
+      return t ? String(this.s(t) || "99:99").slice(0, 5) < "08:00" : n === 1;
+    });
     if (est === "cargar" && Number.isFinite(target)) {
       if (k("deye_franjas") && !this._flagOn(k("deye_franjas"))) {
         if (/^(select|input_select)\./.test(k("deye_franjas"))) note = "\n\nOjo: la programación por franjas está desactivada. Elige el modo en el desplegable de Solar para que los programas funcionen.";
         else steps.push(["Activar la programación por franjas", () => this._flagSet(k("deye_franjas"), true)]);
       }
-      if (k("deye_p1_soc")) steps.push([`Programa 1: SOC ${target} %`, () => this._write(k("deye_p1_soc"), target)]);
-      if (k("deye_p1_carga")) steps.push(["Programa 1: carga desde la red activada", () => this._chargeSet(k("deye_p1_carga"), true)]);
-      if (k("deye_p2_carga")) steps.push(["Programa 2: carga desde la red desactivada", () => this._chargeSet(k("deye_p2_carga"), false)]);
-      if (k("deye_carga_red") && this.s(k("deye_carga_red")) !== "on") steps.push(["Activar la carga de la batería por la red", () => this._write(k("deye_carga_red"), true)]);
-    } else if (est === "no_cargar" && k("deye_p1_carga")) {
-      steps.push(["Programa 1: carga desde la red desactivada", () => this._chargeSet(k("deye_p1_carga"), false)]);
+      for (const n of night) {
+        if (k(`deye_p${n}_soc`)) steps.push([`Programa ${n}: SOC ${target} %`, () => this._write(k(`deye_p${n}_soc`), target)]);
+        if (k(`deye_p${n}_carga`)) steps.push([`Programa ${n}: carga desde la red activada`, () => this._chargeSet(k(`deye_p${n}_carga`), true)]);
+      }
+      // With time-of-use active, grid charging is decided by each program; the general switch is only for the mode without programs.
+      const touOn = !!k("deye_franjas") && this._flagOn(k("deye_franjas"));
+      if (!touOn && k("deye_carga_red") && this.s(k("deye_carga_red")) !== "on") steps.push(["Activar la carga de la batería por la red", () => this._write(k("deye_carga_red"), true)]);
+    } else if (est === "no_cargar") {
+      for (const n of night) if (k(`deye_p${n}_carga`)) steps.push([`Programa ${n}: carga desde la red desactivada`, () => this._chargeSet(k(`deye_p${n}_carga`), false)]);
     }
     if (!steps.length) return alert("No hay nada que aplicar: configura los programas del Deye en Configurar → Inversor Deye.");
     if (!confirm("Se va a cambiar en el inversor:\n\n• " + steps.map((s2) => s2[0]).join("\n• ") + note + "\n\n¿Aplicar?")) return;

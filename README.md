@@ -41,7 +41,7 @@ gráficas; cada dispositivo guarda su propio diseño.
 |:--|:--|
 | **Puente de mando** | Flujo de energía animado, indicadores clave, resumen del periodo elegido, alertas y gráfica de 24 h. |
 | **Red** | Importación y vertido, uso de la potencia contratada, tensión y frecuencia, precio de hoy y mañana, 30 días. |
-| **Solar** | Producción frente a la potencia pico, cada string (W, V, A, % de Wp), comparativa W/kWp, inversor, histórico diario y mensual. |
+| **Solar** | Producción frente a la potencia pico, cada string (W, V, A, % de Wp), comparativa W/kWp, inversor, histórico diario y mensual. Con un inversor Deye: **carga de la batería por la red**, intensidad y programas 1 y 2. Con una entidad del tiempo: **nubosidad de hoy y de 5 días** y la **recomendación de carga por red** de la noche. |
 | **Batería** | Carga total, flujo, energía almacenada, autonomía, cada batería y sus celdas una a una, comunicación con cada BMS y diferencia de SOC entre baterías. |
 | **Consumos** | Total, consumo sin medir, ranking de circuitos y aparatos, tarjetas por grupo y gráfica apilada. |
 | **Problemas** | Críticos, avisos e información con el detalle de cada uno, estado de todas las fuentes e historial. |
@@ -91,8 +91,8 @@ gráficas; cada dispositivo guarda su propio diseño.
 Todo se cambia desde la integración, sin YAML:
 
 - **Configurar** abre un menú con una pantalla por área: general (día de la
-  factura, avisos), red, consumo, solar e inversor, tarifa, gas, luces,
-  temperaturas, riego, CO₂ y umbrales de problemas.
+  factura, avisos), red, consumo, solar e inversor, inversor Deye, tarifa, gas,
+  luces, temperaturas, riego, CO₂ y umbrales de problemas.
 - **Añadir string**, **Añadir batería**, **Añadir circuito** y **Añadir zona de
   riego** suman cada elemento de tu casa. Puedes tener los que quieras y
   editarlos o borrarlos uno a uno.
@@ -173,6 +173,25 @@ temperaturas y humedad de la casa · gas consumiéndose sin parar.
 
 Cada problema tiene que durar un tiempo antes de aparecer, para que una lectura
 suelta no dispare un aviso.
+
+### Carga por red y programas del inversor (Deye)
+
+En **Configurar → Inversor Deye** eliges las entidades que ya tengas en Home
+Assistant (por ejemplo, las de la integración Solarman): interruptor de carga
+por red, intensidad de carga, programación por franjas y, para los programas 1
+y 2, hora, potencia, SOC y carga. Todo es opcional: la pestaña **Solar** solo
+muestra los controles de lo que configures. Los números respetan el mínimo y el
+máximo que da el propio inversor.
+
+Para la **nubosidad** y la **recomendación de carga nocturna** elige una
+entidad `weather` en **Configurar → Solar e inversor** (mejor si su previsión
+diaria incluye `cloud_coverage`, como Open-Meteo o Met.no; si no, se estima por
+el estado del cielo). La recomendación usa la batería de 08:00 a 00:00 y deja
+la noche (00:00–08:00) para cargar por la red cuando el día siguiente no basta:
+compara la producción estimada con tu consumo medio de los últimos 7 días y el
+SOC actual, y propone un SOC objetivo. El botón **Aplicar** lo escribe en los
+programas 1 y 2 tras pedir confirmación. También queda en el sensor
+`recomendacion_carga_red` para tus automatizaciones. Es una estimación.
 
 ## Configurar desde Windows con un token (opcional)
 

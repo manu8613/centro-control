@@ -327,6 +327,13 @@ MAIN: tuple[CentroSensorDescription, ...] = (
     _energy("energia_consumo", "consumo"),
     _energy("energia_bateria_carga", "bateria_carga"),
     _energy("energia_bateria_descarga", "bateria_descarga"),
+    CentroSensorDescription(
+        key="recomendacion_carga_red",
+        device_class=SensorDeviceClass.ENUM,
+        options=["cargar", "no_cargar", "sin_datos"],
+        value=lambda m: m.solar_plan.get("estado", "sin_datos") if m.solar_plan else None,
+        attrs=lambda m: dict(m.solar_plan),
+    ),
     # ------------------------------------------------------------- money
     _money("coste_energia", "coste_energia"),
     _money("compensacion_excedentes", "compensacion"),

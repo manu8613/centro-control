@@ -15,7 +15,7 @@ NAME: Final = "Centro de Control"
 AUTHOR: Final = "manu8613"
 AUTHOR_URL: Final = "https://github.com/manu8613"
 REPO_URL: Final = "https://github.com/manu8613/centro-control"
-VERSION: Final = "2.6.0"
+VERSION: Final = "2.7.0"
 
 DEFAULT_TITLE: Final = "Centro de Control"
 DASHBOARD_URL: Final = "centro-control"
@@ -70,6 +70,22 @@ CONF_INV_TEMP2: Final = "inversor_temperatura_dc"
 CONF_INV_STATUS: Final = "inversor_estado"
 CONF_INV_FAULT: Final = "inversor_fallo"
 CONF_INV_ALARM: Final = "inversor_alarma"
+CONF_PV_FORECAST_TOMORROW: Final = "solar_prevision_manana"
+
+# ---------------------------------------------------------------- inverter control (Deye) and cloud cover
+CONF_WEATHER: Final = "meteo_entidad"
+CONF_DAY_SHARE: Final = "consumo_diurno_pct"
+CONF_DEYE_GRID_CHARGE: Final = "deye_carga_red"
+CONF_DEYE_GRID_CURRENT: Final = "deye_corriente_carga_red"
+CONF_DEYE_TOU: Final = "deye_franjas"
+CONF_DEYE_P1_TIME: Final = "deye_p1_hora"
+CONF_DEYE_P1_POWER: Final = "deye_p1_potencia"
+CONF_DEYE_P1_SOC: Final = "deye_p1_soc"
+CONF_DEYE_P1_CHARGE: Final = "deye_p1_carga"
+CONF_DEYE_P2_TIME: Final = "deye_p2_hora"
+CONF_DEYE_P2_POWER: Final = "deye_p2_potencia"
+CONF_DEYE_P2_SOC: Final = "deye_p2_soc"
+CONF_DEYE_P2_CHARGE: Final = "deye_p2_carga"
 
 # ---------------------------------------------------------------- tariff
 CONF_PRICE_MODE: Final = "precio_modo"
@@ -200,6 +216,7 @@ DEFAULTS: Final[dict[str, object]] = {
     CONF_CONTRACTED_P1: 4.6,
     CONF_CONTRACTED_P2: 4.6,
     CONF_PV_PEAK: 0,
+    CONF_DAY_SHARE: 85.0,
     CONF_PRICE_MODE: PRICE_PERIODS,
     CONF_PRICE_P1: 0.20,
     CONF_PRICE_P2: 0.13,

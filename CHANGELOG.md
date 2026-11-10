@@ -8,6 +8,22 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.0] - 2026-11-10
+
+### Añadido
+- Pestaña **Solar**: controles del inversor Deye. Carga de la batería por la
+  red, intensidad de carga, programación por franjas y programas 1 y 2 (hora,
+  potencia, SOC y carga). Nueva pantalla **Configurar → Inversor Deye** para
+  elegir las entidades; los valores se limitan al mínimo y máximo del inversor.
+- Nubosidad de hoy y de los próximos 5 días con la producción solar estimada
+  (entidad `weather` en **Configurar → Solar e inversor**; si la previsión no
+  trae `cloud_coverage`, se estima por el estado del cielo).
+- Recomendación de carga por red para la noche: prioriza la batería de 08:00 a
+  00:00 y compara la producción prevista con tu consumo medio y el SOC. Botón
+  **Aplicar** (con confirmación) y sensor `recomendacion_carga_red`.
+- Ajustes nuevos: previsión solar de mañana (opcional) y parte del consumo
+  entre 08:00 y 00:00 (85 % por defecto).
+
 ## [2.6.0] - 2026-11-10
 
 ### Añadido

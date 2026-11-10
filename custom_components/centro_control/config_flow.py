@@ -97,6 +97,19 @@ from .const import (
     CONF_INV_STATUS,
     CONF_INV_TEMP,
     CONF_INV_TEMP2,
+    CONF_DAY_SHARE,
+    CONF_DEYE_GRID_CHARGE,
+    CONF_DEYE_GRID_CURRENT,
+    CONF_DEYE_P1_CHARGE,
+    CONF_DEYE_P1_POWER,
+    CONF_DEYE_P1_SOC,
+    CONF_DEYE_P1_TIME,
+    CONF_DEYE_P2_CHARGE,
+    CONF_DEYE_P2_POWER,
+    CONF_DEYE_P2_SOC,
+    CONF_DEYE_P2_TIME,
+    CONF_DEYE_TOU,
+    CONF_WEATHER,
     CONF_INV_TEMP_CRIT,
     CONF_INV_TEMP_WARN,
     CONF_LIGHTS,
@@ -125,6 +138,7 @@ from .const import (
     CONF_PRICE_SENSOR,
     CONF_PV_ENERGY,
     CONF_PV_FORECAST,
+    CONF_PV_FORECAST_TOMORROW,
     CONF_PV_PEAK,
     CONF_PV_POWER,
     CONF_RAIN_SENSOR,
@@ -189,6 +203,10 @@ SENSOR = _entity("sensor")
 POWER = _entity("sensor")
 ENERGY = _entity("sensor")
 ANY_STATUS = _entity(["sensor", "binary_sensor"])
+SWITCH = _entity(["switch", "input_boolean"])
+NUMBER = _entity(["number", "input_number"])
+TIME = _entity(["time", "input_datetime", "text"])
+CHARGE_MODE = _entity(["select", "switch", "input_boolean", "input_select"])
 
 # Each options screen: key -> (selector, required)
 Fields = dict[str, tuple[Any, bool]]
@@ -224,6 +242,22 @@ SECTIONS: dict[str, Fields] = {
         CONF_INV_STATUS: (ANY_STATUS, False),
         CONF_INV_FAULT: (ANY_STATUS, False),
         CONF_INV_ALARM: (ANY_STATUS, False),
+        CONF_PV_FORECAST_TOMORROW: (SENSOR, False),
+        CONF_WEATHER: (_entity("weather"), False),
+        CONF_DAY_SHARE: (_number(30, 100, 1, "%"), True),
+    },
+    "deye": {
+        CONF_DEYE_GRID_CHARGE: (SWITCH, False),
+        CONF_DEYE_GRID_CURRENT: (NUMBER, False),
+        CONF_DEYE_TOU: (SWITCH, False),
+        CONF_DEYE_P1_TIME: (TIME, False),
+        CONF_DEYE_P1_POWER: (NUMBER, False),
+        CONF_DEYE_P1_SOC: (NUMBER, False),
+        CONF_DEYE_P1_CHARGE: (CHARGE_MODE, False),
+        CONF_DEYE_P2_TIME: (TIME, False),
+        CONF_DEYE_P2_POWER: (NUMBER, False),
+        CONF_DEYE_P2_SOC: (NUMBER, False),
+        CONF_DEYE_P2_CHARGE: (CHARGE_MODE, False),
     },
     "tarifa": {
         CONF_PRICE_MODE: (_select([PRICE_PERIODS, PRICE_SENSOR, PRICE_FLAT], CONF_PRICE_MODE), True),
@@ -392,6 +426,9 @@ class CentroOptionsFlow(OptionsFlow):
 
     async def async_step_solar(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return await self._section("solar", user_input)
+
+    async def async_step_deye(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self._section("deye", user_input)
 
     async def async_step_tarifa(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return await self._section("tarifa", user_input)

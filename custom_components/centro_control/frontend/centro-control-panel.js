@@ -660,10 +660,16 @@ class CentroControlPanel extends HTMLElement {
       e.stopPropagation();
       return this._rotAction(rot.dataset);
     }
+    const adv = e.target.closest("[data-adv]");
+    if (adv) {
+      e.stopPropagation();
+      return this._applyAdvice();
+    }
     if (this._edit && !e.target.closest("nav")) return;
-    const t = e.target.closest("[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
+    const t = e.target.closest("[data-set],[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
     if (!t) return;
     const d = t.dataset;
+    if (d.set !== undefined && d.val !== undefined) return this._write(d.set, d.val);
     if (d.tab) return this._go(d.tab);
     if (d.select) return this._hass.callService("select", "select_option", { entity_id: d.select, option: d.option });
     if (d.press) {
@@ -687,7 +693,9 @@ class CentroControlPanel extends HTMLElement {
   _change(e) {
     const t = e.target;
     this._busy = Date.now() + 1500;
-    if (t.dataset.number) {
+    if (t.dataset.set) {
+      this._write(t.dataset.set, t.value);
+    } else if (t.dataset.number) {
       this._hass.callService("number", "set_value", { entity_id: t.dataset.number, value: Number(t.value) });
     } else if (t.dataset.bright) {
       this._hass.callService("light", "turn_on", { entity_id: t.dataset.bright, brightness_pct: Number(t.value) });
@@ -984,11 +992,135 @@ class CentroControlPanel extends HTMLElement {
     if (strings.length) charts.push(this.chartCard("st24", "Strings 24 h (W)", C.amber, { kind: "history", hours: 24, unit: "W", series: strings.map((s, i) => ({ name: s.name, entity: s.power, color: PALETTE[i % PALETTE.length] })) }));
     charts.push(this.chartCard("p30", "Producción 30 días (kWh)", C.amber, { kind: "days", unit: "kWh", series: [{ name: "Solar", field: "solar", color: C.amber }] }));
     charts.push(this.chartCard("p12", "Producción por meses (kWh)", C.amber, { kind: "months", unit: "kWh", count: 12, series: [{ name: "Solar", field: "solar", color: C.amber }] }));
+    const deye = this.deyeCards();
     return [
       { cards: head },
       { cards: [this.title("ts", "Strings", "", "mdi:solar-panel", C.amber), ...st, ...(inv.length ? [this.title("ti", "Inversor", "", "mdi:power-plug-battery", C.orange), ...inv] : [])] },
+      { id: "plan", cls: "w2", cards: this.adviceCards() },
+      { id: "deye", cls: deye.length > 1 ? "w3" : "", cards: deye },
       { cls: "w2", cards: charts },
     ];
+  }
+
+  // ---------------------------------------------------------------- inverter control (Deye) and cloud cover
+  _write(entity, value) {
+    const st = this.st(entity);
+    if (!st) return;
+    const d = entity.split(".")[0];
+    const call = (domain, service, data) => this._hass.callService(domain, service, { entity_id: entity, ...data });
+    this._busy = Date.now() + 1500;
+    if (d === "number" || d === "input_number") {
+      let v = Number(value);
+      if (!Number.isFinite(v)) return;
+      const a = st.attributes;
+      if (a.min !== undefined) v = Math.max(Number(a.min), v);
+      if (a.max !== undefined) v = Math.min(Number(a.max), v);
+      return call(d, "set_value", { value: v });
+    }
+    if (d === "time") return call("time", "set_value", { time: String(value).length === 5 ? value + ":00" : value });
+    if (d === "input_datetime") return call("input_datetime", "set_datetime", { time: String(value).length === 5 ? value + ":00" : value });
+    if (d === "text") return call("text", "set_value", { value: String(value).slice(0, 5) });
+    if (d === "select" || d === "input_select") return call(d, "select_option", { option: String(value) });
+    if (d === "switch" || d === "input_boolean") return call(d, value === true || value === "true" || value === "on" ? "turn_on" : "turn_off", {});
+  }
+  _gridOpt(o) { return /(grid|red)/i.test(o) && !/^\s*(no|none|ning|sin|off|disable)/i.test(o); }
+  _offOpt(o) { return /^\s*(no|none|ning|sin|off|disable)/i.test(o); }
+  /** Is "charge from the grid" on for a program (select with a grid option, or a switch)? */
+  _chargeOn(entity) {
+    const st = this.s(entity);
+    return entity.startsWith("select.") || entity.startsWith("input_select.") ? this._gridOpt(st || "") : st === "on";
+  }
+  _chargeSet(entity, on) {
+    if (entity.startsWith("select.") || entity.startsWith("input_select.")) {
+      const opts = this.a(entity, "options") || [];
+      const opt = on ? opts.find((o) => this._gridOpt(o)) : opts.find((o) => this._offOpt(o));
+      if (opt) this._write(entity, opt);
+    } else this._write(entity, on);
+  }
+  _applyAdvice() {
+    const est = this.S("recomendacion_carga_red");
+    const target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+    const k = (x) => this.set_(x);
+    const steps = [];
+    if (est === "cargar" && Number.isFinite(target)) {
+      if (k("deye_franjas") && this.s(k("deye_franjas")) !== "on") steps.push(["Activar la programación por franjas", () => this._write(k("deye_franjas"), true)]);
+      if (k("deye_p1_soc")) steps.push([`Programa 1: SOC ${target} %`, () => this._write(k("deye_p1_soc"), target)]);
+      if (k("deye_p1_carga")) steps.push(["Programa 1: carga desde la red activada", () => this._chargeSet(k("deye_p1_carga"), true)]);
+      if (k("deye_p2_carga")) steps.push(["Programa 2: carga desde la red desactivada", () => this._chargeSet(k("deye_p2_carga"), false)]);
+      if (k("deye_carga_red") && this.s(k("deye_carga_red")) !== "on") steps.push(["Activar la carga de la batería por la red", () => this._write(k("deye_carga_red"), true)]);
+    } else if (est === "no_cargar" && k("deye_p1_carga")) {
+      steps.push(["Programa 1: carga desde la red desactivada", () => this._chargeSet(k("deye_p1_carga"), false)]);
+    }
+    if (!steps.length) return alert("No hay nada que aplicar: configura los programas del Deye en Configurar → Inversor Deye.");
+    if (!confirm("Se va a cambiar en el inversor:\n\n• " + steps.map((s2) => s2[0]).join("\n• ") + "\n\n¿Aplicar?")) return;
+    steps.forEach((s2) => s2[1]());
+  }
+
+  cloudIcon(p) {
+    return p === null || p === undefined ? "mdi:weather-cloudy-clock" : p < 20 ? "mdi:weather-sunny" : p < 45 ? "mdi:weather-partly-cloudy" : p < 75 ? "mdi:weather-cloudy" : "mdi:weather-cloudy-alert";
+  }
+  adviceCards() {
+    if (!this.set_("meteo_entidad"))
+      return [this.card("adv", `<h3>${icon("mdi:weather-partly-cloudy")}Nubosidad y carga por red</h3><div class="empty">${icon("mdi:information-outline")} Elige la «Entidad del tiempo» en Configurar → Solar e inversor para ver la nubosidad de hoy y de los próximos 5 días, y la recomendación de carga por red.</div>`, { c: C.muted })];
+    const est = this.S("recomendacion_carga_red");
+    const a = (x) => this.A("recomendacion_carga_red", x);
+    const col = est === "cargar" ? C.amber : est === "no_cargar" ? C.green : C.muted;
+    const head = est === "cargar" ? "Conviene cargar por la red esta noche" : est === "no_cargar" ? "No hace falta cargar por la red" : "Sin datos suficientes";
+    const canApply = est === "cargar" || est === "no_cargar" ? ["deye_p1_carga", "deye_p1_soc", "deye_carga_red"].some((x) => this.set_(x)) : false;
+    const target = a("soc_objetivo"), s08 = a("soc_previsto_08h");
+    const kpis = target !== null && target !== undefined && est !== "sin_datos" ? `<div class="chips" style="margin:6px 0"><span class="chip on" style="--c:${col}">Objetivo ${fmt(target, 0)} %</span><span class="chip">A las 08:00 sin red: ${fmt(s08, 0)} %</span><span class="chip">Consumo medio ${kwh(a("consumo_diario_kwh"), 1)}/día</span></div>` : "";
+    const apply = canApply ? `<button class="btn full" style="--c:${col};margin-top:8px" data-adv="apply">${icon("mdi:flash-auto")}${est === "cargar" ? `Aplicar en el Deye: cargar hasta ${fmt(target, 0)} %` : "Aplicar en el Deye: no cargar por red"}</button>` : "";
+    const adv = this.card("adv", `<h3>${icon("mdi:transmission-tower-import")}Carga por red esta noche</h3><div class="big" style="--c:${col};font-size:20px">${head}</div>${kpis}<div class="small muted">${esc(a("motivo") || "")}</div>${apply}<div class="small muted" style="margin-top:8px">Prioriza la batería de 08:00 a 00:00; la red carga de 00:00 a 08:00. Es una estimación con la nubosidad prevista y tu consumo medio.</div>`, { c: col });
+    const days = a("dias") || [];
+    const tiles = days.map((d, i) => {
+      const label = i === 0 ? "Hoy" : i === 1 ? "Mañana" : new Date(d.fecha + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short" });
+      const p = d.nubes_pct;
+      const c = p === null || p === undefined ? C.muted : p < 30 ? C.amber : p < 70 ? C.cyan : C.violet;
+      const solar = d.solar_kwh !== null && d.solar_kwh !== undefined ? `≈ ${fmt(d.solar_kwh, 1)} kWh` : "—";
+      const cov = d.cobertura_pct !== null && d.cobertura_pct !== undefined ? `${fmt(d.cobertura_pct, 0)} % del consumo` : "";
+      return `<div style="flex:1 1 90px;min-width:90px;text-align:center;padding:8px 4px;border-radius:12px;border:1px solid ${c}55;background:${c}12"><div class="small muted">${esc(label)}</div><div style="color:${c};font-size:22px">${icon(this.cloudIcon(p))}</div><div style="font-weight:700;color:${c}">${p === null || p === undefined ? "—" : fmt(p, 0) + " %"}</div><div class="small">${solar}</div><div class="small muted">${cov}</div>${d.origen_nubes === "estimada" ? `<div class="small muted" title="La previsión no trae porcentaje de nubes: se estima por el estado del cielo">~ por el cielo</div>` : ""}</div>`;
+    }).join("");
+    const cloud = this.card("cloud", `<h3>${icon("mdi:weather-partly-cloudy")}Nubosidad: hoy y próximos 5 días</h3>${days.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${tiles}</div><div class="small muted" style="margin-top:8px">Producción solar estimada con la nubosidad${this.set_("solar_prevision_manana") ? " (hoy y mañana, de tu sensor de previsión)" : ""}.</div>` : `<div class="empty">${icon("mdi:information-outline")} Esperando la previsión de ${esc(this.name(this.set_("meteo_entidad")))}…</div>`}`, { c: C.cyan });
+    return [adv, cloud];
+  }
+  numRow(label, entity, unit) {
+    const st = this.st(entity);
+    if (!st) return "";
+    const a = st.attributes;
+    const v = toNum(st.state, 0);
+    return `<div class="sim"><label>${esc(label)}</label><input type="range" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}" value="${v}" data-set="${esc(entity)}"><b>${fmt(v, 0)} ${unit}</b></div>`;
+  }
+  deyeCards() {
+    const k = (x) => this.set_(x);
+    if (!["deye_carga_red", "deye_corriente_carga_red", "deye_franjas", "deye_p1_hora", "deye_p1_soc", "deye_p1_carga", "deye_p2_hora", "deye_p2_soc", "deye_p2_carga"].some(k))
+      return [this.card("deye", `<h3>${icon("mdi:power-plug-battery")}Inversor Deye</h3><div class="empty">${icon("mdi:information-outline")} Añade las entidades de tu inversor en Configurar → Inversor Deye para controlar la carga por red y los programas 1 y 2 desde aquí.</div>`, { c: C.muted })];
+    const toggle = (label, entity, ic) => {
+      const on = this.s(entity) === "on";
+      return `<button class="btn full" style="--c:${on ? C.green : C.muted};margin-bottom:8px" data-toggle="${esc(entity)}">${icon(ic)}${esc(label)}: ${on ? "activada" : "desactivada"}</button>`;
+    };
+    let main = `<h3>${icon("mdi:transmission-tower-import")}Carga de la batería por la red</h3>`;
+    if (k("deye_carga_red")) main += toggle("Carga por red", k("deye_carga_red"), "mdi:transmission-tower-import");
+    if (k("deye_corriente_carga_red")) main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A");
+    if (k("deye_franjas")) main += toggle("Programación por franjas", k("deye_franjas"), "mdi:calendar-clock");
+    main += `<div class="small muted" style="margin-top:6px">Los cambios se envían al inversor al soltar el control. Se respetan los límites que da el propio inversor.</div>`;
+    const cards = [this.card("gc", main, { c: C.green })];
+    for (const n of [1, 2]) {
+      const t = k(`deye_p${n}_hora`), pw = k(`deye_p${n}_potencia`), so = k(`deye_p${n}_soc`), ch = k(`deye_p${n}_carga`);
+      if (![t, pw, so, ch].some(Boolean)) continue;
+      let h = `<h3>${icon("mdi:clock-time-four-outline")}Programa ${n}</h3>`;
+      if (t) {
+        const v = String(this.s(t) || "").slice(0, 5);
+        h += `<div class="sim"><label>Hora de inicio</label><input type="time" value="${esc(v)}" data-set="${esc(t)}" style="background:#0d1c33;color:inherit;border:1px solid #16304f;border-radius:8px;padding:4px 6px"><b>${esc(v || "—")}</b></div>`;
+      }
+      if (pw) h += this.numRow("Potencia", pw, this.unit(pw) || "W");
+      if (so) h += this.numRow("SOC", so, this.unit(so) || "%");
+      if (ch) {
+        const sel = ch.startsWith("select.") || ch.startsWith("input_select.");
+        h += `<div class="small muted" style="margin:8px 0 4px">Carga</div><div class="chips">` + (sel ? (this.a(ch, "options") || []).map((o) => `<button class="chip ${this.s(ch) === o ? "on" : ""}" data-set="${esc(ch)}" data-val="${esc(o)}">${esc(o)}</button>`).join("") : `<button class="chip ${this.s(ch) === "on" ? "on" : ""}" data-set="${esc(ch)}" data-val="${this.s(ch) === "on" ? "false" : "true"}">${this.s(ch) === "on" ? "Desde la red: sí" : "Desde la red: no"}</button>`) + `</div>`;
+      }
+      cards.push(this.card(`p${n}`, h, { c: n === 1 ? C.amber : C.violet }));
+    }
+    return cards;
   }
 
   socDiffColor(d) {

@@ -8,6 +8,15 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.6.0] - 2026-11-10
+
+### Añadido
+- Botón **Rotar** en la barra: cambia de pestaña automáticamente, pensado para
+  la tablet. Si tocas la pantalla espera unos segundos antes de seguir.
+- Nueva pestaña **Configuración**: tiempo en cada pestaña, tiempo de espera tras
+  un toque y qué pestañas entran en la rotación. Se guarda en cada dispositivo,
+  igual que el diseño.
+
 ## [2.5.0] - 2026-11-09
 
 ### Añadido

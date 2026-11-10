@@ -28,7 +28,14 @@ const TABS = [
   ["luces", "Luces", "mdi:lightbulb-group"],
   ["clima", "Temperaturas", "mdi:thermometer"],
   ["riego", "Riego", "mdi:sprinkler-variant"],
+  ["config", "Configuración", "mdi:cog"],
 ];
+// Rotación automática de pestañas (por dispositivo). «config» nunca rota.
+const ROT_KEY = "centro_control_ajustes";
+const ROT_SECS = [10, 15, 30, 60, 120, 300];
+const ROT_RESUME = [15, 30, 60, 120, 300];
+const ROT_DEFAULT = { on: false, secs: 30, resume: 60, off: [] };
+const fmtSecs = (s) => (s >= 60 ? `${s / 60} min` : `${s} s`);
 
 // ------------------------------------------------------------------ formatting
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -85,6 +92,7 @@ main{padding:16px;max-width:1800px;margin:0 auto;container-type:inline-size}
 @media(max-width:760px){header{gap:4px;padding:6px}.brand{letter-spacing:0;margin-right:0}.brand .t{display:none}.laybtn span{display:none}.laybtn{padding:7px}nav button{padding:8px 9px}}
 .laybtn{all:unset;flex:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;border:1px solid #12304d}
 .laybtn:hover,.laybtn.on{color:${C.amber};border-color:${C.amber}88;background:${C.amber}14}
+.rotbtn.on{color:${C.cyan};border-color:${C.cyan}88;background:${C.cyan}14}.rotbtn.on:hover{color:${C.cyan};border-color:${C.cyan}88;background:${C.cyan}22}
 .layinfo{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 14px;border:1px dashed ${C.amber}aa;border-radius:14px;color:${C.amber};background:${C.amber}0d;font-size:13px}
 .layinfo button,.lay button{all:unset;cursor:pointer;padding:5px 9px;border-radius:8px;border:1px solid ${C.amber}77;color:${C.amber};font-size:12px;display:inline-flex;align-items:center;gap:4px;background:#0a1222}
 .layinfo button:hover,.lay button:hover{background:${C.amber}22}
@@ -302,7 +310,7 @@ class CentroControlPanel extends HTMLElement {
     if (this._built) return;
     this._built = true;
     const root = this.shadowRoot;
-    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><nav></nav><button class="laybtn" data-lay="toggle" title="Mover y redimensionar tarjetas y gráficas en este dispositivo">${icon("mdi:view-dashboard-edit-outline")}<span>Diseño</span></button></header><main><div class="grid"></div></main>`;
+    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><nav></nav><button class="laybtn rotbtn" data-rot="toggle"></button><button class="laybtn" data-lay="toggle" title="Mover y redimensionar tarjetas y gráficas en este dispositivo">${icon("mdi:view-dashboard-edit-outline")}<span>Diseño</span></button></header><main><div class="grid"></div></main>`;
     const holder = root.querySelector(".menu");
     this._menu = document.createElement("ha-menu-button");
     holder.appendChild(this._menu);
@@ -318,11 +326,97 @@ class CentroControlPanel extends HTMLElement {
       if (TABS.some((x) => x[0] === t) && t !== this._tab) this._go(t);
     });
     this._timer = setInterval(() => this._refreshCharts(), 60000);
+    // Cualquier toque, tecla o rueda del usuario retrasa el siguiente cambio de pestaña.
+    const touched = () => this._rotTouched();
+    for (const ev of ["pointerdown", "keydown", "wheel"]) root.addEventListener(ev, touched, { passive: true });
+    this._rotUi();
+    this._rotSchedule();
     this._schedule(true);
   }
   disconnectedCallback() {
     clearInterval(this._timer);
+    clearTimeout(this._rotTimer);
+    this._rotTimer = null;
     this._built = false;
+  }
+
+  // ---------------------------------------------------------------- tab rotation (per device)
+  _rotLoad() {
+    if (this._rot) return this._rot;
+    let r = {};
+    try {
+      r = JSON.parse(localStorage.getItem(ROT_KEY) || "{}") || {};
+    } catch (e) {
+      r = {};
+    }
+    this._rot = {
+      on: r.on === true,
+      secs: ROT_SECS.includes(r.secs) ? r.secs : ROT_DEFAULT.secs,
+      resume: ROT_RESUME.includes(r.resume) ? r.resume : ROT_DEFAULT.resume,
+      off: Array.isArray(r.off) ? r.off.filter((k) => TABS.some((t) => t[0] === k && k !== "config")) : [],
+    };
+    return this._rot;
+  }
+  _rotSave() {
+    try {
+      localStorage.setItem(ROT_KEY, JSON.stringify(this._rotLoad()));
+    } catch (e) {
+      /* modo privado: los ajustes duran hasta recargar la página */
+    }
+  }
+  _rotKeys() {
+    const off = this._rotLoad().off;
+    return TABS.map((t) => t[0]).filter((k) => k !== "config" && !off.includes(k));
+  }
+  _rotSchedule(ms) {
+    clearTimeout(this._rotTimer);
+    this._rotTimer = null;
+    const r = this._rotLoad();
+    if (!r.on || !this._built) return;
+    this._rotTimer = setTimeout(() => this._rotTick(), ms ?? r.secs * 1000);
+  }
+  _rotTouched() {
+    const r = this._rotLoad();
+    if (r.on) this._rotSchedule(r.resume * 1000);
+  }
+  _rotTick() {
+    this._rotTimer = null;
+    const r = this._rotLoad();
+    if (!r.on) return;
+    const keys = this._rotKeys();
+    const idle = !this._edit && this._tab !== "config" && Date.now() >= this._busy;
+    if (idle && keys.length > 1) {
+      const all = TABS.map((t) => t[0]);
+      for (let step = 1; step <= all.length; step++) {
+        const k = all[(all.indexOf(this._tab) + step) % all.length];
+        if (keys.includes(k)) {
+          this._go(k);
+          break;
+        }
+      }
+    }
+    this._rotSchedule();
+  }
+  _rotUi() {
+    const btn = this.shadowRoot?.querySelector(".rotbtn");
+    if (!btn) return;
+    const on = this._rotLoad().on;
+    btn.classList.toggle("on", on);
+    btn.title = on ? "Parar el cambio automático de pestañas" : "Cambiar de pestaña automáticamente (ajustes en Configuración)";
+    btn.innerHTML = `${icon(on ? "mdi:pause-circle-outline" : "mdi:play-circle-outline")}<span>Rotar</span>`;
+  }
+  _rotAction(d) {
+    const r = this._rotLoad();
+    if (d.rot === "toggle") r.on = !r.on;
+    else if (d.rot === "secs" && ROT_SECS.includes(Number(d.v))) r.secs = Number(d.v);
+    else if (d.rot === "resume" && ROT_RESUME.includes(Number(d.v))) r.resume = Number(d.v);
+    else if (d.rot === "tab" && TABS.some((t) => t[0] === d.v && d.v !== "config")) r.off = r.off.includes(d.v) ? r.off.filter((k) => k !== d.v) : [...r.off, d.v];
+    else if (d.rot === "all") r.off = [];
+    else if (d.rot === "none") r.off = TABS.map((t) => t[0]).filter((k) => k !== "config");
+    this._rotSave();
+    this._rotUi();
+    this._rotSchedule();
+    this._schedule(true);
   }
 
   // ---------------------------------------------------------------- helpers
@@ -560,6 +654,11 @@ class CentroControlPanel extends HTMLElement {
     if (lay) {
       e.stopPropagation();
       return this._layAction(lay.dataset);
+    }
+    const rot = e.target.closest("[data-rot]");
+    if (rot) {
+      e.stopPropagation();
+      return this._rotAction(rot.dataset);
     }
     if (this._edit && !e.target.closest("nav")) return;
     const t = e.target.closest("[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
@@ -1245,6 +1344,32 @@ class CentroControlPanel extends HTMLElement {
     if (soils.length) secs.push({ cls: "w2", cards: [this.chartCard("soil", "Humedad del suelo 7 días (%)", C.blue, { kind: "history", hours: 168, unit: "%", bucket: 60, min: 0, max: 100, series: soils.map((z, i) => ({ name: z.name, entity: z.soil, color: PALETTE[(i + 6) % PALETTE.length] })) })] });
     secs.push({ cls: "w2", cards: [this.chartCard("valves", "Válvulas 7 días", C.blue, { kind: "history", hours: 168, unit: "", bucket: 5, min: 0, max: zones.length, series: zones.map((z, i) => ({ name: z.name, entity: z.valve, color: PALETTE[(i + 6) % PALETTE.length], step: true })) })] });
     return secs;
+  }
+
+  v_config() {
+    const r = this._rotLoad();
+    const keys = this._rotKeys();
+    const chip = (act, v, label, on, extra = "") => `<button class="chip ${on ? "on" : ""}" data-rot="${act}" data-v="${esc(v)}">${extra}${esc(label)}</button>`;
+    const power = `<button class="btn full" style="--c:${r.on ? C.green : C.muted}" data-rot="toggle">${icon(r.on ? "mdi:pause-circle-outline" : "mdi:play-circle-outline")}${r.on ? "Rotación activada · pulsa para parar" : "Rotación desactivada · pulsa para activar"}</button>`;
+    const warn = r.on && keys.length < 2 ? `<div class="small" style="color:${C.amber};margin-top:8px">⚠ Marca al menos dos pestañas para que haya algo que rotar.</div>` : "";
+    const rotCard = this.card(
+      "rot",
+      `<h3>${icon("mdi:monitor-dashboard")}Cambio automático de pestañas</h3>${power}
+      <div class="small muted" style="margin:12px 0 6px">Tiempo en cada pestaña</div><div class="chips">${ROT_SECS.map((s) => chip("secs", s, fmtSecs(s), s === r.secs)).join("")}</div>
+      <div class="small muted" style="margin:12px 0 6px">Si tocas la pantalla, seguir pasando pestañas tras</div><div class="chips">${ROT_RESUME.map((s) => chip("resume", s, fmtSecs(s), s === r.resume)).join("")}</div>
+      ${warn}
+      <div class="small muted" style="margin-top:10px">También puedes activarlo con el botón <b>Rotar</b> de la barra. No cambia de pestaña mientras estás en Configuración ni en el modo Diseño.</div>`,
+      { c: C.cyan }
+    );
+    const tabsCard = this.card(
+      "rtabs",
+      `<h3>${icon("mdi:tab-search")}Pestañas que se muestran</h3>
+      <div class="chips">${TABS.filter((t) => t[0] !== "config").map(([k, l, ic]) => chip("tab", k, l, !r.off.includes(k), icon(ic))).join("")}</div>
+      <div class="chips" style="margin-top:12px"><button class="chip" data-rot="all">Todas</button><button class="chip" data-rot="none">Ninguna</button></div>
+      <div class="small muted" style="margin-top:10px">${keys.length} de ${TABS.length - 1} pestañas en la rotación. Estos ajustes se guardan solo en este dispositivo: la tablet y el PC pueden tener los suyos.</div>`,
+      { c: C.violet }
+    );
+    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, tabsCard] }];
   }
 }
 

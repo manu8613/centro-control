@@ -35,7 +35,7 @@ Datos de ejemplo, no de ninguna casa real.
 El botón **Diseño** permite mover y redimensionar secciones, tarjetas y
 gráficas; cada dispositivo guarda su propio diseño.
 
-## Las 12 pestañas
+## Las 13 pestañas
 
 | Pestaña | Qué enseña |
 |:--|:--|
@@ -51,6 +51,7 @@ gráficas; cada dispositivo guarda su propio diseño.
 | **Luces** | Encendidas, interior y exterior, sin conexión, control de cada luz y «Apagar todas». |
 | **Temperaturas** | Media, máxima y mínima, mapa de calor, termostatos y gráficas de temperatura y humedad. |
 | **Riego** | Cada zona con su tiempo, «Regar», humedad del suelo, lluvia, «Omitir si llueve» y «Parar todo». |
+| **Configuración** | Cambio automático de pestañas (botón **Rotar**): tiempo en cada una, espera tras un toque y qué pestañas rotan; se guarda en cada dispositivo. |
 
 ### Interactivo
 

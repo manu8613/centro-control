@@ -94,20 +94,44 @@ def cloud_from(entry: dict[str, Any]) -> tuple[float | None, str]:
     return None, ""
 
 
-def normalize_forecast(raw: list[dict[str, Any]] | None, current: dict[str, Any] | None = None, today: date | None = None) -> list[dict[str, Any]]:
-    """Daily forecast -> ``[{fecha, nubes_pct, origen, condicion}]`` (one per date, ascending).
+def _local_day(stamp: Any, tz: Any = None) -> str:
+    """Local calendar day (YYYY-MM-DD) of a forecast datetime (ISO text or datetime)."""
+    try:
+        moment = stamp if isinstance(stamp, datetime) else datetime.fromisoformat(str(stamp).replace("Z", "+00:00"))
+        if tz is not None and moment.tzinfo is not None:
+            moment = moment.astimezone(tz)
+        return moment.date().isoformat()
+    except (TypeError, ValueError):
+        text = str(stamp)[:10]
+        return text if len(text) == 10 else ""
 
+
+def normalize_forecast(
+    raw: list[dict[str, Any]] | None,
+    current: dict[str, Any] | None = None,
+    today: date | None = None,
+    tz: Any = None,
+) -> list[dict[str, Any]]:
+    """Forecast (daily, twice-daily or hourly) -> ``[{fecha, nubes_pct, origen, condicion}]`` (one per local day, ascending).
+
+    Several entries of the same day (twice-daily/hourly forecasts) are averaged.
     ``current`` (the weather entity's attributes + state) fills in today when the
     forecast does not include it.
     """
-    days: dict[str, dict[str, Any]] = {}
+    groups: dict[str, list[tuple[float | None, str, Any]]] = {}
     for entry in raw or []:
-        stamp = str(entry.get("datetime", ""))[:10]
-        if len(stamp) != 10:
+        stamp = _local_day(entry.get("datetime"), tz)
+        if not stamp:
             continue
         pct, origin = cloud_from(entry)
-        if stamp not in days:
-            days[stamp] = {"fecha": stamp, "nubes_pct": pct, "origen": origin, "condicion": entry.get("condition")}
+        groups.setdefault(stamp, []).append((pct, origin, entry.get("condition")))
+    days: dict[str, dict[str, Any]] = {}
+    for stamp, items in groups.items():
+        values = [i[0] for i in items if i[0] is not None]
+        pct = sum(values) / len(values) if values else None
+        origin = "pronostico" if any(i[1] == "pronostico" for i in items) else (items[0][1] if pct is not None else "")
+        condition = next((i[2] for i in items if i[2]), None)
+        days[stamp] = {"fecha": stamp, "nubes_pct": pct, "origen": origin, "condicion": condition}
     if today is not None and current and today.isoformat() not in days:
         pct, origin = cloud_from(current)
         if pct is not None:
@@ -220,6 +244,7 @@ def build_plan(
     day_share_pct: float,
     forecast: list[dict[str, Any]],
     solar_override: dict[str, float] | None = None,
+    weather_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything the sensor/panel shows: cloud cover per day, solar estimate and the advice."""
     override = solar_override or {}
@@ -267,4 +292,5 @@ def build_plan(
         "consumo_diario_kwh": None if daily_load_kwh is None else round(daily_load_kwh, 1),
         "capacidad_kwh": capacity_kwh,
         "dias": days,
+        "meteo": weather_info or {},
     }

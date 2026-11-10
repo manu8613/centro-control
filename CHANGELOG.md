@@ -8,6 +8,16 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.3] - 2026-11-10
+
+### Corregido
+- Nubosidad y previsión del cielo: si la previsión no estaba disponible en el primer intento (arranque, recarga de la integración, entidad del tiempo aún no lista), no se volvía a pedir hasta 30 minutos después y la pestaña Solar se quedaba en «Esperando la previsión». Ahora reintenta cada 2 minutos hasta tenerla, y al recibirla actualiza la recomendación al momento.
+- Si la entidad del tiempo no ofrece previsión diaria, se prueba la de dos veces al día y la horaria (se promedia por día), y se usa el estado actual para hoy.
+- Los días se calculan en hora local (antes una previsión en UTC podía caer en el día anterior).
+
+### Añadido
+- Diagnóstico: el sensor «Recomendación de carga por red» lleva el atributo `meteo` (entidad, tipo de previsión, error) y la pestaña Solar muestra el motivo cuando no hay previsión. Un aviso en el registro de Home Assistant lo indica una vez.
+
 ## [2.7.2] - 2026-11-10
 
 ### Cambiado

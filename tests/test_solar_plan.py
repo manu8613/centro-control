@@ -63,8 +63,23 @@ def test_normalize_forecast_orders_dedupes_and_fills_today():
     out = normalize_forecast(raw, {"condition": "partlycloudy"}, date(2026, 11, 10))
     assert [d["fecha"] for d in out] == ["2026-11-10", "2026-11-11", "2026-11-12"]
     assert out[0]["nubes_pct"] == 45 and out[0]["origen"] == "estimada"
-    assert out[1]["nubes_pct"] == 95  # first entry of the day wins
+    assert out[1]["nubes_pct"] == 52.5  # entries of the same day are averaged (95 and 10)
     assert out[2]["origen"] == "pronostico"
+
+
+def test_normalize_forecast_uses_the_local_day():
+    from zoneinfo import ZoneInfo
+
+    # Met.no style: local midnight of the 11th arrives as 23:00 UTC of the 10th
+    raw = [{"datetime": "2026-11-10T23:00:00+00:00", "cloud_coverage": 30}, {"datetime": "2026-11-11T23:00:00+00:00", "cloud_coverage": 60}]
+    out = normalize_forecast(raw, None, date(2026, 11, 11), ZoneInfo("Europe/Madrid"))
+    assert [(d["fecha"], d["nubes_pct"]) for d in out] == [("2026-11-11", 30), ("2026-11-12", 60)]
+
+
+def test_normalize_forecast_averages_hourly_entries():
+    raw = [{"datetime": f"2026-11-10T{h:02d}:00:00+01:00", "cloud_coverage": 20 if h < 12 else 60} for h in range(24)]
+    out = normalize_forecast(raw, None, date(2026, 11, 10))
+    assert len(out) == 1 and out[0]["nubes_pct"] == 40 and out[0]["origen"] == "pronostico"
 
 
 def test_normalize_forecast_drops_past_and_caps_at_six_days():

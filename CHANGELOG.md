@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.5] - 2026-11-10
+
+### Añadido
+- Configuración: nueva tarjeta «Pestañas visibles» para ocultar o mostrar pestañas en la barra de este dispositivo (Configuración siempre se ve). Una pestaña oculta tampoco entra en la rotación automática, y en «Pestañas en la rotación» aparece tachada y sin poder activarse.
+
 ## [2.7.4] - 2026-11-10
 
 ### Añadido

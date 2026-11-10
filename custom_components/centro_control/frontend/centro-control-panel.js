@@ -1619,7 +1619,7 @@ class CentroControlPanel extends HTMLElement {
       const st = this.st(e);
       if (!st) continue;
       const v = String(st.state).toLowerCase();
-      if (v === "ringing" || (e.startsWith("binary_sensor.") && v === "on")) return { key: e + "@" + (st.last_changed || ""), entity: e };
+      if (v === "ringing" || v === "ring" || (e.startsWith("binary_sensor.") && v === "on")) return { key: e + "@" + (st.last_changed || ""), entity: e };
       if (e.startsWith("event.") && st.last_changed && Date.now() - Date.parse(st.last_changed) < 30000) return { key: e + "@" + st.last_changed, entity: e };
     }
     return null;

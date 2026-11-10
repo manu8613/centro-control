@@ -504,7 +504,7 @@ class CentroControlPanel extends HTMLElement {
   S(key) { return this.s(this.id(key)); }
   N(key, d = null) { return this.n(this.id(key), d); }
   A(key, attr) { return this.a(this.id(key), attr); }
-  set_(k) { return this.cfg.settings?.[k]; }
+  set_(k) { return this.cfg?.settings?.[k]; }
   name(e) { return this.a(e, "friendly_name") || (e || "").split(".").pop(); }
   unit(e) { return this.a(e, "unit_of_measurement") || ""; }
   watts(e) {

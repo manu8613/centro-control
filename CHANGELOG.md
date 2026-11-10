@@ -8,6 +8,25 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.4] - 2026-11-10
+
+### Añadido
+- Videoportero: cuando alguien llama, el panel (en cualquier pestaña) abre una ventana emergente con la imagen en directo de la cámara y, si lo configuras, un botón pequeño «Abrir puerta» que pide un segundo toque para confirmar. Se cierra sola 30 s después de que cese la llamada y no se reabre si la cierras. También se pueden elegir desde la pestaña Configuración del propio panel (escribiendo o eligiendo de la lista; se guarda en ese dispositivo y manda sobre lo de la integración). Ajustes en Configurar → «Videoportero: ventana de llamada»: sensores de llamada (se detectan solos los `*_call_state`), cámara (se detecta por nombre) y el interruptor/botón/cerradura que abre la puerta (nunca se elige solo).
+- Solar: junto a la «Intensidad de carga» por red se ve la potencia en vatios (intensidad × tensión de la batería, la de tu banco si la tienes configurada o 51,2 V nominales), también en tiempo real al mover el deslizador o escribir.
+- La intensidad de carga por red no puede superar la potencia contratada **menos lo que consume la casa en ese momento** (p. ej. 4,6 kW − 0,6 kW = 4 kW ⇒ 75 A a 52,8 V): el deslizador y la caja se limitan a ese máximo, el panel recorta lo que se escriba y avisa si el inversor ya tiene un valor por encima.
+
+- Carga por red esta noche: junto a lo aconsejado, ahora puedes elegir tú el SOC con el que quieres empezar el día a las 08:00 («Elegir yo el SOC»: deslizador y caja con el valor exacto). Muestra al momento cuánta energía aportaría la red, y la diferencia con lo aconsejado. «Aplicar» usa tu valor, y hay un botón para no cargar por red esta noche. Se recuerda por dispositivo; «Usar lo aconsejado» vuelve al modo automático.
+
+- Solar → Inversor: las tarjetas de Estado, Fallo y Alarma cambian de color según la gravedad: verde si todo es normal, ámbar si es algo a revisar o que se arregla (alarmas, cambio de modo, red, comunicación), rojo si es grave (sobrecorriente, fugas, temperatura excesiva, fallo del inversor) y azul para reposo (standby, autotest). Un fallo desconocido se pinta en rojo por seguridad.
+
+- Nueva pestaña **Enchufes**: enchufes e interruptores de Home Assistant con su estado, el consumo de los que miden (sensor de potencia del mismo dispositivo) y un toque para encender o apagar. Se agrupan por estancia (si Home Assistant las tiene) o en interior/exterior. Opciones nuevas en Configurar → «Luces y enchufes»: lista de enchufes (vacío = todos) y enchufes que no quieres ver.
+- Luces y enchufes **dinámicos**: se leen en directo de Home Assistant, así que un dispositivo nuevo aparece solo, sin «Regenerar panel» ni recargar. Se omiten las entidades ocultas, de diagnóstico o de configuración y las de la propia integración y de Solarman.
+
+- Temperaturas, al final de todo: **mapa de nubes y lluvia en tiempo real** (tarjeta Weather Radar Card) y **mapa de rayos en tiempo real** (mapa de Home Assistant con los rayos de Blitzortung), con el contador de rayos y la distancia y dirección del último. Se crean con las tarjetas que ya tienes instaladas, no hace falta configurar nada y se ven bien en la tablet.
+
+### Cambiado
+- Programas 1 y 2 del Deye: se quita el deslizador de «Potencia» (en el inversor esa potencia también marca la velocidad de descarga); quedan la hora, el SOC y la carga.
+
 ## [2.7.3] - 2026-11-10
 
 ### Corregido

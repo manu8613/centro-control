@@ -15,7 +15,7 @@ NAME: Final = "Centro de Control"
 AUTHOR: Final = "manu8613"
 AUTHOR_URL: Final = "https://github.com/manu8613"
 REPO_URL: Final = "https://github.com/manu8613/centro-control"
-VERSION: Final = "2.7.3"
+VERSION: Final = "2.7.4"
 
 DEFAULT_TITLE: Final = "Centro de Control"
 DASHBOARD_URL: Final = "centro-control"
@@ -124,6 +124,11 @@ CONF_GAS_FLOW: Final = "gas_caudal"
 # ---------------------------------------------------------------- lights
 CONF_LIGHTS: Final = "luces"
 CONF_LIGHTS_EXCLUDE: Final = "luces_excluir"
+CONF_BELL_CALLS: Final = "timbre_llamadas"
+CONF_BELL_CAMERA: Final = "timbre_camara"
+CONF_BELL_OPEN: Final = "timbre_abrir"
+CONF_PLUGS: Final = "enchufes"
+CONF_PLUGS_EXCLUDE: Final = "enchufes_excluir"
 CONF_OUTDOOR_PATTERN: Final = "patron_exterior"
 
 # ---------------------------------------------------------------- climate

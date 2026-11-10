@@ -26,12 +26,15 @@ const TABS = [
   ["co2", "CO₂", "mdi:leaf-circle"],
   ["gas", "Gas", "mdi:fire"],
   ["luces", "Luces", "mdi:lightbulb-group"],
+  ["enchufes", "Enchufes", "mdi:power-socket-eu"],
   ["clima", "Temperaturas", "mdi:thermometer"],
   ["riego", "Riego", "mdi:sprinkler-variant"],
   ["config", "Configuración", "mdi:cog"],
 ];
 // Rotación automática de pestañas (por dispositivo). «config» nunca rota.
 const ROT_KEY = "centro_control_ajustes";
+const BELL_KEY = "centro_control_timbre";
+const MAN_KEY = "centro_control_carga_manual";
 const ROT_SECS = [10, 15, 30, 60, 120, 300];
 const ROT_RESUME = [15, 30, 60, 120, 300];
 const ROT_DEFAULT = { on: false, secs: 30, resume: 60, off: [] };
@@ -62,7 +65,16 @@ function fmtDate(iso, withTime = false) {
 const icon = (i, cls = "") => `<ha-icon class="${cls}" icon="${esc(i)}"></ha-icon>`;
 
 // ------------------------------------------------------------------ styles
-const CSS = `
+const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:12px}
+.bellbox{background:#0b1220;border:1px solid #22d3ee;border-radius:16px;box-shadow:0 0 30px rgba(34,211,238,.35);width:min(640px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+.bellh{display:flex;align-items:center;gap:8px}.bellh .muted{flex:1}
+.bellx{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;font-size:20px}
+.bellv{min-height:180px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}.bellv>*{width:100%}
+.bellin{width:100%;box-sizing:border-box;background:#0b1220;color:inherit;border:1px solid #334155;border-radius:8px;padding:6px 8px;font-size:13px}
+.bellf{display:flex;justify-content:flex-end}
+.bellopen{background:#1e293b;color:inherit;border:1px solid #475569;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
+.bellopen.armed{background:#b45309;border-color:#f59e0b}
+
 :host{display:block;min-height:100vh;color:${C.text};font-family:var(--paper-font-body1_-_font-family, "Segoe UI", Roboto, sans-serif);
  background:radial-gradient(1200px 600px at 8% -10%, rgba(0,229,255,.16), transparent 60%),radial-gradient(900px 500px at 110% 0%, rgba(255,79,216,.10), transparent 60%),
  repeating-linear-gradient(0deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),repeating-linear-gradient(90deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),
@@ -133,7 +145,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer;border:none}
 .sim{display:grid;grid-template-columns:1fr 64px;gap:4px 10px;align-items:center;margin:6px 0}.sim label{font-size:12px;color:${C.muted};grid-column:1/-1}
 .sim b{text-align:right;font-variant-numeric:tabular-nums}
-.nrb{grid-column:1/-1;display:flex;align-items:center;gap:12px}.nrb input[type=range]{flex:1;min-width:0}.nrv{display:flex;align-items:center;gap:4px}.nrv input{width:76px;text-align:right;font:inherit;font-variant-numeric:tabular-nums;color:inherit;background:rgba(255,255,255,.06);border:1px solid ${C.muted};border-radius:8px;padding:6px 8px}.nrv i{font-style:normal;color:${C.muted};min-width:18px}
+.nrb{grid-column:1/-1;display:flex;align-items:center;gap:12px}.nrb input[type=range]{flex:1;min-width:0}.nrv{display:flex;align-items:center;gap:4px}.nrv input{width:76px;text-align:right;font:inherit;font-variant-numeric:tabular-nums;color:inherit;background:rgba(255,255,255,.06);border:1px solid ${C.muted};border-radius:8px;padding:6px 8px}.nrw{white-space:nowrap;font-variant-numeric:tabular-nums;color:${C.cyan};min-width:84px;text-align:right}.nrv i{font-style:normal;color:${C.muted};min-width:18px}
 svg text{font-family:inherit}
 .chart{position:relative;min-height:180px}.chart svg{width:100%;display:block}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:${C.muted};margin-top:4px}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:3px;border-radius:2px;display:inline-block}
@@ -292,6 +304,8 @@ class CentroControlPanel extends HTMLElement {
   set hass(h) {
     this._hass = h;
     if (this._menu) this._menu.hass = h;
+    if (this._bellEl && this._bellCard) this._bellCard.hass = h;
+    this._bellCheck();
     this._schedule();
   }
   set narrow(n) {
@@ -324,13 +338,32 @@ class CentroControlPanel extends HTMLElement {
     root.addEventListener("input", (e) => {
       this._busy = Date.now() + 2500;
       const t = e.target;
+      if (t.dataset && t.dataset.manin) {
+        const b = t.closest(".nrb");
+        if (b && t.value !== "") {
+          for (const o of b.querySelectorAll("input[data-manin]")) if (o !== t) o.value = t.value;
+          const n = (x) => (x === "" || x === undefined ? NaN : Number(x));
+          const p = b.parentElement.querySelector(".manp");
+          if (p) p.textContent = this._manPreview(Number(t.value), n(b.dataset.s08), n(b.dataset.cap), n(b.dataset.target));
+          const ab = b.closest(".card, .sim")?.parentElement?.querySelector('[data-adv="apply"] .advl');
+          if (ab) ab.textContent = `Aplicar en el Deye: cargar hasta ${Math.round(Number(t.value))} % (manual)`;
+        }
+      }
       if (t.dataset && t.dataset.nr) {
         const b = t.closest(".nrb");
         if (b) for (const o of b.querySelectorAll("input[data-nr]")) if (o !== t && t.value !== "") o.value = t.value;
+        if (b && b.dataset.volt && t.value !== "") {
+          const cap = b.dataset.cap ? Number(b.dataset.cap) : Infinity;
+          const val = Number(t.value), w = b.querySelector(".nrw");
+          if (w) {
+            w.textContent = `≈ ${Math.round(Math.min(val, cap) * Number(b.dataset.volt)).toLocaleString("es-ES")} W${val > cap ? ` (máx. ${cap} A)` : ""}`;
+            w.style.color = val > cap ? C.red : "";
+          }
+        }
       }
     });
     root.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target.dataset && e.target.dataset.nr && e.target.type === "number") e.target.blur();
+      if (e.key === "Enter" && e.target.dataset && (e.target.dataset.nr || e.target.dataset.manin) && e.target.type === "number") e.target.blur();
     });
     window.addEventListener("hashchange", () => {
       const t = location.hash.replace("#", "");
@@ -349,6 +382,38 @@ class CentroControlPanel extends HTMLElement {
     clearTimeout(this._rotTimer);
     this._rotTimer = null;
     this._built = false;
+  }
+
+  // ---------------------------------------------------------------- manual night grid-charge target (per device)
+  _manLoad() {
+    if (this._man) return this._man;
+    let r = {};
+    try {
+      r = JSON.parse(localStorage.getItem(MAN_KEY) || "{}") || {};
+    } catch (e) {
+      r = {};
+    }
+    const soc = Number(r.soc);
+    this._man = { on: r.on === true, soc: Number.isFinite(soc) ? Math.max(0, Math.min(100, Math.round(soc))) : null };
+    return this._man;
+  }
+  _manSave() {
+    try {
+      localStorage.setItem(MAN_KEY, JSON.stringify(this._manLoad()));
+    } catch (e) {
+      /* modo privado: dura hasta recargar */
+    }
+  }
+  /** What a manual night target means: SOC at 08:00 and the energy the grid has to supply (cap = battery kWh, s08 = SOC at 08:00 without grid, target = advised). */
+  _manPreview(v, s08, cap, target) {
+    const parts = [`Empezarías el día a las 08:00 con ≈ ${fmt(v, 0)} %`];
+    if (Number.isFinite(s08) && Number.isFinite(cap) && cap > 0) {
+      const grid = Math.max(0, v - s08) / 100 * cap / 0.9;
+      parts.push(grid > 0.05 ? `la red aportaría ≈ ${fmt(grid, 1)} kWh` : `sin red llegarías con ≈ ${fmt(s08, 0)} %: no hace falta cargar`);
+    }
+    let cmp = "";
+    if (Number.isFinite(target)) cmp = v < target ? ` · ${fmt(target - v, 0)} puntos por debajo de lo aconsejado (${fmt(target, 0)} %): la batería podría no llegar a las 00:00` : v > target ? ` · ${fmt(v - target, 0)} puntos por encima de lo aconsejado (${fmt(target, 0)} %)` : " · igual que lo aconsejado";
+    return parts.join(" · ") + cmp;
   }
 
   // ---------------------------------------------------------------- tab rotation (per device)
@@ -439,7 +504,7 @@ class CentroControlPanel extends HTMLElement {
   S(key) { return this.s(this.id(key)); }
   N(key, d = null) { return this.n(this.id(key), d); }
   A(key, attr) { return this.a(this.id(key), attr); }
-  set_(k) { return this.cfg.settings?.[k]; }
+  set_(k) { return this.cfg?.settings?.[k]; }
   name(e) { return this.a(e, "friendly_name") || (e || "").split(".").pop(); }
   unit(e) { return this.a(e, "unit_of_measurement") || ""; }
   watts(e) {
@@ -554,6 +619,7 @@ class CentroControlPanel extends HTMLElement {
           slot.html = c.html;
         }
       }
+    this._mountHosts();
   }
 
   // ---------------------------------------------------------------- layout (per device)
@@ -661,6 +727,13 @@ class CentroControlPanel extends HTMLElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
   _click(e) {
+    const bell = e.target.closest("[data-bell]");
+    if (bell) {
+      e.stopPropagation();
+      if (bell.dataset.bell === "close") this._bellClose();
+      else this._bellOpenDoor();
+      return;
+    }
     const lay = e.target.closest("[data-lay]");
     if (lay) {
       e.stopPropagation();
@@ -671,10 +744,22 @@ class CentroControlPanel extends HTMLElement {
       e.stopPropagation();
       return this._rotAction(rot.dataset);
     }
+    const mm = e.target.closest("[data-manmode]");
+    if (mm) {
+      e.stopPropagation();
+      const man = this._manLoad();
+      man.on = mm.dataset.manmode === "manual";
+      if (man.on && man.soc === null) {
+        const t = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+        man.soc = Number.isFinite(t) ? Math.round(t) : 60;
+      }
+      this._manSave();
+      return this._schedule(true);
+    }
     const adv = e.target.closest("[data-adv]");
     if (adv) {
       e.stopPropagation();
-      return this._applyAdvice();
+      return this._applyAdvice(adv.dataset.adv);
     }
     if (this._edit && !e.target.closest("nav")) return;
     const t = e.target.closest("[data-set],[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
@@ -705,7 +790,21 @@ class CentroControlPanel extends HTMLElement {
   _change(e) {
     const t = e.target;
     this._busy = Date.now() + 1500;
-    if (t.dataset.set) {
+    if (t.dataset.bellcfg) {
+      const pr = this._bellPrefs(), v = String(t.value || "").trim();
+      pr[t.dataset.bellcfg] = t.dataset.bellcfg === "timbre_llamadas" ? v.split(",").map((x) => x.trim()).filter(Boolean) : v;
+      try {
+        localStorage.setItem(BELL_KEY, JSON.stringify(pr));
+      } catch (_e) {}
+      this._schedule(true);
+      return;
+    }
+    if (t.dataset.manin) {
+      const man = this._manLoad(), v = Number(t.value);
+      if (Number.isFinite(v)) man.soc = Math.max(Number(t.min) || 0, Math.min(Number(t.max) || 100, Math.round(v)));
+      this._manSave();
+      this._schedule(true);
+    } else if (t.dataset.set) {
       this._write(t.dataset.set, t.value);
     } else if (t.dataset.number) {
       this._hass.callService("number", "set_value", { entity_id: t.dataset.number, value: Number(t.value) });
@@ -998,7 +1097,9 @@ class CentroControlPanel extends HTMLElement {
     }
     for (const [k, l] of [["inversor_estado", "Estado"], ["inversor_fallo", "Fallo"], ["inversor_alarma", "Alarma"]]) {
       const e = this.set_(k);
-      if (e) inv.push(this.kpi(k, e, esc(this.s(e) ?? "—"), l, "mdi:information-outline", C.orange, 6));
+      if (!e) continue;
+      const sev = this._invSeverity(k, this.s(e));
+      inv.push(this.kpi(k, e, esc(this.s(e) ?? "—"), l, sev.icon, sev.color, 6));
     }
     const charts = [];
     if (strings.length) charts.push(this.chartCard("st24", "Strings 24 h (W)", C.amber, { kind: "history", hours: 24, unit: "W", series: strings.map((s, i) => ({ name: s.name, entity: s.power, color: PALETTE[i % PALETTE.length] })) }));
@@ -1027,6 +1128,10 @@ class CentroControlPanel extends HTMLElement {
       const a = st.attributes;
       if (a.min !== undefined) v = Math.max(Number(a.min), v);
       if (a.max !== undefined) v = Math.min(Number(a.max), v);
+      if (entity === this.set_("deye_corriente_carga_red")) {
+        const cap = this._gridCap();
+        if (cap) v = Math.min(cap.amps, v); // never above the contracted power
+      }
       return call(d, "set_value", { value: v });
     }
     if (d === "time") return call("time", "set_value", { time: String(value).length === 5 ? value + ":00" : value });
@@ -1034,6 +1139,25 @@ class CentroControlPanel extends HTMLElement {
     if (d === "text") return call("text", "set_value", { value: String(value).slice(0, 5) });
     if (d === "select" || d === "input_select") return call(d, "select_option", { option: String(value) });
     if (d === "switch" || d === "input_boolean") return call(d, value === true || value === "true" || value === "on" ? "turn_on" : "turn_off", {});
+  }
+  /** Battery voltage (bank first); falls back to a 16S LiFePO4 nominal 51.2 V. */
+  _batVolt() {
+    const bs = (this.cfg.batteries || []).slice().sort((a, b) => (b.in_total ? 1 : 0) - (a.in_total ? 1 : 0));
+    for (const b of bs) {
+      const v = b.voltage ? toNum(this.s(b.voltage), NaN) : NaN;
+      if (v >= 20 && v <= 120) return { v, nominal: false };
+    }
+    return { v: 51.2, nominal: true };
+  }
+  /** Highest grid-charge current (A) that keeps the grid draw within the contracted power: contracted minus what the house consumes right now. */
+  _gridCap() {
+    const kw = toNum(this.A("uso_potencia_contratada", "contratada_kw"), NaN);
+    if (!(kw > 0)) return null;
+    const { v, nominal } = this._batVolt();
+    const loadEntity = this.set_("consumo_potencia");
+    const load = loadEntity ? Math.max(0, this.watts(loadEntity) || 0) : 0;
+    const avail = Math.max(0, kw * 1000 - load);
+    return { amps: Math.floor(avail / v), watts: avail, load, contracted: kw * 1000, volt: v, nominal, kw };
   }
   _gridOpt(o) { return /(grid|red|both|ambos)/i.test(o) && !/^\s*(no|none|ning|sin|off|disable)/i.test(o); }
   _offOpt(o) { return /^\s*(no|none|ning|sin|off|disable)/i.test(o); }
@@ -1062,9 +1186,15 @@ class CentroControlPanel extends HTMLElement {
       if (opt) this._write(entity, opt);
     } else this._write(entity, on);
   }
-  _applyAdvice() {
-    const est = this.S("recomendacion_carga_red");
-    const target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+  _applyAdvice(act = "apply") {
+    let est = this.S("recomendacion_carga_red");
+    let target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+    const man = this._manLoad();
+    if (act === "off") est = "no_cargar";
+    else if (man.on && man.soc !== null) {
+      est = "cargar"; // the person chose the target
+      target = man.soc;
+    }
     const k = (x) => this.set_(x);
     const steps = [];
     let note = "";
@@ -1106,8 +1236,20 @@ class CentroControlPanel extends HTMLElement {
     const canApply = est === "cargar" || est === "no_cargar" ? ["deye_p1_carga", "deye_p1_soc", "deye_carga_red"].some((x) => this.set_(x)) : false;
     const target = a("soc_objetivo"), s08 = a("soc_previsto_08h");
     const kpis = target !== null && target !== undefined && est !== "sin_datos" ? `<div class="chips" style="margin:6px 0"><span class="chip on" style="--c:${col}">Objetivo ${fmt(target, 0)} %</span><span class="chip">A las 08:00 sin red: ${fmt(s08, 0)} %</span><span class="chip">Consumo medio ${kwh(a("consumo_diario_kwh"), 1)}/día</span></div>` : "";
-    const apply = canApply ? `<button class="btn full" style="--c:${col};margin-top:8px" data-adv="apply">${icon("mdi:flash-auto")}${est === "cargar" ? `Aplicar en el Deye: cargar hasta ${fmt(target, 0)} %` : "Aplicar en el Deye: no cargar por red"}</button>` : "";
-    const adv = this.card("adv", `<h3>${icon("mdi:transmission-tower-import")}Carga por red esta noche</h3><div class="big" style="--c:${col};font-size:20px">${head}</div>${kpis}<div class="small muted">${esc(a("motivo") || "")}</div>${apply}<div class="small muted" style="margin-top:8px">Prioriza la batería de 08:00 a 00:00; la red carga de 00:00 a 08:00. Es una estimación con la nubosidad prevista y tu consumo medio.</div>`, { c: col });
+    const advTarget = Number(target);
+    const man = this._manLoad();
+    const socEnt = this.set_("deye_p1_soc");
+    const sa = socEnt ? this.st(socEnt)?.attributes || {} : {};
+    const lo = Number.isFinite(Number(sa.min)) ? Number(sa.min) : 0, hi = Number.isFinite(Number(sa.max)) ? Number(sa.max) : 100;
+    const mv = Math.max(lo, Math.min(hi, man.soc ?? (Number.isFinite(advTarget) ? advTarget : 60)));
+    const canApplyAny = ["deye_p1_carga", "deye_p1_soc", "deye_carga_red"].some((x) => this.set_(x));
+    const modeChip = (m, label, on) => `<button class="chip ${on ? "on" : ""}" style="--c:${col}" data-manmode="${m}">${label}</button>`;
+    const mode = canApplyAny ? `<div class="chips" style="margin:10px 0 4px">${modeChip("auto", "Usar lo aconsejado", !man.on)}${modeChip("manual", "Elegir yo el SOC", man.on)}</div>` : "";
+    const s08n = Number(s08), capn = Number(a("capacidad_kwh"));
+    const manual = canApplyAny && man.on ? `<div class="sim nr"><label>SOC con el que quiero empezar a las 08:00 (objetivo de carga por red)</label><div class="nrb" data-man="1" data-s08="${Number.isFinite(s08n) ? s08n : ""}" data-cap="${Number.isFinite(capn) ? capn : ""}" data-target="${Number.isFinite(advTarget) ? advTarget : ""}"><input type="range" min="${lo}" max="${hi}" step="1" value="${mv}" data-manin="1" aria-label="SOC objetivo manual"><span class="nrv"><input type="number" inputmode="numeric" min="${lo}" max="${hi}" step="1" value="${mv}" data-manin="1" aria-label="SOC objetivo manual (valor exacto)"><i>%</i></span></div><div class="small muted manp" style="grid-column:1/-1">${esc(this._manPreview(mv, s08n, capn, advTarget))}</div></div>` : "";
+    const btn = (act, label) => `<button class="btn full" style="--c:${col};margin-top:8px" data-adv="${act}">${icon("mdi:flash-auto")}<span class="advl">${label}</span></button>`;
+    const apply = !canApplyAny ? "" : man.on ? btn("apply", `Aplicar en el Deye: cargar hasta ${fmt(mv, 0)} % (manual)`) + btn("off", "Aplicar en el Deye: no cargar por red esta noche") : canApply ? btn("apply", est === "cargar" ? `Aplicar en el Deye: cargar hasta ${fmt(target, 0)} %` : "Aplicar en el Deye: no cargar por red") : "";
+    const adv = this.card("adv", `<h3>${icon("mdi:transmission-tower-import")}Carga por red esta noche</h3><div class="big" style="--c:${col};font-size:20px">${head}</div>${kpis}<div class="small muted">${esc(a("motivo") || "")}</div>${mode}${manual}${apply}<div class="small muted" style="margin-top:8px">Prioriza la batería de 08:00 a 00:00; la red carga de 00:00 a 08:00. Es una estimación con la nubosidad prevista y tu consumo medio.</div>`, { c: col });
     const days = a("dias") || [];
     const tiles = days.map((d, i) => {
       const label = i === 0 ? "Hoy" : i === 1 ? "Mañana" : new Date(d.fecha + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short" });
@@ -1120,15 +1262,48 @@ class CentroControlPanel extends HTMLElement {
     const cloud = this.card("cloud", `<h3>${icon("mdi:weather-partly-cloudy")}Nubosidad: hoy y próximos 5 días</h3>${days.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${tiles}</div><div class="small muted" style="margin-top:8px">Producción solar estimada con la nubosidad${this.set_("solar_prevision_manana") ? " (hoy y mañana, de tu sensor de previsión)" : ""}.</div>` : `<div class="empty">${icon("mdi:information-outline")} Esperando la previsión de ${esc(this.name(this.set_("meteo_entidad")))}…${a("meteo") && a("meteo").error ? `<div class="small muted" style="margin-top:6px">Motivo: ${esc(a("meteo").error)}</div>` : ""}</div>`}`, { c: C.cyan });
     return [adv, cloud];
   }
-  numRow(label, entity, unit) {
+  numRow(label, entity, unit, opt = {}) {
     const st = this.st(entity);
     if (!st) return "";
     const a = st.attributes;
-    const min = a.min ?? 0, max = a.max ?? 100, step = a.step ?? 1;
+    const min = a.min ?? 0, step = a.step ?? 1;
     const v = toNum(st.state, 0);
+    const cap = opt.cap ?? null; // extra upper limit (e.g. contracted power)
+    const max = cap !== null ? Math.min(a.max ?? 100, cap) : (a.max ?? 100);
     const dec = step < 1 ? 1 : 0;
+    const volt = opt.volt || 0;
+    const wTxt = (x) => `≈ ${Math.round(x * volt).toLocaleString("es-ES", { useGrouping: true })} W`;
+    const over = cap !== null && v > cap;
+    const watts = volt ? `<span class="nrw" style="${over ? `color:${C.red}` : ""}">${wTxt(v)}</span>` : "";
+    const note = opt.note ? `<div class="small muted" style="grid-column:1/-1">${opt.note}</div>` : "";
+    const warn = over ? `<div class="small" style="grid-column:1/-1;color:${C.red}">⚠ ${fmt(v, 0)} ${unit} supera la potencia contratada menos el consumo de la casa; bájala a ${fmt(cap, 0)} ${unit} o menos.</div>` : "";
     // slider + exact box that stay in sync while dragging/typing; the value is written on release / Enter / leaving the box
-    return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb"><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span></div></div>`;
+    return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb" ${volt ? `data-volt="${volt}"` : ""} ${cap !== null ? `data-cap="${cap}"` : ""}><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.min(v, max)}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span>${watts}</div>${warn}${note}</div>`;
+  }
+  /** Colour of an inverter status / fault / alarm: green = normal, cyan = idle, amber = fixable, red = serious, grey = unknown. */
+  _invSeverity(kind, state) {
+    const ok = { color: C.green, icon: "mdi:check-circle-outline", level: "ok" };
+    const idle = { color: C.cyan, icon: "mdi:power-sleep", level: "idle" };
+    const warn = { color: C.amber, icon: "mdi:alert-outline", level: "warn" };
+    const bad = { color: C.red, icon: "mdi:alert-octagon", level: "bad" };
+    const none = { color: C.muted, icon: "mdi:help-circle-outline", level: "none" };
+    const txt = String(state ?? "").trim(), low = txt.toLowerCase();
+    if (!txt || /^(unavailable|unknown|none|null)$/.test(low)) return none;
+    const grave = /(over-?current|sobre-?corriente|over-?volt|sobre-?tensi|leak|fuga|too high|demasiado|temperatur|insulat|aislamiento|short|cortocircuito|ground|tierra|arc\b|arco|fire|incendio)/i;
+    const mild = /(changed|cambio|communicat|comunicaci|soft start|quality|calidad|grid|red el|meter|contador|battery loss|parallel|paralelo|standby)/i;
+    if (kind === "inversor_estado") {
+      if (/^(normal|ok|on|running|working|online|grid|on-grid|connected|generating|funcionando|correcto)$/i.test(low)) return ok;
+      if (/(standby|stand-by|espera|waiting|idle|self-?test|autotest|check|startup|arranque|sleep|offline|off)/i.test(low)) return idle;
+      if (/(fault|fallo|error|aver[ií]a|falla|critical|cr[ií]tic)/i.test(low)) return bad;
+      if (/(alarm|warn|aviso|alerta|atenci)/i.test(low)) return warn;
+      return warn;
+    }
+    if (/^(ok|normal|0|0\.0|off|false|no|ninguno|ninguna|sin alarmas?|sin fallos?|clear|none)$/i.test(low)) return ok;
+    if (low === "on" || low === "true") return kind === "inversor_fallo" ? bad : warn;
+    if (grave.test(low)) return bad;
+    if (kind === "inversor_alarma") return warn; // alarms: something to look at, the inverter keeps working
+    if (mild.test(low)) return warn; // faults that clear by themselves / are fixed from outside (grid, mode change, communication)
+    return bad;
   }
   deyeCards() {
     const k = (x) => this.set_(x);
@@ -1140,7 +1315,12 @@ class CentroControlPanel extends HTMLElement {
     };
     let main = `<h3>${icon("mdi:transmission-tower-import")}Carga de la batería por la red</h3>`;
     if (k("deye_carga_red")) main += toggle("Carga por red", k("deye_carga_red"), "mdi:transmission-tower-import");
-    if (k("deye_corriente_carga_red")) main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A");
+    if (k("deye_corriente_carga_red")) {
+      const g = this._gridCap();
+      const { v: volt, nominal } = this._batVolt();
+      const note = `Potencia = intensidad × tensión de la batería (${fmt(volt, 1)} V${nominal ? " nominal" : ""})${g ? `. Máximo ahora ${fmt(g.amps, 0)} A = ${fmt(g.watts, 0)} W: potencia contratada (${fmt(g.contracted, 0)} W) menos lo que consume la casa (${fmt(g.load, 0)} W).` : "."}`;
+      main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A", { cap: g ? g.amps : null, volt, note });
+    }
     if (k("deye_carga_red_inicio")) main += this.numRow("Empezar a cargar por red por debajo de", k("deye_carga_red_inicio"), this.unit(k("deye_carga_red_inicio")) || "%");
     if (k("deye_franjas")) {
       const f = k("deye_franjas"), on = this._flagOn(f);
@@ -1151,14 +1331,13 @@ class CentroControlPanel extends HTMLElement {
     main += `<div class="small muted" style="margin-top:6px">Los cambios se envían al inversor al soltar el control. Se respetan los límites que da el propio inversor.</div>`;
     const cards = [this.card("gc", main, { c: C.green })];
     for (const n of [1, 2]) {
-      const t = k(`deye_p${n}_hora`), pw = k(`deye_p${n}_potencia`), so = k(`deye_p${n}_soc`), ch = k(`deye_p${n}_carga`);
-      if (![t, pw, so, ch].some(Boolean)) continue;
+      const t = k(`deye_p${n}_hora`), so = k(`deye_p${n}_soc`), ch = k(`deye_p${n}_carga`);
+      if (![t, so, ch].some(Boolean)) continue;
       let h = `<h3>${icon("mdi:clock-time-four-outline")}Programa ${n}</h3>`;
       if (t) {
         const v = String(this.s(t) || "").slice(0, 5);
         h += `<div class="sim"><label>Hora de inicio</label><input type="time" value="${esc(v)}" data-set="${esc(t)}" style="background:#0d1c33;color:inherit;border:1px solid #16304f;border-radius:8px;padding:4px 6px"><b>${esc(v || "—")}</b></div>`;
       }
-      if (pw) h += this.numRow("Potencia", pw, this.unit(pw) || "W");
       if (so) h += this.numRow("SOC", so, this.unit(so) || "%");
       if (ch) {
         const sel = ch.startsWith("select.") || ch.startsWith("input_select.");
@@ -1433,8 +1612,242 @@ class CentroControlPanel extends HTMLElement {
   }
 
   // ---------------------------------------------------------------- 10 luces
+
+  // ---------------------------------------------------------------- videoportero: ventana emergente al llamar
+  /** Videoportero settings: what is chosen in this device's Configuración tab wins over the integration options. */
+  _bellPrefs() {
+    try {
+      const v = JSON.parse(localStorage.getItem(BELL_KEY) || "{}");
+      return v && typeof v === "object" ? v : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+  _bellSet(k) {
+    const v = this._bellPrefs()[k];
+    return Array.isArray(v) ? (v.length ? v : this.set_(k)) : v ? v : this.set_(k);
+  }
+  _bellSensors() {
+    const set = this._list(this._bellSet("timbre_llamadas"));
+    if (set.length) return set;
+    return Object.keys(this._hass?.states || {}).filter((e) => /^(sensor|binary_sensor)\..*call_state$/.test(e));
+  }
+  _bellCamera() {
+    const c = this._bellSet("timbre_camara");
+    if (c) return c;
+    return Object.keys(this._hass?.states || {}).find((e) => e.startsWith("camera.") && /videoportero|telefonillo|portero|doorbell|timbre|puerta/i.test(e + " " + this.name(e)));
+  }
+  /** Returns {key, entity} of the first bell that is ringing right now, or null. */
+  _bellRinging() {
+    for (const e of this._bellSensors()) {
+      const st = this.st(e);
+      if (!st) continue;
+      const v = String(st.state).toLowerCase();
+      if (v === "ringing" || v === "ring" || (e.startsWith("binary_sensor.") && v === "on")) return { key: e + "@" + (st.last_changed || ""), entity: e };
+      if (e.startsWith("event.") && st.last_changed && Date.now() - Date.parse(st.last_changed) < 30000) return { key: e + "@" + st.last_changed, entity: e };
+    }
+    return null;
+  }
+  _bellCheck() {
+    if (!this._hass || !this.cfg) return;
+    const r = this._bellRinging();
+    if (r) {
+      clearTimeout(this._bellTimer);
+      this._bellTimer = null;
+      if (!this._bellEl && r.key !== this._bellDismissed) this._bellOpen(r);
+    } else if (this._bellEl && !this._bellTimer) {
+      this._bellTimer = setTimeout(() => this._bellClose(), 30000);
+    }
+  }
+  _bellDoor() {
+    const d = this._bellSet("timbre_abrir");
+    if (!d) return null;
+    const dom = String(d).split(".")[0];
+    const svc = { switch: ["switch", "turn_on"], button: ["button", "press"], input_button: ["input_button", "press"], lock: ["lock", "unlock"], script: ["script", "turn_on"], input_boolean: ["input_boolean", "turn_on"] }[dom];
+    return svc ? { entity: d, domain: svc[0], service: svc[1] } : null;
+  }
+  async _bellOpen(r) {
+    this._bellEl = document.createElement("div");
+    this._bellEl.className = "bell";
+    this._bellKey = r.key;
+    const cam = this._bellCamera();
+    const door = this._bellDoor();
+    this._bellEl.innerHTML = `<div class="bellbox"><div class="bellh">${icon("mdi:doorbell-video")}<b>Llaman a la puerta</b><span class="muted small">${esc(this.name(r.entity))}</span><button class="bellx" data-bell="close" title="Cerrar">${icon("mdi:close")}</button></div>
+      <div class="bellv">${cam ? '<span class="muted small">Conectando con la cámara…</span>' : '<span class="muted small">Sin cámara configurada (Configurar → Videoportero).</span>'}</div>
+      ${door ? `<div class="bellf"><button class="bellopen" data-bell="open">${icon("mdi:door-open")}<span>Abrir puerta</span></button></div>` : ""}</div>`;
+    this.shadowRoot.appendChild(this._bellEl);
+    if (!cam) return;
+    try {
+      const helpers = await window.loadCardHelpers();
+      if (!this._bellEl) return;
+      const el = helpers.createCardElement({ type: "picture-entity", entity: cam, camera_view: "live", show_state: false, show_name: false });
+      el.hass = this._hass;
+      this._bellCard = el;
+      this._bellEl.querySelector(".bellv").replaceChildren(el);
+    } catch (e) {
+      const v = this._bellEl && this._bellEl.querySelector(".bellv");
+      if (v) v.innerHTML = `<span class="muted small">No se pudo abrir la imagen: ${esc((e && e.message) || String(e))}</span>`;
+    }
+  }
+  _bellClose() {
+    clearTimeout(this._bellTimer);
+    clearTimeout(this._bellArm);
+    this._bellTimer = this._bellArm = null;
+    if (this._bellEl) {
+      this._bellDismissed = this._bellKey;
+      this._bellEl.remove(); // removing the card element stops the video stream
+    }
+    this._bellEl = this._bellCard = null;
+  }
+  /** Two taps within 4 s: the first arms the button, the second opens the door. */
+  _bellOpenDoor() {
+    const d = this._bellDoor();
+    const b = this._bellEl && this._bellEl.querySelector(".bellopen");
+    if (!d || !b) return false;
+    if (!this._bellArm) {
+      b.classList.add("armed");
+      b.querySelector("span").textContent = "Toca otra vez para abrir";
+      this._bellArm = setTimeout(() => {
+        this._bellArm = null;
+        b.classList.remove("armed");
+        b.querySelector("span").textContent = "Abrir puerta";
+      }, 4000);
+      return false;
+    }
+    clearTimeout(this._bellArm);
+    this._bellArm = null;
+    this._hass.callService(d.domain, d.service, { entity_id: d.entity });
+    b.classList.remove("armed");
+    b.querySelector("span").textContent = "Puerta abierta";
+    return true;
+  }
+
+  // ---------------------------------------------------------------- embedded Home Assistant cards (maps)
+  _hostConfig(kind) {
+    if (kind === "radar") return { type: "custom:weather-radar-card", map_style: "dark" };
+    return { type: "map", entities: [{ entity: "zone.home" }], geo_location_sources: ["blitzortung"], default_zoom: 8, dark_mode: true, aspect_ratio: "16:10" };
+  }
+  async _hostCreate(kind) {
+    const H = (this._hosts = this._hosts || {});
+    if (H[kind] || H[kind + ":busy"]) return;
+    H[kind + ":busy"] = true;
+    try {
+      const helpers = await window.loadCardHelpers();
+      const el = helpers.createCardElement(this._hostConfig(kind));
+      el.hass = this._hass;
+      H[kind] = el;
+      delete H[kind + ":err"];
+    } catch (e) {
+      H[kind + ":err"] = (e && e.message) || String(e);
+    }
+    H[kind + ":busy"] = false;
+    this._mountHosts();
+  }
+  /** Puts the (long-lived) card elements into their boxes; they survive tab changes and re-renders. */
+  _mountHosts() {
+    if (!this._grid) return;
+    const H = (this._hosts = this._hosts || {});
+    this._grid.querySelectorAll(".hostbox[data-host]").forEach((box) => {
+      const kind = box.dataset.host, el = H[kind];
+      if (el) {
+        el.hass = this._hass;
+        if (el.parentNode !== box) box.replaceChildren(el);
+        return;
+      }
+      if (H[kind + ":err"]) box.innerHTML = `<div class="empty">${icon("mdi:alert-circle-outline")} No se pudo crear el mapa: ${esc(H[kind + ":err"])}</div>`;
+      else this._hostCreate(kind);
+    });
+  }
+
+  // ---------------------------------------------------------------- live device discovery (lights, plugs)
+  _list(v) {
+    return Array.isArray(v) ? v.map(String) : v ? [String(v)] : [];
+  }
+  /** Entities of a domain read from Home Assistant's live state list: a device added later shows up on its own, no "regenerate panel". */
+  _live(domain, chosenKey, excludeKey, skipPlatforms = []) {
+    const chosen = this._list(this.set_(chosenKey));
+    if (chosen.length) return chosen;
+    const excluded = new Set(this._list(this.set_(excludeKey)));
+    const reg = this._hass.entities || {};
+    return Object.keys(this._hass.states)
+      .filter((e) => e.startsWith(domain + "."))
+      .filter((e) => {
+        if (excluded.has(e)) return false;
+        const r = reg[e], st = this._hass.states[e];
+        if (r && (r.entity_category || r.hidden)) return false; // diagnostic / config / hidden entities
+        if (st && st.attributes && st.attributes.restored) return false; // leftovers
+        if (r && skipPlatforms.includes(r.platform)) return false;
+        return true;
+      })
+      .sort((x, y) => this.name(x).localeCompare(this.name(y), "es"));
+  }
+  _isOutdoor(entity) {
+    let pat = this.set_("patron_exterior");
+    if (typeof pat !== "string" || !pat) pat = "porche|patio|jard[ií]n|terraza|fachada|exterior|piscina|foco|calle";
+    try {
+      return new RegExp(pat, "i").test(`${entity} ${this.name(entity)}`);
+    } catch (e) {
+      return false;
+    }
+  }
+  _areaOf(entity) {
+    const r = (this._hass.entities || {})[entity];
+    const areas = this._hass.areas || {};
+    const id = (r && r.area_id) || (r && r.device_id && (this._hass.devices || {})[r.device_id]?.area_id);
+    return id && areas[id] ? areas[id].name : "";
+  }
+  _lightList() {
+    return this._live("light", "luces", "luces_excluir").map((entity) => {
+      const modes = this.a(entity, "supported_color_modes") || [];
+      return { entity, name: this.name(entity), outdoor: this._isOutdoor(entity), dimmable: modes.some((m) => m !== "onoff") };
+    });
+  }
+  /** Power (W) of the plug: the power sensor of the same device, when there is one. */
+  _plugPower(entity) {
+    const reg = this._hass.entities || {};
+    const dev = reg[entity] && reg[entity].device_id;
+    if (!dev) return null;
+    for (const [e, r] of Object.entries(reg)) {
+      if (r.device_id !== dev || !e.startsWith("sensor.")) continue;
+      const st = this._hass.states[e];
+      if (st && st.attributes && st.attributes.device_class === "power") {
+        const w = this.watts(e);
+        if (w !== null) return w;
+      }
+    }
+    return null;
+  }
+  v_enchufes() {
+    const plugs = this._live("switch", "enchufes", "enchufes_excluir", ["centro_control", "solarman", "hacs"]).map((entity) => ({ entity, name: this.name(entity), area: this._areaOf(entity), outdoor: this._isOutdoor(entity), w: this._plugPower(entity) }));
+    const on = plugs.filter((l) => this.s(l.entity) === "on");
+    const na = plugs.filter((l) => ["unavailable", undefined].includes(this.s(l.entity))).length;
+    const watts = on.reduce((sum, l) => sum + (l.w || 0), 0);
+    const head = [
+      this.title("t", "Enchufes", "Enchufes e interruptores de la casa, los nuevos aparecen solos", "mdi:power-socket-eu", C.cyan),
+      this.kpi("on", null, `${on.length} / ${plugs.length}`, "Encendidos", "mdi:power-socket-eu", C.cyan, 6),
+      this.kpi("w", null, `${fmt(watts, 0)} W`, "Consumo de los que miden", "mdi:flash", C.amber, 6),
+      this.kpi("na", null, String(na), "Sin conexión", "mdi:lan-disconnect", na ? C.red : C.green, 6),
+    ];
+    const card = (l) => {
+      const s = this.s(l.entity), isOn = s === "on";
+      const sub = s === "unavailable" ? `<span style="color:${C.red}">Sin conexión</span>` : isOn ? `Encendido${l.w !== null ? ` · ${fmt(l.w, 0)} W` : ""}` : "Apagado";
+      return this.card("p" + l.entity, `<div class="light ${isOn ? "on" : "off"}"><div class="kpi" style="flex:1"><div class="ic" data-toggle="${esc(l.entity)}">${icon(isOn ? "mdi:power-socket-eu" : "mdi:power-plug-off-outline")}</div><div class="grow" data-more="${esc(l.entity)}" style="cursor:pointer"><div style="font-weight:700">${esc(l.name)}</div><div class="l">${sub}</div></div></div></div>`, { c: isOn ? C.cyan : "#2a3b55", w: 6 });
+    };
+    const secs = [{ cards: head }];
+    // by room when Home Assistant knows the areas; otherwise inside / outside
+    const byArea = plugs.some((l) => l.area);
+    const groups = new Map();
+    for (const l of plugs) {
+      const g = byArea ? l.area || "Sin área" : l.outdoor ? "Exterior" : "Interior";
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(l);
+    }
+    for (const [g, items] of groups) secs.push({ cards: [this.title("t" + g, g, "", byArea ? "mdi:floor-plan" : g === "Exterior" ? "mdi:outdoor-lamp" : "mdi:home", C.cyan), ...items.map(card)] });
+    if (!plugs.length) secs.push({ cards: [this.empty("e", "No hay enchufes ni interruptores. Cuando los añadas a Home Assistant aparecerán aquí solos.")] });
+    return secs;
+  }
   v_luces() {
-    const lights = this.cfg.lights || [];
+    const lights = this._lightList();
     const on = lights.filter((l) => this.s(l.entity) === "on");
     const off = lights.filter((l) => ["unavailable", undefined].includes(this.s(l.entity))).length;
     const head = [
@@ -1453,7 +1866,7 @@ class CentroControlPanel extends HTMLElement {
     const secs = [{ cards: head }];
     if (inside.length) secs.push({ cards: [this.title("ti", "Interior", "", "mdi:home-lightbulb", C.gold), ...inside.map(lightCard)] });
     if (outside.length) secs.push({ cards: [this.title("to", "Exterior", "", "mdi:outdoor-lamp", C.gold), ...outside.map(lightCard)] });
-    if (!lights.length) secs.push({ cards: [this.empty("e", "No hay luces. Si las añades a Home Assistant, pulsa «Regenerar panel».")] });
+    if (!lights.length) secs.push({ cards: [this.empty("e", "No hay luces. Cuando las añadas a Home Assistant aparecerán aquí solas.")] });
     return secs;
   }
 
@@ -1487,6 +1900,36 @@ class CentroControlPanel extends HTMLElement {
     if (temps.length) charts.push(this.chartCard("t24", "Temperaturas 24 h (°C)", C.orange, { kind: "history", hours: 24, unit: "°C", bucket: 15, height: 280, series: temps.slice(0, 12).map((e, i) => ({ name: this.name(e), entity: e, color: PALETTE[i % PALETTE.length] })) }));
     if ((this.cfg.humidities || []).length) charts.push(this.chartCard("h24", "Humedad 24 h (%)", C.blue, { kind: "history", hours: 24, unit: "%", bucket: 15, series: this.cfg.humidities.slice(0, 8).map((e, i) => ({ name: this.name(e), entity: e, color: PALETTE[(i + 6) % PALETTE.length] })) }));
     if (charts.length) secs.push({ cls: "w2", cards: charts });
+    secs.push(...this.mapCards());
+    return secs;
+  }
+
+  // Live maps (clouds/rain radar and lightning) built from the cards the person already has in Home Assistant.
+  mapCards() {
+    const secs = [];
+    secs.push({
+      id: "map_radar",
+      cls: "wall",
+      cards: [this.title("tm1", "Mapa de nubes y lluvia en tiempo real", "Radar animado (Weather Radar Card)", "mdi:weather-cloudy-clock", C.cyan), this.card("mapradar", `<div class="hostbox" data-host="radar" style="min-height:380px"></div>`, { c: C.cyan })],
+    });
+    const lt = Object.keys(this._hass.states).filter((e) => /^sensor\..*lightning_(counter|distance|azimuth)$/.test(e));
+    const pick = (suffix) => lt.find((e) => e.endsWith("lightning_" + suffix));
+    const cnt = pick("counter"), dist = pick("distance"), az = pick("azimuth");
+    const kpis = [];
+    if (cnt) kpis.push(this.kpi("lc", cnt, fmt(this.n(cnt) ?? 0, 0), "Rayos detectados", "mdi:flash", C.amber, 6));
+    if (dist) {
+      const d = this.n(dist);
+      kpis.push(this.kpi("ld", dist, d === null ? "—" : `${fmt(d, 1)} km`, "Último rayo, distancia", "mdi:map-marker-distance", d !== null && d < 10 ? C.red : d !== null && d < 30 ? C.amber : C.green, 6));
+    }
+    if (az) {
+      const a = this.n(az);
+      kpis.push(this.kpi("la", az, a === null ? "—" : `${fmt(a, 0)}°`, "Dirección del último rayo", "mdi:compass-outline", C.cyan, 6));
+    }
+    secs.push({
+      id: "map_rayos",
+      cls: "wall",
+      cards: [this.title("tm2", "Mapa de rayos en tiempo real", "Tormentas cerca de casa (Blitzortung)", "mdi:weather-lightning", C.amber), ...kpis, this.card("maprayos", `<div class="hostbox" data-host="rayos" style="min-height:380px"></div>`, { c: C.amber })],
+    });
     return secs;
   }
 
@@ -1547,7 +1990,21 @@ class CentroControlPanel extends HTMLElement {
       <div class="small muted" style="margin-top:10px">${keys.length} de ${TABS.length - 1} pestañas en la rotación. Estos ajustes se guardan solo en este dispositivo: la tablet y el PC pueden tener los suyos.</div>`,
       { c: C.violet }
     );
-    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, tabsCard] }];
+    const ids = Object.keys(this._hass?.states || {}).sort();
+    const opts = (re) => ids.filter((e) => re.test(e)).map((e) => `<option value="${esc(e)}">${esc(this.name(e))}</option>`).join("");
+    const pr = this._bellPrefs();
+    const field = (k, label, list, val, ph) => `<div class="small muted" style="margin:10px 0 4px">${label}</div><input class="bellin" data-bellcfg="${k}" list="dl_${k}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"><datalist id="dl_${k}">${list}</datalist>`;
+    const bellCard = this.card(
+      "bellcfg",
+      `<h3>${icon("mdi:doorbell-video")}Videoportero: ventana de llamada</h3>
+      <div class="small muted">Escribe o elige la entidad. Vacío = usar la de la integración o, en llamada y cámara, detectarla sola. Se guarda solo en este dispositivo.</div>
+      ${field("timbre_llamadas", "Sensor de llamada (varios, separados por coma)", opts(/^(sensor|binary_sensor|event)\..*(call|ring|timbre|bell|llam)/i), this._list(pr.timbre_llamadas).join(", "), this._list(this.set_("timbre_llamadas")).join(", ") || "automático (*_call_state)")}
+      ${field("timbre_camara", "Cámara", opts(/^camera\./), pr.timbre_camara || "", this.set_("timbre_camara") || "automático (por nombre)")}
+      ${field("timbre_abrir", "Abrir puerta (interruptor, botón, cerradura o script)", opts(/^(switch|button|input_button|lock|script|input_boolean)\./), pr.timbre_abrir || "", this.set_("timbre_abrir") || "sin botón de abrir")}
+      <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar.</div>`,
+      { c: C.amber }
+    );
+    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, tabsCard, bellCard] }];
   }
 }
 

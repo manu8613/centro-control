@@ -14,6 +14,8 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 - Solar: junto a la «Intensidad de carga» por red se ve la potencia en vatios (intensidad × tensión de la batería, la de tu banco si la tienes configurada o 51,2 V nominales), también en tiempo real al mover el deslizador o escribir.
 - La intensidad de carga por red no puede superar la potencia contratada **menos lo que consume la casa en ese momento** (p. ej. 4,6 kW − 0,6 kW = 4 kW ⇒ 75 A a 52,8 V): el deslizador y la caja se limitan a ese máximo, el panel recorta lo que se escriba y avisa si el inversor ya tiene un valor por encima.
 
+- Carga por red esta noche: junto a lo aconsejado, ahora puedes elegir tú el SOC con el que quieres empezar el día a las 08:00 («Elegir yo el SOC»: deslizador y caja con el valor exacto). Muestra al momento cuánta energía aportaría la red, y la diferencia con lo aconsejado. «Aplicar» usa tu valor, y hay un botón para no cargar por red esta noche. Se recuerda por dispositivo; «Usar lo aconsejado» vuelve al modo automático.
+
 ### Cambiado
 - Programas 1 y 2 del Deye: se quita el deslizador de «Potencia» (en el inversor esa potencia también marca la velocidad de descarga); quedan la hora, el SOC y la carga.
 

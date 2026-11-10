@@ -32,6 +32,7 @@ const TABS = [
 ];
 // Rotación automática de pestañas (por dispositivo). «config» nunca rota.
 const ROT_KEY = "centro_control_ajustes";
+const MAN_KEY = "centro_control_carga_manual";
 const ROT_SECS = [10, 15, 30, 60, 120, 300];
 const ROT_RESUME = [15, 30, 60, 120, 300];
 const ROT_DEFAULT = { on: false, secs: 30, resume: 60, off: [] };
@@ -324,6 +325,17 @@ class CentroControlPanel extends HTMLElement {
     root.addEventListener("input", (e) => {
       this._busy = Date.now() + 2500;
       const t = e.target;
+      if (t.dataset && t.dataset.manin) {
+        const b = t.closest(".nrb");
+        if (b && t.value !== "") {
+          for (const o of b.querySelectorAll("input[data-manin]")) if (o !== t) o.value = t.value;
+          const n = (x) => (x === "" || x === undefined ? NaN : Number(x));
+          const p = b.parentElement.querySelector(".manp");
+          if (p) p.textContent = this._manPreview(Number(t.value), n(b.dataset.s08), n(b.dataset.cap), n(b.dataset.target));
+          const ab = b.closest(".card, .sim")?.parentElement?.querySelector('[data-adv="apply"] .advl');
+          if (ab) ab.textContent = `Aplicar en el Deye: cargar hasta ${Math.round(Number(t.value))} % (manual)`;
+        }
+      }
       if (t.dataset && t.dataset.nr) {
         const b = t.closest(".nrb");
         if (b) for (const o of b.querySelectorAll("input[data-nr]")) if (o !== t && t.value !== "") o.value = t.value;
@@ -338,7 +350,7 @@ class CentroControlPanel extends HTMLElement {
       }
     });
     root.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && e.target.dataset && e.target.dataset.nr && e.target.type === "number") e.target.blur();
+      if (e.key === "Enter" && e.target.dataset && (e.target.dataset.nr || e.target.dataset.manin) && e.target.type === "number") e.target.blur();
     });
     window.addEventListener("hashchange", () => {
       const t = location.hash.replace("#", "");
@@ -357,6 +369,38 @@ class CentroControlPanel extends HTMLElement {
     clearTimeout(this._rotTimer);
     this._rotTimer = null;
     this._built = false;
+  }
+
+  // ---------------------------------------------------------------- manual night grid-charge target (per device)
+  _manLoad() {
+    if (this._man) return this._man;
+    let r = {};
+    try {
+      r = JSON.parse(localStorage.getItem(MAN_KEY) || "{}") || {};
+    } catch (e) {
+      r = {};
+    }
+    const soc = Number(r.soc);
+    this._man = { on: r.on === true, soc: Number.isFinite(soc) ? Math.max(0, Math.min(100, Math.round(soc))) : null };
+    return this._man;
+  }
+  _manSave() {
+    try {
+      localStorage.setItem(MAN_KEY, JSON.stringify(this._manLoad()));
+    } catch (e) {
+      /* modo privado: dura hasta recargar */
+    }
+  }
+  /** What a manual night target means: SOC at 08:00 and the energy the grid has to supply (cap = battery kWh, s08 = SOC at 08:00 without grid, target = advised). */
+  _manPreview(v, s08, cap, target) {
+    const parts = [`Empezarías el día a las 08:00 con ≈ ${fmt(v, 0)} %`];
+    if (Number.isFinite(s08) && Number.isFinite(cap) && cap > 0) {
+      const grid = Math.max(0, v - s08) / 100 * cap / 0.9;
+      parts.push(grid > 0.05 ? `la red aportaría ≈ ${fmt(grid, 1)} kWh` : `sin red llegarías con ≈ ${fmt(s08, 0)} %: no hace falta cargar`);
+    }
+    let cmp = "";
+    if (Number.isFinite(target)) cmp = v < target ? ` · ${fmt(target - v, 0)} puntos por debajo de lo aconsejado (${fmt(target, 0)} %): la batería podría no llegar a las 00:00` : v > target ? ` · ${fmt(v - target, 0)} puntos por encima de lo aconsejado (${fmt(target, 0)} %)` : " · igual que lo aconsejado";
+    return parts.join(" · ") + cmp;
   }
 
   // ---------------------------------------------------------------- tab rotation (per device)
@@ -679,10 +723,22 @@ class CentroControlPanel extends HTMLElement {
       e.stopPropagation();
       return this._rotAction(rot.dataset);
     }
+    const mm = e.target.closest("[data-manmode]");
+    if (mm) {
+      e.stopPropagation();
+      const man = this._manLoad();
+      man.on = mm.dataset.manmode === "manual";
+      if (man.on && man.soc === null) {
+        const t = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+        man.soc = Number.isFinite(t) ? Math.round(t) : 60;
+      }
+      this._manSave();
+      return this._schedule(true);
+    }
     const adv = e.target.closest("[data-adv]");
     if (adv) {
       e.stopPropagation();
-      return this._applyAdvice();
+      return this._applyAdvice(adv.dataset.adv);
     }
     if (this._edit && !e.target.closest("nav")) return;
     const t = e.target.closest("[data-set],[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
@@ -713,7 +769,12 @@ class CentroControlPanel extends HTMLElement {
   _change(e) {
     const t = e.target;
     this._busy = Date.now() + 1500;
-    if (t.dataset.set) {
+    if (t.dataset.manin) {
+      const man = this._manLoad(), v = Number(t.value);
+      if (Number.isFinite(v)) man.soc = Math.max(Number(t.min) || 0, Math.min(Number(t.max) || 100, Math.round(v)));
+      this._manSave();
+      this._schedule(true);
+    } else if (t.dataset.set) {
       this._write(t.dataset.set, t.value);
     } else if (t.dataset.number) {
       this._hass.callService("number", "set_value", { entity_id: t.dataset.number, value: Number(t.value) });
@@ -1093,9 +1154,15 @@ class CentroControlPanel extends HTMLElement {
       if (opt) this._write(entity, opt);
     } else this._write(entity, on);
   }
-  _applyAdvice() {
-    const est = this.S("recomendacion_carga_red");
-    const target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+  _applyAdvice(act = "apply") {
+    let est = this.S("recomendacion_carga_red");
+    let target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
+    const man = this._manLoad();
+    if (act === "off") est = "no_cargar";
+    else if (man.on && man.soc !== null) {
+      est = "cargar"; // the person chose the target
+      target = man.soc;
+    }
     const k = (x) => this.set_(x);
     const steps = [];
     let note = "";
@@ -1137,8 +1204,20 @@ class CentroControlPanel extends HTMLElement {
     const canApply = est === "cargar" || est === "no_cargar" ? ["deye_p1_carga", "deye_p1_soc", "deye_carga_red"].some((x) => this.set_(x)) : false;
     const target = a("soc_objetivo"), s08 = a("soc_previsto_08h");
     const kpis = target !== null && target !== undefined && est !== "sin_datos" ? `<div class="chips" style="margin:6px 0"><span class="chip on" style="--c:${col}">Objetivo ${fmt(target, 0)} %</span><span class="chip">A las 08:00 sin red: ${fmt(s08, 0)} %</span><span class="chip">Consumo medio ${kwh(a("consumo_diario_kwh"), 1)}/día</span></div>` : "";
-    const apply = canApply ? `<button class="btn full" style="--c:${col};margin-top:8px" data-adv="apply">${icon("mdi:flash-auto")}${est === "cargar" ? `Aplicar en el Deye: cargar hasta ${fmt(target, 0)} %` : "Aplicar en el Deye: no cargar por red"}</button>` : "";
-    const adv = this.card("adv", `<h3>${icon("mdi:transmission-tower-import")}Carga por red esta noche</h3><div class="big" style="--c:${col};font-size:20px">${head}</div>${kpis}<div class="small muted">${esc(a("motivo") || "")}</div>${apply}<div class="small muted" style="margin-top:8px">Prioriza la batería de 08:00 a 00:00; la red carga de 00:00 a 08:00. Es una estimación con la nubosidad prevista y tu consumo medio.</div>`, { c: col });
+    const advTarget = Number(target);
+    const man = this._manLoad();
+    const socEnt = this.set_("deye_p1_soc");
+    const sa = socEnt ? this.st(socEnt)?.attributes || {} : {};
+    const lo = Number.isFinite(Number(sa.min)) ? Number(sa.min) : 0, hi = Number.isFinite(Number(sa.max)) ? Number(sa.max) : 100;
+    const mv = Math.max(lo, Math.min(hi, man.soc ?? (Number.isFinite(advTarget) ? advTarget : 60)));
+    const canApplyAny = ["deye_p1_carga", "deye_p1_soc", "deye_carga_red"].some((x) => this.set_(x));
+    const modeChip = (m, label, on) => `<button class="chip ${on ? "on" : ""}" style="--c:${col}" data-manmode="${m}">${label}</button>`;
+    const mode = canApplyAny ? `<div class="chips" style="margin:10px 0 4px">${modeChip("auto", "Usar lo aconsejado", !man.on)}${modeChip("manual", "Elegir yo el SOC", man.on)}</div>` : "";
+    const s08n = Number(s08), capn = Number(a("capacidad_kwh"));
+    const manual = canApplyAny && man.on ? `<div class="sim nr"><label>SOC con el que quiero empezar a las 08:00 (objetivo de carga por red)</label><div class="nrb" data-man="1" data-s08="${Number.isFinite(s08n) ? s08n : ""}" data-cap="${Number.isFinite(capn) ? capn : ""}" data-target="${Number.isFinite(advTarget) ? advTarget : ""}"><input type="range" min="${lo}" max="${hi}" step="1" value="${mv}" data-manin="1" aria-label="SOC objetivo manual"><span class="nrv"><input type="number" inputmode="numeric" min="${lo}" max="${hi}" step="1" value="${mv}" data-manin="1" aria-label="SOC objetivo manual (valor exacto)"><i>%</i></span></div><div class="small muted manp" style="grid-column:1/-1">${esc(this._manPreview(mv, s08n, capn, advTarget))}</div></div>` : "";
+    const btn = (act, label) => `<button class="btn full" style="--c:${col};margin-top:8px" data-adv="${act}">${icon("mdi:flash-auto")}<span class="advl">${label}</span></button>`;
+    const apply = !canApplyAny ? "" : man.on ? btn("apply", `Aplicar en el Deye: cargar hasta ${fmt(mv, 0)} % (manual)`) + btn("off", "Aplicar en el Deye: no cargar por red esta noche") : canApply ? btn("apply", est === "cargar" ? `Aplicar en el Deye: cargar hasta ${fmt(target, 0)} %` : "Aplicar en el Deye: no cargar por red") : "";
+    const adv = this.card("adv", `<h3>${icon("mdi:transmission-tower-import")}Carga por red esta noche</h3><div class="big" style="--c:${col};font-size:20px">${head}</div>${kpis}<div class="small muted">${esc(a("motivo") || "")}</div>${mode}${manual}${apply}<div class="small muted" style="margin-top:8px">Prioriza la batería de 08:00 a 00:00; la red carga de 00:00 a 08:00. Es una estimación con la nubosidad prevista y tu consumo medio.</div>`, { c: col });
     const days = a("dias") || [];
     const tiles = days.map((d, i) => {
       const label = i === 0 ? "Hoy" : i === 1 ? "Mañana" : new Date(d.fecha + "T12:00:00").toLocaleDateString("es-ES", { weekday: "short" });

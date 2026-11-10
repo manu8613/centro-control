@@ -133,6 +133,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer;border:none}
 .sim{display:grid;grid-template-columns:1fr 64px;gap:4px 10px;align-items:center;margin:6px 0}.sim label{font-size:12px;color:${C.muted};grid-column:1/-1}
 .sim b{text-align:right;font-variant-numeric:tabular-nums}
+.nrb{grid-column:1/-1;display:flex;align-items:center;gap:12px}.nrb input[type=range]{flex:1;min-width:0}.nrv{display:flex;align-items:center;gap:4px}.nrv input{width:76px;text-align:right;font:inherit;font-variant-numeric:tabular-nums;color:inherit;background:rgba(255,255,255,.06);border:1px solid ${C.muted};border-radius:8px;padding:6px 8px}.nrv i{font-style:normal;color:${C.muted};min-width:18px}
 svg text{font-family:inherit}
 .chart{position:relative;min-height:180px}.chart svg{width:100%;display:block}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:${C.muted};margin-top:4px}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:3px;border-radius:2px;display:inline-block}
@@ -320,7 +321,17 @@ class CentroControlPanel extends HTMLElement {
     this._grid = root.querySelector(".grid");
     root.addEventListener("click", (e) => this._click(e));
     root.addEventListener("change", (e) => this._change(e));
-    root.addEventListener("input", () => (this._busy = Date.now() + 2500));
+    root.addEventListener("input", (e) => {
+      this._busy = Date.now() + 2500;
+      const t = e.target;
+      if (t.dataset && t.dataset.nr) {
+        const b = t.closest(".nrb");
+        if (b) for (const o of b.querySelectorAll("input[data-nr]")) if (o !== t && t.value !== "") o.value = t.value;
+      }
+    });
+    root.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && e.target.dataset && e.target.dataset.nr && e.target.type === "number") e.target.blur();
+    });
     window.addEventListener("hashchange", () => {
       const t = location.hash.replace("#", "");
       if (TABS.some((x) => x[0] === t) && t !== this._tab) this._go(t);
@@ -1113,8 +1124,11 @@ class CentroControlPanel extends HTMLElement {
     const st = this.st(entity);
     if (!st) return "";
     const a = st.attributes;
+    const min = a.min ?? 0, max = a.max ?? 100, step = a.step ?? 1;
     const v = toNum(st.state, 0);
-    return `<div class="sim"><label>${esc(label)}</label><input type="range" min="${a.min ?? 0}" max="${a.max ?? 100}" step="${a.step ?? 1}" value="${v}" data-set="${esc(entity)}"><b>${fmt(v, 0)} ${unit}</b></div>`;
+    const dec = step < 1 ? 1 : 0;
+    // slider + exact box that stay in sync while dragging/typing; the value is written on release / Enter / leaving the box
+    return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb"><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span></div></div>`;
   }
   deyeCards() {
     const k = (x) => this.set_(x);

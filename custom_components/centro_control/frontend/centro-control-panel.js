@@ -133,7 +133,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--c);box-shadow:0 0 10px var(--c);cursor:pointer;border:none}
 .sim{display:grid;grid-template-columns:1fr 64px;gap:4px 10px;align-items:center;margin:6px 0}.sim label{font-size:12px;color:${C.muted};grid-column:1/-1}
 .sim b{text-align:right;font-variant-numeric:tabular-nums}
-.nrb{grid-column:1/-1;display:flex;align-items:center;gap:12px}.nrb input[type=range]{flex:1;min-width:0}.nrv{display:flex;align-items:center;gap:4px}.nrv input{width:76px;text-align:right;font:inherit;font-variant-numeric:tabular-nums;color:inherit;background:rgba(255,255,255,.06);border:1px solid ${C.muted};border-radius:8px;padding:6px 8px}.nrv i{font-style:normal;color:${C.muted};min-width:18px}
+.nrb{grid-column:1/-1;display:flex;align-items:center;gap:12px}.nrb input[type=range]{flex:1;min-width:0}.nrv{display:flex;align-items:center;gap:4px}.nrv input{width:76px;text-align:right;font:inherit;font-variant-numeric:tabular-nums;color:inherit;background:rgba(255,255,255,.06);border:1px solid ${C.muted};border-radius:8px;padding:6px 8px}.nrw{white-space:nowrap;font-variant-numeric:tabular-nums;color:${C.cyan};min-width:84px;text-align:right}.nrv i{font-style:normal;color:${C.muted};min-width:18px}
 svg text{font-family:inherit}
 .chart{position:relative;min-height:180px}.chart svg{width:100%;display:block}
 .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:${C.muted};margin-top:4px}.legend span{display:flex;align-items:center;gap:5px}.legend i{width:10px;height:3px;border-radius:2px;display:inline-block}
@@ -327,6 +327,14 @@ class CentroControlPanel extends HTMLElement {
       if (t.dataset && t.dataset.nr) {
         const b = t.closest(".nrb");
         if (b) for (const o of b.querySelectorAll("input[data-nr]")) if (o !== t && t.value !== "") o.value = t.value;
+        if (b && b.dataset.volt && t.value !== "") {
+          const cap = b.dataset.cap ? Number(b.dataset.cap) : Infinity;
+          const val = Number(t.value), w = b.querySelector(".nrw");
+          if (w) {
+            w.textContent = `≈ ${Math.round(Math.min(val, cap) * Number(b.dataset.volt)).toLocaleString("es-ES")} W${val > cap ? ` (máx. ${cap} A)` : ""}`;
+            w.style.color = val > cap ? C.red : "";
+          }
+        }
       }
     });
     root.addEventListener("keydown", (e) => {
@@ -1027,6 +1035,10 @@ class CentroControlPanel extends HTMLElement {
       const a = st.attributes;
       if (a.min !== undefined) v = Math.max(Number(a.min), v);
       if (a.max !== undefined) v = Math.min(Number(a.max), v);
+      if (entity === this.set_("deye_corriente_carga_red")) {
+        const cap = this._gridCap();
+        if (cap) v = Math.min(cap.amps, v); // never above the contracted power
+      }
       return call(d, "set_value", { value: v });
     }
     if (d === "time") return call("time", "set_value", { time: String(value).length === 5 ? value + ":00" : value });
@@ -1034,6 +1046,22 @@ class CentroControlPanel extends HTMLElement {
     if (d === "text") return call("text", "set_value", { value: String(value).slice(0, 5) });
     if (d === "select" || d === "input_select") return call(d, "select_option", { option: String(value) });
     if (d === "switch" || d === "input_boolean") return call(d, value === true || value === "true" || value === "on" ? "turn_on" : "turn_off", {});
+  }
+  /** Battery voltage (bank first); falls back to a 16S LiFePO4 nominal 51.2 V. */
+  _batVolt() {
+    const bs = (this.cfg.batteries || []).slice().sort((a, b) => (b.in_total ? 1 : 0) - (a.in_total ? 1 : 0));
+    for (const b of bs) {
+      const v = b.voltage ? toNum(this.s(b.voltage), NaN) : NaN;
+      if (v >= 20 && v <= 120) return { v, nominal: false };
+    }
+    return { v: 51.2, nominal: true };
+  }
+  /** Highest grid-charge current (A) whose power stays within the contracted power, or null when unknown. */
+  _gridCap() {
+    const kw = toNum(this.A("uso_potencia_contratada", "contratada_kw"), NaN);
+    if (!(kw > 0)) return null;
+    const { v, nominal } = this._batVolt();
+    return { amps: Math.floor((kw * 1000) / v), watts: kw * 1000, volt: v, nominal, kw };
   }
   _gridOpt(o) { return /(grid|red|both|ambos)/i.test(o) && !/^\s*(no|none|ning|sin|off|disable)/i.test(o); }
   _offOpt(o) { return /^\s*(no|none|ning|sin|off|disable)/i.test(o); }
@@ -1120,15 +1148,23 @@ class CentroControlPanel extends HTMLElement {
     const cloud = this.card("cloud", `<h3>${icon("mdi:weather-partly-cloudy")}Nubosidad: hoy y próximos 5 días</h3>${days.length ? `<div style="display:flex;gap:8px;flex-wrap:wrap">${tiles}</div><div class="small muted" style="margin-top:8px">Producción solar estimada con la nubosidad${this.set_("solar_prevision_manana") ? " (hoy y mañana, de tu sensor de previsión)" : ""}.</div>` : `<div class="empty">${icon("mdi:information-outline")} Esperando la previsión de ${esc(this.name(this.set_("meteo_entidad")))}…${a("meteo") && a("meteo").error ? `<div class="small muted" style="margin-top:6px">Motivo: ${esc(a("meteo").error)}</div>` : ""}</div>`}`, { c: C.cyan });
     return [adv, cloud];
   }
-  numRow(label, entity, unit) {
+  numRow(label, entity, unit, opt = {}) {
     const st = this.st(entity);
     if (!st) return "";
     const a = st.attributes;
-    const min = a.min ?? 0, max = a.max ?? 100, step = a.step ?? 1;
+    const min = a.min ?? 0, step = a.step ?? 1;
     const v = toNum(st.state, 0);
+    const cap = opt.cap ?? null; // extra upper limit (e.g. contracted power)
+    const max = cap !== null ? Math.min(a.max ?? 100, cap) : (a.max ?? 100);
     const dec = step < 1 ? 1 : 0;
+    const volt = opt.volt || 0;
+    const wTxt = (x) => `≈ ${Math.round(x * volt).toLocaleString("es-ES", { useGrouping: true })} W`;
+    const over = cap !== null && v > cap;
+    const watts = volt ? `<span class="nrw" style="${over ? `color:${C.red}` : ""}">${wTxt(v)}</span>` : "";
+    const note = opt.note ? `<div class="small muted" style="grid-column:1/-1">${opt.note}</div>` : "";
+    const warn = over ? `<div class="small" style="grid-column:1/-1;color:${C.red}">⚠ ${fmt(v, 0)} ${unit} supera la potencia contratada; bájala a ${fmt(cap, 0)} ${unit} o menos.</div>` : "";
     // slider + exact box that stay in sync while dragging/typing; the value is written on release / Enter / leaving the box
-    return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb"><input type="range" min="${min}" max="${max}" step="${step}" value="${v}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span></div></div>`;
+    return `<div class="sim nr"><label>${esc(label)}</label><div class="nrb" ${volt ? `data-volt="${volt}"` : ""} ${cap !== null ? `data-cap="${cap}"` : ""}><input type="range" min="${min}" max="${max}" step="${step}" value="${Math.min(v, max)}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)}"><span class="nrv"><input type="number" inputmode="decimal" min="${min}" max="${max}" step="${step}" value="${Number(v.toFixed(dec))}" data-set="${esc(entity)}" data-nr="1" aria-label="${esc(label)} (valor exacto)"><i>${unit}</i></span>${watts}</div>${warn}${note}</div>`;
   }
   deyeCards() {
     const k = (x) => this.set_(x);
@@ -1140,7 +1176,12 @@ class CentroControlPanel extends HTMLElement {
     };
     let main = `<h3>${icon("mdi:transmission-tower-import")}Carga de la batería por la red</h3>`;
     if (k("deye_carga_red")) main += toggle("Carga por red", k("deye_carga_red"), "mdi:transmission-tower-import");
-    if (k("deye_corriente_carga_red")) main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A");
+    if (k("deye_corriente_carga_red")) {
+      const g = this._gridCap();
+      const { v: volt, nominal } = this._batVolt();
+      const note = `Potencia = intensidad × tensión de la batería (${fmt(volt, 1)} V${nominal ? " nominal" : ""})${g ? `. Máximo ${fmt(g.amps, 0)} A = ${fmt(g.watts, 0)} W, la potencia contratada.` : "."}`;
+      main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A", { cap: g ? g.amps : null, volt, note });
+    }
     if (k("deye_carga_red_inicio")) main += this.numRow("Empezar a cargar por red por debajo de", k("deye_carga_red_inicio"), this.unit(k("deye_carga_red_inicio")) || "%");
     if (k("deye_franjas")) {
       const f = k("deye_franjas"), on = this._flagOn(f);

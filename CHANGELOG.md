@@ -8,6 +8,12 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.4] - 2026-11-10
+
+### Añadido
+- Solar: junto a la «Intensidad de carga» por red se ve la potencia en vatios (intensidad × tensión de la batería, la de tu banco si la tienes configurada o 51,2 V nominales), también en tiempo real al mover el deslizador o escribir.
+- La intensidad de carga por red no puede superar la potencia contratada: el deslizador y la caja se limitan a ese máximo (p. ej. 4,6 kW ⇒ 87 A a 52,8 V), el panel recorta lo que se escriba y avisa si el inversor ya tiene un valor por encima.
+
 ## [2.7.3] - 2026-11-10
 
 ### Corregido

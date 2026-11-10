@@ -33,6 +33,7 @@
           "red": "Red eléctrica",
           "consumo": "Consumo total",
           "solar": "Solar e inversor",
+          "deye": "Inversor Deye: carga por red y programas",
           "tarifa": "Tarifa de la luz",
           "gas": "Gas",
           "luces": "Luces",
@@ -91,18 +92,55 @@
           "solar_potencia": "Potencia solar total",
           "solar_energia": "Energía solar (contador)",
           "solar_prevision_hoy": "Previsión solar de hoy (kWh)",
+          "solar_prevision_manana": "Previsión solar de mañana (kWh)",
           "solar_pico_wp": "Potencia pico instalada (Wp)",
           "inversor_temperatura": "Temperatura del inversor",
           "inversor_temperatura_dc": "Temperatura DC / disipador",
           "inversor_estado": "Estado del inversor",
           "inversor_fallo": "Fallo del inversor",
-          "inversor_alarma": "Alarma del inversor"
+          "inversor_alarma": "Alarma del inversor",
+          "meteo_entidad": "Entidad del tiempo (nubosidad)",
+          "consumo_diurno_pct": "Consumo entre 08:00 y 00:00"
         },
         "data_description": {
           "solar_potencia": "Si lo dejas vacío se suman los strings.",
           "solar_energia": "Opcional. Vale un sensor diario («producción de hoy») o total.",
           "solar_prevision_hoy": "Opcional, p. ej. de Forecast.Solar o Solcast.",
-          "solar_pico_wp": "0 = suma de los strings."
+          "solar_prevision_manana": "Opcional, p. ej. de Forecast.Solar o Solcast. Si no, se estima con la nubosidad.",
+          "solar_pico_wp": "0 = suma de los strings.",
+          "meteo_entidad": "Una entidad «weather» con previsión diaria; mejor si incluye cloud_coverage (Open-Meteo, Met.no…).",
+          "consumo_diurno_pct": "Parte del consumo diario que ocurre de 08:00 a 00:00 (por defecto 85 %). Sirve para la recomendación de carga por red."
+        }
+      },
+      "deye": {
+        "title": "Inversor Deye: carga por red y programas",
+        "data": {
+          "deye_carga_red": "Carga de la batería desde la red",
+          "deye_corriente_carga_red": "Intensidad de carga desde la red",
+          "deye_carga_red_inicio": "SOC de inicio de la carga por red",
+          "deye_franjas": "Programación por franjas (Time of use)",
+          "deye_p1_hora": "Programa 1: hora de inicio",
+          "deye_p1_potencia": "Programa 1: potencia",
+          "deye_p1_soc": "Programa 1: SOC",
+          "deye_p1_carga": "Programa 1: carga",
+          "deye_p2_hora": "Programa 2: hora de inicio",
+          "deye_p2_potencia": "Programa 2: potencia",
+          "deye_p2_soc": "Programa 2: SOC",
+          "deye_p2_carga": "Programa 2: carga"
+        },
+        "data_description": {
+          "deye_carga_red": "Interruptor del inversor que permite cargar la batería con la red (p. ej. «Grid charge»).",
+          "deye_corriente_carga_red": "Número del inversor, en amperios (p. ej. «Battery grid charging current»).",
+          "deye_carga_red_inicio": "Número del inversor, en % (p. ej. «Battery grid charging start»).",
+          "deye_franjas": "Interruptor o selector del inversor que activa los programas horarios.",
+          "deye_p1_hora": "Entidad de hora (time) del programa 1.",
+          "deye_p1_potencia": "Número, en vatios.",
+          "deye_p1_soc": "Número, en %.",
+          "deye_p1_carga": "Selector (red / generador / ninguna) o interruptor de carga del programa 1.",
+          "deye_p2_hora": "Entidad de hora (time) del programa 2.",
+          "deye_p2_potencia": "Número, en vatios.",
+          "deye_p2_soc": "Número, en %.",
+          "deye_p2_carga": "Selector (red / generador / ninguna) o interruptor de carga del programa 2."
         }
       },
       "tarifa": {
@@ -533,6 +571,9 @@
       },
       "energia_solar": {
         "name": "Energía solar"
+      },
+      "recomendacion_carga_red": {
+        "name": "Recomendación de carga por red"
       },
       "energia_importada": {
         "name": "Energía importada"

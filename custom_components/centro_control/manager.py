@@ -28,6 +28,7 @@ from .const import (
     CONF_CO2_FACTOR,
     CONF_CO2_GAS,
     CONF_CO2_SENSOR,
+    CONF_DAY_SHARE,
     CONF_CO2_TREE,
     CONF_CONTRACTED_P1,
     CONF_CONTRACTED_P2,
@@ -62,10 +63,13 @@ from .const import (
     CONF_PRICE_P3,
     CONF_PRICE_SENSOR,
     CONF_PV_ENERGY,
+    CONF_PV_FORECAST,
+    CONF_PV_FORECAST_TOMORROW,
     CONF_PV_POWER,
     CONF_RAIN_SENSOR,
     CONF_SOC_MIN,
     CONF_VAT,
+    CONF_WEATHER,
     DOMAIN,
     HISTORY_DAYS,
     LEVELS,
@@ -81,6 +85,7 @@ from .energy import Counters, Integrator, Meter, to_kwh, to_watts
 from .insights import summary
 from .model import Model
 from .problems import Debouncer, Live, Problem, evaluate
+from .solar_plan import build_plan, daily_load_from_history, normalize_forecast
 from .tariff import (
     Scenario,
     Tariff,
@@ -190,6 +195,9 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.sim: dict[str, float] = dict(SIM_DEFAULTS)
         self.live: dict[str, Any] = {}
         self.forecast: dict[str, Any] = {}
+        self.solar_plan: dict[str, Any] = {}
+        self.weather_days: list[dict[str, Any]] = []
+        self._weather_at = 0.0
         self.simulation: dict[str, Any] = {}
         self.insights: dict[str, Any] = {}
         self.gas_entities: dict[str, str] = {}
@@ -540,6 +548,7 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.insights = summary(self.counters, self.tariff.typical_price(), tree, car)
         if ts - self._forecast_at > 300:
             self._update_forecast(now)
+        self._update_solar_plan(now, ts)
         self._check_zone_limits(now)
         self.async_set_updated_data(None)
 
@@ -572,6 +581,52 @@ class CentroManager(DataUpdateCoordinator[None]):
             self.simulation = simulate(self.counters, tariff, today, self.model.peak_wp, self.scenario())
         except Exception:  # noqa: BLE001 - a forecast must never break the live data
             _LOGGER.exception("No se pudo calcular la previsión de la factura")
+
+    # ================================================================ cloud cover and night grid charge
+    def _update_solar_plan(self, now: datetime, ts: float) -> None:
+        weather = self.model.get(CONF_WEATHER)
+        if not weather:
+            self.solar_plan = {}
+            return
+        if ts - self._weather_at > 1800:
+            self._weather_at = ts
+            self.hass.async_create_task(self._fetch_weather(str(weather)))
+        try:
+            today = now.date()
+            tomorrow = (today + timedelta(days=1)).isoformat()
+            override = {}
+            for day, key in ((today.isoformat(), CONF_PV_FORECAST), (tomorrow, CONF_PV_FORECAST_TOMORROW)):
+                value = self._num(self.model.get(key))
+                if value is not None and value >= 0:
+                    override[day] = value
+            self.solar_plan = build_plan(
+                now=now,
+                latitude=float(self.hass.config.latitude),
+                peak_wp=self.model.peak_wp,
+                capacity_kwh=self.model.capacity_kwh,
+                soc_now=self.live.get("soc"),
+                reserve_pct=self.model.num(CONF_SOC_MIN, 10),
+                daily_load_kwh=daily_load_from_history(self.counters.history, today),
+                day_share_pct=self.model.num(CONF_DAY_SHARE, 85),
+                forecast=self.weather_days,
+                solar_override=override,
+            )
+        except Exception:  # noqa: BLE001 - advice must never break the live data
+            _LOGGER.exception("No se pudo calcular la recomendación de carga por red")
+
+    async def _fetch_weather(self, entity_id: str) -> None:
+        """Daily forecast of the weather entity (cloud_coverage when it has it)."""
+        raw: list[dict[str, Any]] = []
+        try:
+            response = await self.hass.services.async_call(
+                "weather", "get_forecasts", {"type": "daily"}, target={"entity_id": entity_id}, blocking=True, return_response=True
+            )
+            raw = list((response or {}).get(entity_id, {}).get("forecast") or [])
+        except Exception as err:  # noqa: BLE001 - not every integration offers daily forecasts
+            _LOGGER.debug("Sin previsión diaria de %s: %s", entity_id, err)
+        state = self.hass.states.get(entity_id)
+        current = None if state is None else {**state.attributes, "condition": state.state}
+        self.weather_days = normalize_forecast(raw, current, dt_util.now().date())
 
     @callback
     def set_sim(self, key: str, value: float) -> None:

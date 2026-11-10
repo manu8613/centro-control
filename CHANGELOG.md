@@ -12,8 +12,9 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
 ### Añadido
 - Pestaña **Solar**: controles del inversor Deye. Carga de la batería por la
-  red, intensidad de carga, programación por franjas y programas 1 y 2 (hora,
-  potencia, SOC y carga). Nueva pantalla **Configurar → Inversor Deye** para
+  red, intensidad de carga, SOC de inicio de la carga por red, programación por
+  franjas (interruptor o selector) y programas 1 y 2 (hora, potencia, SOC y
+  carga). Nueva pantalla **Configurar → Inversor Deye** para
   elegir las entidades; los valores se limitan al mínimo y máximo del inversor.
 - Nubosidad de hoy y de los próximos 5 días con la producción solar estimada
   (entidad `weather` en **Configurar → Solar e inversor**; si la previsión no

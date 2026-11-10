@@ -117,6 +117,7 @@
         "data": {
           "deye_carga_red": "Carga de la batería desde la red",
           "deye_corriente_carga_red": "Intensidad de carga desde la red",
+          "deye_carga_red_inicio": "SOC de inicio de la carga por red",
           "deye_franjas": "Programación por franjas (Time of use)",
           "deye_p1_hora": "Programa 1: hora de inicio",
           "deye_p1_potencia": "Programa 1: potencia",
@@ -130,7 +131,8 @@
         "data_description": {
           "deye_carga_red": "Interruptor del inversor que permite cargar la batería con la red (p. ej. «Grid charge»).",
           "deye_corriente_carga_red": "Número del inversor, en amperios (p. ej. «Battery grid charging current»).",
-          "deye_franjas": "Interruptor del inversor que activa los programas horarios.",
+          "deye_carga_red_inicio": "Número del inversor, en % (p. ej. «Battery grid charging start»).",
+          "deye_franjas": "Interruptor o selector del inversor que activa los programas horarios.",
           "deye_p1_hora": "Entidad de hora (time) del programa 1.",
           "deye_p1_potencia": "Número, en vatios.",
           "deye_p1_soc": "Número, en %.",

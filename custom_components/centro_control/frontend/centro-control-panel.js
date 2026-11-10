@@ -669,6 +669,7 @@ class CentroControlPanel extends HTMLElement {
     const t = e.target.closest("[data-set],[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
     if (!t) return;
     const d = t.dataset;
+    if (d.set !== undefined && d.flag !== undefined) return this._flagSet(d.set, d.flag === "on");
     if (d.set !== undefined && d.val !== undefined) return this._write(d.set, d.val);
     if (d.tab) return this._go(d.tab);
     if (d.select) return this._hass.callService("select", "select_option", { entity_id: d.select, option: d.option });
@@ -1037,13 +1038,25 @@ class CentroControlPanel extends HTMLElement {
       if (opt) this._write(entity, opt);
     } else this._write(entity, on);
   }
+  /** On/off of a flag that can be a switch or a select (Enabled/Disabled...). */
+  _flagOn(entity) {
+    const st = this.s(entity);
+    return entity.startsWith("select.") || entity.startsWith("input_select.") ? /^\s*(enabled?|on|activ|s[ií]|yes|true)/i.test(st || "") : st === "on";
+  }
+  _flagSet(entity, on) {
+    if (entity.startsWith("select.") || entity.startsWith("input_select.")) {
+      const opts = this.a(entity, "options") || [];
+      const opt = opts.find((o) => (on ? /^\s*(enabled?|on|activ|s[ií]|yes|true)/i : /^\s*(disabled?|off|desactiv|no|none)/i).test(o));
+      if (opt) this._write(entity, opt);
+    } else this._write(entity, on);
+  }
   _applyAdvice() {
     const est = this.S("recomendacion_carga_red");
     const target = Number(this.A("recomendacion_carga_red", "soc_objetivo"));
     const k = (x) => this.set_(x);
     const steps = [];
     if (est === "cargar" && Number.isFinite(target)) {
-      if (k("deye_franjas") && this.s(k("deye_franjas")) !== "on") steps.push(["Activar la programación por franjas", () => this._write(k("deye_franjas"), true)]);
+      if (k("deye_franjas") && !this._flagOn(k("deye_franjas"))) steps.push(["Activar la programación por franjas", () => this._flagSet(k("deye_franjas"), true)]);
       if (k("deye_p1_soc")) steps.push([`Programa 1: SOC ${target} %`, () => this._write(k("deye_p1_soc"), target)]);
       if (k("deye_p1_carga")) steps.push(["Programa 1: carga desde la red activada", () => this._chargeSet(k("deye_p1_carga"), true)]);
       if (k("deye_p2_carga")) steps.push(["Programa 2: carga desde la red desactivada", () => this._chargeSet(k("deye_p2_carga"), false)]);
@@ -1092,7 +1105,7 @@ class CentroControlPanel extends HTMLElement {
   }
   deyeCards() {
     const k = (x) => this.set_(x);
-    if (!["deye_carga_red", "deye_corriente_carga_red", "deye_franjas", "deye_p1_hora", "deye_p1_soc", "deye_p1_carga", "deye_p2_hora", "deye_p2_soc", "deye_p2_carga"].some(k))
+    if (!["deye_carga_red", "deye_corriente_carga_red", "deye_carga_red_inicio", "deye_franjas", "deye_p1_hora", "deye_p1_soc", "deye_p1_carga", "deye_p2_hora", "deye_p2_soc", "deye_p2_carga"].some(k))
       return [this.card("deye", `<h3>${icon("mdi:power-plug-battery")}Inversor Deye</h3><div class="empty">${icon("mdi:information-outline")} Añade las entidades de tu inversor en Configurar → Inversor Deye para controlar la carga por red y los programas 1 y 2 desde aquí.</div>`, { c: C.muted })];
     const toggle = (label, entity, ic) => {
       const on = this.s(entity) === "on";
@@ -1101,7 +1114,13 @@ class CentroControlPanel extends HTMLElement {
     let main = `<h3>${icon("mdi:transmission-tower-import")}Carga de la batería por la red</h3>`;
     if (k("deye_carga_red")) main += toggle("Carga por red", k("deye_carga_red"), "mdi:transmission-tower-import");
     if (k("deye_corriente_carga_red")) main += this.numRow("Intensidad de carga", k("deye_corriente_carga_red"), this.unit(k("deye_corriente_carga_red")) || "A");
-    if (k("deye_franjas")) main += toggle("Programación por franjas", k("deye_franjas"), "mdi:calendar-clock");
+    if (k("deye_carga_red_inicio")) main += this.numRow("Empezar a cargar por red por debajo de", k("deye_carga_red_inicio"), this.unit(k("deye_carga_red_inicio")) || "%");
+    if (k("deye_franjas")) {
+      const f = k("deye_franjas"), on = this._flagOn(f);
+      main += /^(select|input_select)\./.test(f)
+        ? `<button class="btn full" style="--c:${on ? C.green : C.muted};margin-bottom:8px" data-set="${esc(f)}" data-flag="${on ? "off" : "on"}">${icon("mdi:calendar-clock")}Programación por franjas: ${on ? "activada" : "desactivada"}</button>`
+        : toggle("Programación por franjas", f, "mdi:calendar-clock");
+    }
     main += `<div class="small muted" style="margin-top:6px">Los cambios se envían al inversor al soltar el control. Se respetan los límites que da el propio inversor.</div>`;
     const cards = [this.card("gc", main, { c: C.green })];
     for (const n of [1, 2]) {

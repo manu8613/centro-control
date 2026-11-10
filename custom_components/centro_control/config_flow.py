@@ -100,6 +100,7 @@ from .const import (
     CONF_DAY_SHARE,
     CONF_DEYE_GRID_CHARGE,
     CONF_DEYE_GRID_CURRENT,
+    CONF_DEYE_GRID_START,
     CONF_DEYE_P1_CHARGE,
     CONF_DEYE_P1_POWER,
     CONF_DEYE_P1_SOC,
@@ -204,6 +205,7 @@ POWER = _entity("sensor")
 ENERGY = _entity("sensor")
 ANY_STATUS = _entity(["sensor", "binary_sensor"])
 SWITCH = _entity(["switch", "input_boolean"])
+FLAG = _entity(["switch", "input_boolean", "select", "input_select"])
 NUMBER = _entity(["number", "input_number"])
 TIME = _entity(["time", "input_datetime", "text"])
 CHARGE_MODE = _entity(["select", "switch", "input_boolean", "input_select"])
@@ -249,7 +251,8 @@ SECTIONS: dict[str, Fields] = {
     "deye": {
         CONF_DEYE_GRID_CHARGE: (SWITCH, False),
         CONF_DEYE_GRID_CURRENT: (NUMBER, False),
-        CONF_DEYE_TOU: (SWITCH, False),
+        CONF_DEYE_GRID_START: (NUMBER, False),
+        CONF_DEYE_TOU: (FLAG, False),
         CONF_DEYE_P1_TIME: (TIME, False),
         CONF_DEYE_P1_POWER: (NUMBER, False),
         CONF_DEYE_P1_SOC: (NUMBER, False),

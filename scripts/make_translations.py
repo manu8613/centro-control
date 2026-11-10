@@ -36,7 +36,8 @@ L = {  # key: (label, description or None)
     "consumo_diurno_pct": ("Consumo entre 08:00 y 00:00", "Parte del consumo diario que ocurre de 08:00 a 00:00 (por defecto 85 %). Sirve para la recomendación de carga por red."),
     "deye_carga_red": ("Carga de la batería desde la red", "Interruptor del inversor que permite cargar la batería con la red (p. ej. «Grid charge»)."),
     "deye_corriente_carga_red": ("Intensidad de carga desde la red", "Número del inversor, en amperios (p. ej. «Battery grid charging current»)."),
-    "deye_franjas": ("Programación por franjas (Time of use)", "Interruptor del inversor que activa los programas horarios."),
+    "deye_carga_red_inicio": ("SOC de inicio de la carga por red", "Número del inversor, en % (p. ej. «Battery grid charging start»)."),
+    "deye_franjas": ("Programación por franjas (Time of use)", "Interruptor o selector del inversor que activa los programas horarios."),
     "deye_p1_hora": ("Programa 1: hora de inicio", "Entidad de hora (time) del programa 1."),
     "deye_p1_potencia": ("Programa 1: potencia", "Número, en vatios."),
     "deye_p1_soc": ("Programa 1: SOC", "Número, en %."),
@@ -187,6 +188,7 @@ SECTIONS = {
         [
             "deye_carga_red",
             "deye_corriente_carga_red",
+            "deye_carga_red_inicio",
             "deye_franjas",
             "deye_p1_hora",
             "deye_p1_potencia",

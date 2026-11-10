@@ -26,6 +26,7 @@ const TABS = [
   ["co2", "CO₂", "mdi:leaf-circle"],
   ["gas", "Gas", "mdi:fire"],
   ["luces", "Luces", "mdi:lightbulb-group"],
+  ["enchufes", "Enchufes", "mdi:power-socket-eu"],
   ["clima", "Temperaturas", "mdi:thermometer"],
   ["riego", "Riego", "mdi:sprinkler-variant"],
   ["config", "Configuración", "mdi:cog"],
@@ -1582,8 +1583,95 @@ class CentroControlPanel extends HTMLElement {
   }
 
   // ---------------------------------------------------------------- 10 luces
+  // ---------------------------------------------------------------- live device discovery (lights, plugs)
+  _list(v) {
+    return Array.isArray(v) ? v.map(String) : v ? [String(v)] : [];
+  }
+  /** Entities of a domain read from Home Assistant's live state list: a device added later shows up on its own, no "regenerate panel". */
+  _live(domain, chosenKey, excludeKey, skipPlatforms = []) {
+    const chosen = this._list(this.set_(chosenKey));
+    if (chosen.length) return chosen;
+    const excluded = new Set(this._list(this.set_(excludeKey)));
+    const reg = this._hass.entities || {};
+    return Object.keys(this._hass.states)
+      .filter((e) => e.startsWith(domain + "."))
+      .filter((e) => {
+        if (excluded.has(e)) return false;
+        const r = reg[e], st = this._hass.states[e];
+        if (r && (r.entity_category || r.hidden)) return false; // diagnostic / config / hidden entities
+        if (st && st.attributes && st.attributes.restored) return false; // leftovers
+        if (r && skipPlatforms.includes(r.platform)) return false;
+        return true;
+      })
+      .sort((x, y) => this.name(x).localeCompare(this.name(y), "es"));
+  }
+  _isOutdoor(entity) {
+    let pat = this.set_("patron_exterior");
+    if (typeof pat !== "string" || !pat) pat = "porche|patio|jard[ií]n|terraza|fachada|exterior|piscina|foco|calle";
+    try {
+      return new RegExp(pat, "i").test(`${entity} ${this.name(entity)}`);
+    } catch (e) {
+      return false;
+    }
+  }
+  _areaOf(entity) {
+    const r = (this._hass.entities || {})[entity];
+    const areas = this._hass.areas || {};
+    const id = (r && r.area_id) || (r && r.device_id && (this._hass.devices || {})[r.device_id]?.area_id);
+    return id && areas[id] ? areas[id].name : "";
+  }
+  _lightList() {
+    return this._live("light", "luces", "luces_excluir").map((entity) => {
+      const modes = this.a(entity, "supported_color_modes") || [];
+      return { entity, name: this.name(entity), outdoor: this._isOutdoor(entity), dimmable: modes.some((m) => m !== "onoff") };
+    });
+  }
+  /** Power (W) of the plug: the power sensor of the same device, when there is one. */
+  _plugPower(entity) {
+    const reg = this._hass.entities || {};
+    const dev = reg[entity] && reg[entity].device_id;
+    if (!dev) return null;
+    for (const [e, r] of Object.entries(reg)) {
+      if (r.device_id !== dev || !e.startsWith("sensor.")) continue;
+      const st = this._hass.states[e];
+      if (st && st.attributes && st.attributes.device_class === "power") {
+        const w = this.watts(e);
+        if (w !== null) return w;
+      }
+    }
+    return null;
+  }
+  v_enchufes() {
+    const plugs = this._live("switch", "enchufes", "enchufes_excluir", ["centro_control", "solarman", "hacs"]).map((entity) => ({ entity, name: this.name(entity), area: this._areaOf(entity), outdoor: this._isOutdoor(entity), w: this._plugPower(entity) }));
+    const on = plugs.filter((l) => this.s(l.entity) === "on");
+    const na = plugs.filter((l) => ["unavailable", undefined].includes(this.s(l.entity))).length;
+    const watts = on.reduce((sum, l) => sum + (l.w || 0), 0);
+    const head = [
+      this.title("t", "Enchufes", "Enchufes e interruptores de la casa, los nuevos aparecen solos", "mdi:power-socket-eu", C.cyan),
+      this.kpi("on", null, `${on.length} / ${plugs.length}`, "Encendidos", "mdi:power-socket-eu", C.cyan, 6),
+      this.kpi("w", null, `${fmt(watts, 0)} W`, "Consumo de los que miden", "mdi:flash", C.amber, 6),
+      this.kpi("na", null, String(na), "Sin conexión", "mdi:lan-disconnect", na ? C.red : C.green, 6),
+    ];
+    const card = (l) => {
+      const s = this.s(l.entity), isOn = s === "on";
+      const sub = s === "unavailable" ? `<span style="color:${C.red}">Sin conexión</span>` : isOn ? `Encendido${l.w !== null ? ` · ${fmt(l.w, 0)} W` : ""}` : "Apagado";
+      return this.card("p" + l.entity, `<div class="light ${isOn ? "on" : "off"}"><div class="kpi" style="flex:1"><div class="ic" data-toggle="${esc(l.entity)}">${icon(isOn ? "mdi:power-socket-eu" : "mdi:power-plug-off-outline")}</div><div class="grow" data-more="${esc(l.entity)}" style="cursor:pointer"><div style="font-weight:700">${esc(l.name)}</div><div class="l">${sub}</div></div></div></div>`, { c: isOn ? C.cyan : "#2a3b55", w: 6 });
+    };
+    const secs = [{ cards: head }];
+    // by room when Home Assistant knows the areas; otherwise inside / outside
+    const byArea = plugs.some((l) => l.area);
+    const groups = new Map();
+    for (const l of plugs) {
+      const g = byArea ? l.area || "Sin área" : l.outdoor ? "Exterior" : "Interior";
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(l);
+    }
+    for (const [g, items] of groups) secs.push({ cards: [this.title("t" + g, g, "", byArea ? "mdi:floor-plan" : g === "Exterior" ? "mdi:outdoor-lamp" : "mdi:home", C.cyan), ...items.map(card)] });
+    if (!plugs.length) secs.push({ cards: [this.empty("e", "No hay enchufes ni interruptores. Cuando los añadas a Home Assistant aparecerán aquí solos.")] });
+    return secs;
+  }
   v_luces() {
-    const lights = this.cfg.lights || [];
+    const lights = this._lightList();
     const on = lights.filter((l) => this.s(l.entity) === "on");
     const off = lights.filter((l) => ["unavailable", undefined].includes(this.s(l.entity))).length;
     const head = [
@@ -1602,7 +1690,7 @@ class CentroControlPanel extends HTMLElement {
     const secs = [{ cards: head }];
     if (inside.length) secs.push({ cards: [this.title("ti", "Interior", "", "mdi:home-lightbulb", C.gold), ...inside.map(lightCard)] });
     if (outside.length) secs.push({ cards: [this.title("to", "Exterior", "", "mdi:outdoor-lamp", C.gold), ...outside.map(lightCard)] });
-    if (!lights.length) secs.push({ cards: [this.empty("e", "No hay luces. Si las añades a Home Assistant, pulsa «Regenerar panel».")] });
+    if (!lights.length) secs.push({ cards: [this.empty("e", "No hay luces. Cuando las añadas a Home Assistant aparecerán aquí solas.")] });
     return secs;
   }
 

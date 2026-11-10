@@ -77,8 +77,10 @@ L = {  # key: (label, description or None)
     "gas_coste_mes": ("Coste del gas este mes", None),
     "gas_factura": ("Factura de gas en curso", None),
     "gas_caudal": ("Caudal de gas (m³/h)", "Para avisar de consumo continuo."),
-    "luces": ("Luces del panel", "Vacío = todas las luces."),
+    "luces": ("Luces del panel", "Vacío = todas las luces (las nuevas aparecen solas)."),
     "luces_excluir": ("Luces que no quiero ver", None),
+    "enchufes": ("Enchufes del panel", "Vacío = todos los interruptores y enchufes de Home Assistant (se añaden solos los nuevos)."),
+    "enchufes_excluir": ("Enchufes o interruptores que no quiero ver", None),
     "patron_exterior": ("Palabras de luces exteriores", "Expresión regular sobre el nombre, p. ej. porche|patio|jardín."),
     "climas": ("Termostatos", "Vacío = todos."),
     "temperaturas": ("Sensores de temperatura", "Vacío = todos, menos los de la batería e inversor."),
@@ -222,7 +224,7 @@ SECTIONS = {
         ],
     ),
     "gas": ("Gas", ["gas_auto", "gas_lectura", "gas_factor", "gas_coste_hoy", "gas_coste_mes", "gas_factura", "gas_caudal"]),
-    "luces": ("Luces", ["luces", "luces_excluir", "patron_exterior"]),
+    "luces": ("Luces y enchufes", ["luces", "luces_excluir", "enchufes", "enchufes_excluir", "patron_exterior"]),
     "clima": (
         "Temperaturas",
         [

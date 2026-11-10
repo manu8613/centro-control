@@ -18,6 +18,9 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
 - Solar → Inversor: las tarjetas de Estado, Fallo y Alarma cambian de color según la gravedad: verde si todo es normal, ámbar si es algo a revisar o que se arregla (alarmas, cambio de modo, red, comunicación), rojo si es grave (sobrecorriente, fugas, temperatura excesiva, fallo del inversor) y azul para reposo (standby, autotest). Un fallo desconocido se pinta en rojo por seguridad.
 
+- Nueva pestaña **Enchufes**: enchufes e interruptores de Home Assistant con su estado, el consumo de los que miden (sensor de potencia del mismo dispositivo) y un toque para encender o apagar. Se agrupan por estancia (si Home Assistant las tiene) o en interior/exterior. Opciones nuevas en Configurar → «Luces y enchufes»: lista de enchufes (vacío = todos) y enchufes que no quieres ver.
+- Luces y enchufes **dinámicos**: se leen en directo de Home Assistant, así que un dispositivo nuevo aparece solo, sin «Regenerar panel» ni recargar. Se omiten las entidades ocultas, de diagnóstico o de configuración y las de la propia integración y de Solarman.
+
 ### Cambiado
 - Programas 1 y 2 del Deye: se quita el deslizador de «Potencia» (en el inversor esa potencia también marca la velocidad de descarga); quedan la hora, el SOC y la carga.
 

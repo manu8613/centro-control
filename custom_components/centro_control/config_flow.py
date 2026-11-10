@@ -115,6 +115,8 @@ from .const import (
     CONF_INV_TEMP_WARN,
     CONF_LIGHTS,
     CONF_LIGHTS_EXCLUDE,
+    CONF_PLUGS,
+    CONF_PLUGS_EXCLUDE,
     CONF_LOAD_ENERGY,
     CONF_LOAD_POWER,
     CONF_MAX_MINUTES,
@@ -292,6 +294,8 @@ SECTIONS: dict[str, Fields] = {
     "luces": {
         CONF_LIGHTS: (_entity("light", multiple=True), False),
         CONF_LIGHTS_EXCLUDE: (_entity("light", multiple=True), False),
+        CONF_PLUGS: (_entity("switch", multiple=True), False),
+        CONF_PLUGS_EXCLUDE: (_entity("switch", multiple=True), False),
         CONF_OUTDOOR_PATTERN: (TextSelector(), False),
     },
     "clima": {

@@ -124,6 +124,8 @@ CONF_GAS_FLOW: Final = "gas_caudal"
 # ---------------------------------------------------------------- lights
 CONF_LIGHTS: Final = "luces"
 CONF_LIGHTS_EXCLUDE: Final = "luces_excluir"
+CONF_PLUGS: Final = "enchufes"
+CONF_PLUGS_EXCLUDE: Final = "enchufes_excluir"
 CONF_OUTDOOR_PATTERN: Final = "patron_exterior"
 
 # ---------------------------------------------------------------- climate

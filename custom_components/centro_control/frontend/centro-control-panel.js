@@ -70,6 +70,7 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 .bellh{display:flex;align-items:center;gap:8px}.bellh .muted{flex:1}
 .bellx{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;font-size:20px}
 .bellv{min-height:180px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}.bellv>*{width:100%}
+.chip.dis{opacity:.35;text-decoration:line-through;cursor:default}
 .bellin{width:100%;box-sizing:border-box;background:#0b1220;color:inherit;border:1px solid #334155;border-radius:8px;padding:6px 8px;font-size:13px}
 .bellf{display:flex;justify-content:flex-end}
 .bellopen{background:#1e293b;color:inherit;border:1px solid #475569;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
@@ -294,6 +295,7 @@ class CentroControlPanel extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._tab = (location.hash || "").replace("#", "") || "resumen";
     if (!TABS.some((t) => t[0] === this._tab)) this._tab = "resumen";
+    if (!this._tabVisible(this._tab)) this._tab = "config";
     this._cards = new Map();
     this._layoutKey = "";
     this._cache = {};
@@ -429,6 +431,7 @@ class CentroControlPanel extends HTMLElement {
       on: r.on === true,
       secs: ROT_SECS.includes(r.secs) ? r.secs : ROT_DEFAULT.secs,
       resume: ROT_RESUME.includes(r.resume) ? r.resume : ROT_DEFAULT.resume,
+      hide: Array.isArray(r.hide) ? r.hide.filter((k) => TABS.some((t) => t[0] === k && k !== "config")) : [],
       off: Array.isArray(r.off) ? r.off.filter((k) => TABS.some((t) => t[0] === k && k !== "config")) : [],
     };
     return this._rot;
@@ -442,7 +445,12 @@ class CentroControlPanel extends HTMLElement {
   }
   _rotKeys() {
     const off = this._rotLoad().off;
-    return TABS.map((t) => t[0]).filter((k) => k !== "config" && !off.includes(k));
+    const hide = this._rotLoad().hide;
+    return TABS.map((t) => t[0]).filter((k) => k !== "config" && !off.includes(k) && !hide.includes(k));
+  }
+  /** A tab hidden in Configuración is neither in the bar nor in the rotation (Configuración itself can't be hidden). */
+  _tabVisible(k) {
+    return k === "config" || !this._rotLoad().hide.includes(k);
   }
   _rotSchedule(ms) {
     clearTimeout(this._rotTimer);
@@ -487,6 +495,9 @@ class CentroControlPanel extends HTMLElement {
     else if (d.rot === "secs" && ROT_SECS.includes(Number(d.v))) r.secs = Number(d.v);
     else if (d.rot === "resume" && ROT_RESUME.includes(Number(d.v))) r.resume = Number(d.v);
     else if (d.rot === "tab" && TABS.some((t) => t[0] === d.v && d.v !== "config")) r.off = r.off.includes(d.v) ? r.off.filter((k) => k !== d.v) : [...r.off, d.v];
+    else if (d.rot === "vis" && TABS.some((t) => t[0] === d.v && d.v !== "config")) r.hide = r.hide.includes(d.v) ? r.hide.filter((k) => k !== d.v) : [...r.hide, d.v];
+    else if (d.rot === "visall") r.hide = [];
+    else if (d.rot === "visnone") r.hide = TABS.map((t) => t[0]).filter((k) => k !== "config");
     else if (d.rot === "all") r.off = [];
     else if (d.rot === "none") r.off = TABS.map((t) => t[0]).filter((k) => k !== "config");
     this._rotSave();
@@ -568,7 +579,12 @@ class CentroControlPanel extends HTMLElement {
     const probs = this.A("problemas", "lista") || [];
     const crit = probs.filter((p) => p.nivel === "critico" && !p.reconocido).length;
     const warn = probs.filter((p) => p.nivel === "aviso" && !p.reconocido).length;
-    root.querySelector("nav").innerHTML = TABS.map(([k, l, ic]) => {
+    if (!this._tabVisible(this._tab)) {
+      this._tab = "config";
+      history.replaceState(null, "", "#config");
+      this._layoutKey = "";
+    }
+    root.querySelector("nav").innerHTML = TABS.filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
       const badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
       return `<button class="${k === this._tab ? "on" : ""}" data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
     }).join("");
@@ -715,6 +731,7 @@ class CentroControlPanel extends HTMLElement {
   }
 
   _go(tab) {
+    if (!this._tabVisible(tab)) return;
     this._tab = tab;
     history.replaceState(null, "", "#" + tab);
     this._layoutKey = "";
@@ -1984,11 +2001,19 @@ class CentroControlPanel extends HTMLElement {
     );
     const tabsCard = this.card(
       "rtabs",
-      `<h3>${icon("mdi:tab-search")}Pestañas que se muestran</h3>
-      <div class="chips">${TABS.filter((t) => t[0] !== "config").map(([k, l, ic]) => chip("tab", k, l, !r.off.includes(k), icon(ic))).join("")}</div>
+      `<h3>${icon("mdi:tab-search")}Pestañas en la rotación</h3>
+      <div class="chips">${TABS.filter((t) => t[0] !== "config").map(([k, l, ic]) => (r.hide.includes(k) ? `<span class="chip dis" title="Oculta: actívala en «Pestañas visibles»">${icon(ic)}${esc(l)}</span>` : chip("tab", k, l, !r.off.includes(k), icon(ic)))).join("")}</div>
       <div class="chips" style="margin-top:12px"><button class="chip" data-rot="all">Todas</button><button class="chip" data-rot="none">Ninguna</button></div>
-      <div class="small muted" style="margin-top:10px">${keys.length} de ${TABS.length - 1} pestañas en la rotación. Estos ajustes se guardan solo en este dispositivo: la tablet y el PC pueden tener los suyos.</div>`,
+      <div class="small muted" style="margin-top:10px">${keys.length} de ${TABS.length - 1 - r.hide.length} pestañas visibles en la rotación; las ocultas no rotan. Estos ajustes se guardan solo en este dispositivo: la tablet y el PC pueden tener los suyos.</div>`,
       { c: C.violet }
+    );
+    const visCard = this.card(
+      "rvis",
+      `<h3>${icon("mdi:eye-outline")}Pestañas visibles</h3>
+      <div class="chips">${TABS.filter((t) => t[0] !== "config").map(([k, l, ic]) => chip("vis", k, l, !r.hide.includes(k), icon(ic))).join("")}</div>
+      <div class="chips" style="margin-top:12px"><button class="chip" data-rot="visall">Mostrar todas</button><button class="chip" data-rot="visnone">Ocultar todas</button></div>
+      <div class="small muted" style="margin-top:10px">Las pestañas ocultas desaparecen de la barra y tampoco entran en la rotación. Configuración siempre se ve. Se guarda solo en este dispositivo.</div>`,
+      { c: C.green }
     );
     const ids = Object.keys(this._hass?.states || {}).sort();
     const opts = (re) => ids.filter((e) => re.test(e)).map((e) => `<option value="${esc(e)}">${esc(this.name(e))}</option>`).join("");
@@ -2004,7 +2029,7 @@ class CentroControlPanel extends HTMLElement {
       <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar.</div>`,
       { c: C.amber }
     );
-    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, tabsCard, bellCard] }];
+    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, visCard, tabsCard, bellCard] }];
   }
 }
 

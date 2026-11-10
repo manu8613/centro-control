@@ -114,6 +114,9 @@ from .const import (
     CONF_INV_TEMP_CRIT,
     CONF_INV_TEMP_WARN,
     CONF_LIGHTS,
+    CONF_BELL_CALLS,
+    CONF_BELL_CAMERA,
+    CONF_BELL_OPEN,
     CONF_LIGHTS_EXCLUDE,
     CONF_PLUGS,
     CONF_PLUGS_EXCLUDE,
@@ -291,6 +294,11 @@ SECTIONS: dict[str, Fields] = {
         CONF_GAS_BILL: (SENSOR, False),
         CONF_GAS_FLOW: (SENSOR, False),
     },
+    "videoportero": {
+        CONF_BELL_CALLS: (_entity(["sensor", "binary_sensor", "event"], multiple=True), False),
+        CONF_BELL_CAMERA: (_entity("camera"), False),
+        CONF_BELL_OPEN: (_entity(["switch", "button", "lock", "script", "input_boolean"]), False),
+    },
     "luces": {
         CONF_LIGHTS: (_entity("light", multiple=True), False),
         CONF_LIGHTS_EXCLUDE: (_entity("light", multiple=True), False),
@@ -433,6 +441,9 @@ class CentroOptionsFlow(OptionsFlow):
 
     async def async_step_solar(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return await self._section("solar", user_input)
+
+    async def async_step_videoportero(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        return await self._section("videoportero", user_input)
 
     async def async_step_deye(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return await self._section("deye", user_input)

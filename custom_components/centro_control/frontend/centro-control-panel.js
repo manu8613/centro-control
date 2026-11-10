@@ -64,7 +64,15 @@ function fmtDate(iso, withTime = false) {
 const icon = (i, cls = "") => `<ha-icon class="${cls}" icon="${esc(i)}"></ha-icon>`;
 
 // ------------------------------------------------------------------ styles
-const CSS = `
+const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:12px}
+.bellbox{background:#0b1220;border:1px solid #22d3ee;border-radius:16px;box-shadow:0 0 30px rgba(34,211,238,.35);width:min(640px,100%);padding:12px;display:flex;flex-direction:column;gap:10px}
+.bellh{display:flex;align-items:center;gap:8px}.bellh .muted{flex:1}
+.bellx{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;font-size:20px}
+.bellv{min-height:180px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}.bellv>*{width:100%}
+.bellf{display:flex;justify-content:flex-end}
+.bellopen{background:#1e293b;color:inherit;border:1px solid #475569;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
+.bellopen.armed{background:#b45309;border-color:#f59e0b}
+
 :host{display:block;min-height:100vh;color:${C.text};font-family:var(--paper-font-body1_-_font-family, "Segoe UI", Roboto, sans-serif);
  background:radial-gradient(1200px 600px at 8% -10%, rgba(0,229,255,.16), transparent 60%),radial-gradient(900px 500px at 110% 0%, rgba(255,79,216,.10), transparent 60%),
  repeating-linear-gradient(0deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),repeating-linear-gradient(90deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),
@@ -294,6 +302,8 @@ class CentroControlPanel extends HTMLElement {
   set hass(h) {
     this._hass = h;
     if (this._menu) this._menu.hass = h;
+    if (this._bellEl && this._bellCard) this._bellCard.hass = h;
+    this._bellCheck();
     this._schedule();
   }
   set narrow(n) {
@@ -715,6 +725,13 @@ class CentroControlPanel extends HTMLElement {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
   _click(e) {
+    const bell = e.target.closest("[data-bell]");
+    if (bell) {
+      e.stopPropagation();
+      if (bell.dataset.bell === "close") this._bellClose();
+      else this._bellOpenDoor();
+      return;
+    }
     const lay = e.target.closest("[data-lay]");
     if (lay) {
       e.stopPropagation();
@@ -1584,6 +1601,103 @@ class CentroControlPanel extends HTMLElement {
   }
 
   // ---------------------------------------------------------------- 10 luces
+
+  // ---------------------------------------------------------------- videoportero: ventana emergente al llamar
+  _bellSensors() {
+    const set = this._list(this.set_("timbre_llamadas"));
+    if (set.length) return set;
+    return Object.keys(this._hass?.states || {}).filter((e) => /^(sensor|binary_sensor)\..*call_state$/.test(e));
+  }
+  _bellCamera() {
+    const c = this.set_("timbre_camara");
+    if (c) return c;
+    return Object.keys(this._hass?.states || {}).find((e) => e.startsWith("camera.") && /videoportero|telefonillo|portero|doorbell|timbre|puerta/i.test(e + " " + this.name(e)));
+  }
+  /** Returns {key, entity} of the first bell that is ringing right now, or null. */
+  _bellRinging() {
+    for (const e of this._bellSensors()) {
+      const st = this.st(e);
+      if (!st) continue;
+      const v = String(st.state).toLowerCase();
+      if (v === "ringing" || (e.startsWith("binary_sensor.") && v === "on")) return { key: e + "@" + (st.last_changed || ""), entity: e };
+      if (e.startsWith("event.") && st.last_changed && Date.now() - Date.parse(st.last_changed) < 30000) return { key: e + "@" + st.last_changed, entity: e };
+    }
+    return null;
+  }
+  _bellCheck() {
+    if (!this._hass || !this.cfg) return;
+    const r = this._bellRinging();
+    if (r) {
+      clearTimeout(this._bellTimer);
+      this._bellTimer = null;
+      if (!this._bellEl && r.key !== this._bellDismissed) this._bellOpen(r);
+    } else if (this._bellEl && !this._bellTimer) {
+      this._bellTimer = setTimeout(() => this._bellClose(), 30000);
+    }
+  }
+  _bellDoor() {
+    const d = this.set_("timbre_abrir");
+    if (!d) return null;
+    const dom = String(d).split(".")[0];
+    const svc = { switch: ["switch", "turn_on"], button: ["button", "press"], input_button: ["input_button", "press"], lock: ["lock", "unlock"], script: ["script", "turn_on"], input_boolean: ["input_boolean", "turn_on"] }[dom];
+    return svc ? { entity: d, domain: svc[0], service: svc[1] } : null;
+  }
+  async _bellOpen(r) {
+    this._bellEl = document.createElement("div");
+    this._bellEl.className = "bell";
+    this._bellKey = r.key;
+    const cam = this._bellCamera();
+    const door = this._bellDoor();
+    this._bellEl.innerHTML = `<div class="bellbox"><div class="bellh">${icon("mdi:doorbell-video")}<b>Llaman a la puerta</b><span class="muted small">${esc(this.name(r.entity))}</span><button class="bellx" data-bell="close" title="Cerrar">${icon("mdi:close")}</button></div>
+      <div class="bellv">${cam ? '<span class="muted small">Conectando con la cámara…</span>' : '<span class="muted small">Sin cámara configurada (Configurar → Videoportero).</span>'}</div>
+      ${door ? `<div class="bellf"><button class="bellopen" data-bell="open">${icon("mdi:door-open")}<span>Abrir puerta</span></button></div>` : ""}</div>`;
+    this.shadowRoot.appendChild(this._bellEl);
+    if (!cam) return;
+    try {
+      const helpers = await window.loadCardHelpers();
+      if (!this._bellEl) return;
+      const el = helpers.createCardElement({ type: "picture-entity", entity: cam, camera_view: "live", show_state: false, show_name: false });
+      el.hass = this._hass;
+      this._bellCard = el;
+      this._bellEl.querySelector(".bellv").replaceChildren(el);
+    } catch (e) {
+      const v = this._bellEl && this._bellEl.querySelector(".bellv");
+      if (v) v.innerHTML = `<span class="muted small">No se pudo abrir la imagen: ${esc((e && e.message) || String(e))}</span>`;
+    }
+  }
+  _bellClose() {
+    clearTimeout(this._bellTimer);
+    clearTimeout(this._bellArm);
+    this._bellTimer = this._bellArm = null;
+    if (this._bellEl) {
+      this._bellDismissed = this._bellKey;
+      this._bellEl.remove(); // removing the card element stops the video stream
+    }
+    this._bellEl = this._bellCard = null;
+  }
+  /** Two taps within 4 s: the first arms the button, the second opens the door. */
+  _bellOpenDoor() {
+    const d = this._bellDoor();
+    const b = this._bellEl && this._bellEl.querySelector(".bellopen");
+    if (!d || !b) return false;
+    if (!this._bellArm) {
+      b.classList.add("armed");
+      b.querySelector("span").textContent = "Toca otra vez para abrir";
+      this._bellArm = setTimeout(() => {
+        this._bellArm = null;
+        b.classList.remove("armed");
+        b.querySelector("span").textContent = "Abrir puerta";
+      }, 4000);
+      return false;
+    }
+    clearTimeout(this._bellArm);
+    this._bellArm = null;
+    this._hass.callService(d.domain, d.service, { entity_id: d.entity });
+    b.classList.remove("armed");
+    b.querySelector("span").textContent = "Puerta abierta";
+    return true;
+  }
+
   // ---------------------------------------------------------------- embedded Home Assistant cards (maps)
   _hostConfig(kind) {
     if (kind === "radar") return { type: "custom:weather-radar-card", map_style: "dark" };

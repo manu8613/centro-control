@@ -79,6 +79,9 @@ L = {  # key: (label, description or None)
     "gas_caudal": ("Caudal de gas (m³/h)", "Para avisar de consumo continuo."),
     "luces": ("Luces del panel", "Vacío = todas las luces (las nuevas aparecen solas)."),
     "luces_excluir": ("Luces que no quiero ver", None),
+    "timbre_llamadas": ("Aviso de llamada del videoportero", "Sensor del estado de la llamada (p. ej. «Call state»: pasa a «ringing» al llamar), sensor binario o evento. Vacío = se buscan solos los «call state»."),
+    "timbre_camara": ("Cámara del videoportero", "Cámara cuya imagen en directo sale en la ventana de llamada."),
+    "timbre_abrir": ("Abrir la puerta", "Relé o botón que abre la puerta (p. ej. «Door 1 relay»). Vacío = la ventana de llamada no muestra el botón de abrir."),
     "enchufes": ("Enchufes del panel", "Vacío = todos los interruptores y enchufes de Home Assistant (se añaden solos los nuevos)."),
     "enchufes_excluir": ("Enchufes o interruptores que no quiero ver", None),
     "patron_exterior": ("Palabras de luces exteriores", "Expresión regular sobre el nombre, p. ej. porche|patio|jardín."),
@@ -224,6 +227,7 @@ SECTIONS = {
         ],
     ),
     "gas": ("Gas", ["gas_auto", "gas_lectura", "gas_factor", "gas_coste_hoy", "gas_coste_mes", "gas_factura", "gas_caudal"]),
+    "videoportero": ("Videoportero: ventana de llamada", ["timbre_llamadas", "timbre_camara", "timbre_abrir"]),
     "luces": ("Luces y enchufes", ["luces", "luces_excluir", "enchufes", "enchufes_excluir", "patron_exterior"]),
     "clima": (
         "Temperaturas",

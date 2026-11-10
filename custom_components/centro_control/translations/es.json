@@ -36,6 +36,7 @@
           "deye": "Inversor Deye: carga por red y programas",
           "tarifa": "Tarifa de la luz",
           "gas": "Gas",
+          "videoportero": "Videoportero: ventana de llamada",
           "luces": "Luces y enchufes",
           "clima": "Temperaturas",
           "riego": "Riego",
@@ -186,6 +187,19 @@
           "gas_lectura": "Si no usas Gas TUR.",
           "gas_factor": "Se usa si Gas TUR no da el suyo.",
           "gas_caudal": "Para avisar de consumo continuo."
+        }
+      },
+      "videoportero": {
+        "title": "Videoportero: ventana de llamada",
+        "data": {
+          "timbre_llamadas": "Aviso de llamada del videoportero",
+          "timbre_camara": "Cámara del videoportero",
+          "timbre_abrir": "Abrir la puerta"
+        },
+        "data_description": {
+          "timbre_llamadas": "Sensor del estado de la llamada (p. ej. «Call state»: pasa a «ringing» al llamar), sensor binario o evento. Vacío = se buscan solos los «call state».",
+          "timbre_camara": "Cámara cuya imagen en directo sale en la ventana de llamada.",
+          "timbre_abrir": "Relé o botón que abre la puerta (p. ej. «Door 1 relay»). Vacío = la ventana de llamada no muestra el botón de abrir."
         }
       },
       "luces": {

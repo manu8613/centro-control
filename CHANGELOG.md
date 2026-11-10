@@ -21,6 +21,8 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 - Nueva pestaña **Enchufes**: enchufes e interruptores de Home Assistant con su estado, el consumo de los que miden (sensor de potencia del mismo dispositivo) y un toque para encender o apagar. Se agrupan por estancia (si Home Assistant las tiene) o en interior/exterior. Opciones nuevas en Configurar → «Luces y enchufes»: lista de enchufes (vacío = todos) y enchufes que no quieres ver.
 - Luces y enchufes **dinámicos**: se leen en directo de Home Assistant, así que un dispositivo nuevo aparece solo, sin «Regenerar panel» ni recargar. Se omiten las entidades ocultas, de diagnóstico o de configuración y las de la propia integración y de Solarman.
 
+- Temperaturas, al final de todo: **mapa de nubes y lluvia en tiempo real** (tarjeta Weather Radar Card) y **mapa de rayos en tiempo real** (mapa de Home Assistant con los rayos de Blitzortung), con el contador de rayos y la distancia y dirección del último. Se crean con las tarjetas que ya tienes instaladas, no hace falta configurar nada y se ven bien en la tablet.
+
 ### Cambiado
 - Programas 1 y 2 del Deye: se quita el deslizador de «Potencia» (en el inversor esa potencia también marca la velocidad de descarga); quedan la hora, el SOC y la carga.
 

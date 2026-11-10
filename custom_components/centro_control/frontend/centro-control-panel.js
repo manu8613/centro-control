@@ -607,6 +607,7 @@ class CentroControlPanel extends HTMLElement {
           slot.html = c.html;
         }
       }
+    this._mountHosts();
   }
 
   // ---------------------------------------------------------------- layout (per device)
@@ -1583,6 +1584,43 @@ class CentroControlPanel extends HTMLElement {
   }
 
   // ---------------------------------------------------------------- 10 luces
+  // ---------------------------------------------------------------- embedded Home Assistant cards (maps)
+  _hostConfig(kind) {
+    if (kind === "radar") return { type: "custom:weather-radar-card", map_style: "dark" };
+    return { type: "map", entities: [{ entity: "zone.home" }], geo_location_sources: ["blitzortung"], default_zoom: 8, dark_mode: true, aspect_ratio: "16:10" };
+  }
+  async _hostCreate(kind) {
+    const H = (this._hosts = this._hosts || {});
+    if (H[kind] || H[kind + ":busy"]) return;
+    H[kind + ":busy"] = true;
+    try {
+      const helpers = await window.loadCardHelpers();
+      const el = helpers.createCardElement(this._hostConfig(kind));
+      el.hass = this._hass;
+      H[kind] = el;
+      delete H[kind + ":err"];
+    } catch (e) {
+      H[kind + ":err"] = (e && e.message) || String(e);
+    }
+    H[kind + ":busy"] = false;
+    this._mountHosts();
+  }
+  /** Puts the (long-lived) card elements into their boxes; they survive tab changes and re-renders. */
+  _mountHosts() {
+    if (!this._grid) return;
+    const H = (this._hosts = this._hosts || {});
+    this._grid.querySelectorAll(".hostbox[data-host]").forEach((box) => {
+      const kind = box.dataset.host, el = H[kind];
+      if (el) {
+        el.hass = this._hass;
+        if (el.parentNode !== box) box.replaceChildren(el);
+        return;
+      }
+      if (H[kind + ":err"]) box.innerHTML = `<div class="empty">${icon("mdi:alert-circle-outline")} No se pudo crear el mapa: ${esc(H[kind + ":err"])}</div>`;
+      else this._hostCreate(kind);
+    });
+  }
+
   // ---------------------------------------------------------------- live device discovery (lights, plugs)
   _list(v) {
     return Array.isArray(v) ? v.map(String) : v ? [String(v)] : [];
@@ -1724,6 +1762,36 @@ class CentroControlPanel extends HTMLElement {
     if (temps.length) charts.push(this.chartCard("t24", "Temperaturas 24 h (°C)", C.orange, { kind: "history", hours: 24, unit: "°C", bucket: 15, height: 280, series: temps.slice(0, 12).map((e, i) => ({ name: this.name(e), entity: e, color: PALETTE[i % PALETTE.length] })) }));
     if ((this.cfg.humidities || []).length) charts.push(this.chartCard("h24", "Humedad 24 h (%)", C.blue, { kind: "history", hours: 24, unit: "%", bucket: 15, series: this.cfg.humidities.slice(0, 8).map((e, i) => ({ name: this.name(e), entity: e, color: PALETTE[(i + 6) % PALETTE.length] })) }));
     if (charts.length) secs.push({ cls: "w2", cards: charts });
+    secs.push(...this.mapCards());
+    return secs;
+  }
+
+  // Live maps (clouds/rain radar and lightning) built from the cards the person already has in Home Assistant.
+  mapCards() {
+    const secs = [];
+    secs.push({
+      id: "map_radar",
+      cls: "wall",
+      cards: [this.title("tm1", "Mapa de nubes y lluvia en tiempo real", "Radar animado (Weather Radar Card)", "mdi:weather-cloudy-clock", C.cyan), this.card("mapradar", `<div class="hostbox" data-host="radar" style="min-height:380px"></div>`, { c: C.cyan })],
+    });
+    const lt = Object.keys(this._hass.states).filter((e) => /^sensor\..*lightning_(counter|distance|azimuth)$/.test(e));
+    const pick = (suffix) => lt.find((e) => e.endsWith("lightning_" + suffix));
+    const cnt = pick("counter"), dist = pick("distance"), az = pick("azimuth");
+    const kpis = [];
+    if (cnt) kpis.push(this.kpi("lc", cnt, fmt(this.n(cnt) ?? 0, 0), "Rayos detectados", "mdi:flash", C.amber, 6));
+    if (dist) {
+      const d = this.n(dist);
+      kpis.push(this.kpi("ld", dist, d === null ? "—" : `${fmt(d, 1)} km`, "Último rayo, distancia", "mdi:map-marker-distance", d !== null && d < 10 ? C.red : d !== null && d < 30 ? C.amber : C.green, 6));
+    }
+    if (az) {
+      const a = this.n(az);
+      kpis.push(this.kpi("la", az, a === null ? "—" : `${fmt(a, 0)}°`, "Dirección del último rayo", "mdi:compass-outline", C.cyan, 6));
+    }
+    secs.push({
+      id: "map_rayos",
+      cls: "wall",
+      cards: [this.title("tm2", "Mapa de rayos en tiempo real", "Tormentas cerca de casa (Blitzortung)", "mdi:weather-lightning", C.amber), ...kpis, this.card("maprayos", `<div class="hostbox" data-host="rayos" style="min-height:380px"></div>`, { c: C.amber })],
+    });
     return secs;
   }
 

@@ -49,6 +49,7 @@ gráficas; cada dispositivo guarda su propio diseño.
 | **CO₂** | CO₂ evitado, emitido por la red y el gas, huella neta, equivalencias en árboles y km, independencia energética. |
 | **Gas** | Consumo y coste (detecta [Gas TUR](https://github.com/manu8613/gas-tur) automáticamente) y gráficas. |
 | **Luces** | Encendidas, interior y exterior, sin conexión, control de cada luz y «Apagar todas». Se leen en directo: una luz nueva aparece sola. |
+| **Temperaturas** (final) | Mapa de nubes y lluvia en tiempo real (requiere *Weather Radar Card* de HACS) y mapa de rayos (requiere la integración *Blitzortung*). |
 | **Enchufes** | Enchufes e interruptores con su estado y consumo (si miden), por estancia. Los nuevos aparecen solos; se pueden excluir en Configurar → Luces y enchufes. |
 | **Temperaturas** | Media, máxima y mínima, mapa de calor, termostatos y gráficas de temperatura y humedad. |
 | **Riego** | Cada zona con su tiempo, «Regar», humedad del suelo, lluvia, «Omitir si llueve» y «Parar todo». |

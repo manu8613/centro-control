@@ -33,6 +33,7 @@ const TABS = [
 ];
 // Rotación automática de pestañas (por dispositivo). «config» nunca rota.
 const ROT_KEY = "centro_control_ajustes";
+const BELL_KEY = "centro_control_timbre";
 const MAN_KEY = "centro_control_carga_manual";
 const ROT_SECS = [10, 15, 30, 60, 120, 300];
 const ROT_RESUME = [15, 30, 60, 120, 300];
@@ -69,6 +70,7 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 .bellh{display:flex;align-items:center;gap:8px}.bellh .muted{flex:1}
 .bellx{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;font-size:20px}
 .bellv{min-height:180px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}.bellv>*{width:100%}
+.bellin{width:100%;box-sizing:border-box;background:#0b1220;color:inherit;border:1px solid #334155;border-radius:8px;padding:6px 8px;font-size:13px}
 .bellf{display:flex;justify-content:flex-end}
 .bellopen{background:#1e293b;color:inherit;border:1px solid #475569;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
 .bellopen.armed{background:#b45309;border-color:#f59e0b}
@@ -788,6 +790,15 @@ class CentroControlPanel extends HTMLElement {
   _change(e) {
     const t = e.target;
     this._busy = Date.now() + 1500;
+    if (t.dataset.bellcfg) {
+      const pr = this._bellPrefs(), v = String(t.value || "").trim();
+      pr[t.dataset.bellcfg] = t.dataset.bellcfg === "timbre_llamadas" ? v.split(",").map((x) => x.trim()).filter(Boolean) : v;
+      try {
+        localStorage.setItem(BELL_KEY, JSON.stringify(pr));
+      } catch (_e) {}
+      this._schedule(true);
+      return;
+    }
     if (t.dataset.manin) {
       const man = this._manLoad(), v = Number(t.value);
       if (Number.isFinite(v)) man.soc = Math.max(Number(t.min) || 0, Math.min(Number(t.max) || 100, Math.round(v)));
@@ -1603,13 +1614,26 @@ class CentroControlPanel extends HTMLElement {
   // ---------------------------------------------------------------- 10 luces
 
   // ---------------------------------------------------------------- videoportero: ventana emergente al llamar
+  /** Videoportero settings: what is chosen in this device's Configuración tab wins over the integration options. */
+  _bellPrefs() {
+    try {
+      const v = JSON.parse(localStorage.getItem(BELL_KEY) || "{}");
+      return v && typeof v === "object" ? v : {};
+    } catch (_e) {
+      return {};
+    }
+  }
+  _bellSet(k) {
+    const v = this._bellPrefs()[k];
+    return Array.isArray(v) ? (v.length ? v : this.set_(k)) : v ? v : this.set_(k);
+  }
   _bellSensors() {
-    const set = this._list(this.set_("timbre_llamadas"));
+    const set = this._list(this._bellSet("timbre_llamadas"));
     if (set.length) return set;
     return Object.keys(this._hass?.states || {}).filter((e) => /^(sensor|binary_sensor)\..*call_state$/.test(e));
   }
   _bellCamera() {
-    const c = this.set_("timbre_camara");
+    const c = this._bellSet("timbre_camara");
     if (c) return c;
     return Object.keys(this._hass?.states || {}).find((e) => e.startsWith("camera.") && /videoportero|telefonillo|portero|doorbell|timbre|puerta/i.test(e + " " + this.name(e)));
   }
@@ -1636,7 +1660,7 @@ class CentroControlPanel extends HTMLElement {
     }
   }
   _bellDoor() {
-    const d = this.set_("timbre_abrir");
+    const d = this._bellSet("timbre_abrir");
     if (!d) return null;
     const dom = String(d).split(".")[0];
     const svc = { switch: ["switch", "turn_on"], button: ["button", "press"], input_button: ["input_button", "press"], lock: ["lock", "unlock"], script: ["script", "turn_on"], input_boolean: ["input_boolean", "turn_on"] }[dom];
@@ -1966,7 +1990,21 @@ class CentroControlPanel extends HTMLElement {
       <div class="small muted" style="margin-top:10px">${keys.length} de ${TABS.length - 1} pestañas en la rotación. Estos ajustes se guardan solo en este dispositivo: la tablet y el PC pueden tener los suyos.</div>`,
       { c: C.violet }
     );
-    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, tabsCard] }];
+    const ids = Object.keys(this._hass?.states || {}).sort();
+    const opts = (re) => ids.filter((e) => re.test(e)).map((e) => `<option value="${esc(e)}">${esc(this.name(e))}</option>`).join("");
+    const pr = this._bellPrefs();
+    const field = (k, label, list, val, ph) => `<div class="small muted" style="margin:10px 0 4px">${label}</div><input class="bellin" data-bellcfg="${k}" list="dl_${k}" value="${esc(val)}" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false"><datalist id="dl_${k}">${list}</datalist>`;
+    const bellCard = this.card(
+      "bellcfg",
+      `<h3>${icon("mdi:doorbell-video")}Videoportero: ventana de llamada</h3>
+      <div class="small muted">Escribe o elige la entidad. Vacío = usar la de la integración o, en llamada y cámara, detectarla sola. Se guarda solo en este dispositivo.</div>
+      ${field("timbre_llamadas", "Sensor de llamada (varios, separados por coma)", opts(/^(sensor|binary_sensor|event)\..*(call|ring|timbre|bell|llam)/i), this._list(pr.timbre_llamadas).join(", "), this._list(this.set_("timbre_llamadas")).join(", ") || "automático (*_call_state)")}
+      ${field("timbre_camara", "Cámara", opts(/^camera\./), pr.timbre_camara || "", this.set_("timbre_camara") || "automático (por nombre)")}
+      ${field("timbre_abrir", "Abrir puerta (interruptor, botón, cerradura o script)", opts(/^(switch|button|input_button|lock|script|input_boolean)\./), pr.timbre_abrir || "", this.set_("timbre_abrir") || "sin botón de abrir")}
+      <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar.</div>`,
+      { c: C.amber }
+    );
+    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, tabsCard, bellCard] }];
   }
 }
 

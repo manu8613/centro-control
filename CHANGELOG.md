@@ -8,11 +8,18 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.9.0] - 2026-11-11
+
+### Añadido
+- Pestaña Luz: nueva tarjeta **Importar factura en PDF**. Eliges uno o varios PDF de la factura de luz y Factusol lee las fechas, los kWh por tramo, los excedentes, la hucha y el total, fija el ciclo con los días que cobró la factura y actualiza la tarifa si los precios cambiaron. El PDF no se guarda en ningún sitio y se quita del selector al terminar.
+- El formulario manual de factura admite el primer día del periodo.
+- Necesita Factusol 0.2.0 o superior.
+
 ## [2.8.0] - 2026-11-11
 
 ### Añadido
 - Nueva pestaña **Luz**, junto a Gas, que muestra todos los datos de [Factusol](https://github.com/manu8613/Factusol) (factura 2.0TD): periodo y precios, factura del ciclo con su desglose, a pagar, coste real, hucha, historial de facturas y estado de la calibración de la pinza. Se detecta sola: si Factusol no está instalado, la pestaña explica cómo conseguirlo.
-- Desde la pestaña Luz se pueden **importar los CSV de i-DE** (varios a la vez), **calcular y aplicar la calibración**, **reconstruir el historial** y **registrar una factura de luz** sin salir del panel. Necesita Factusol 0.1.1 o superior.
+- Desde la pestaña Luz se pueden **importar los CSV de la distribuidora** (varios a la vez), **calcular y aplicar la calibración**, **reconstruir el historial** y **registrar una factura de luz** sin salir del panel. Necesita Factusol 0.1.1 o superior.
 - En el panel YAML de Lovelace se añade también la vista Luz cuando Factusol está instalado.
 
 ## [2.7.6] - 2026-11-11

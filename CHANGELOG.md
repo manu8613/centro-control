@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.7.6] - 2026-11-11
+
+### Corregido
+- La barra de pestañas ya no queda tapada por los botones «Rotar» y «Diseño» cuando hay muchas pestañas: ahora va siempre en una sola línea, se desliza con el dedo y muestra flechas ‹ › (solo cuando hay pestañas fuera de vista); al cambiar de pestaña, la activa se mantiene a la vista. Las pestañas son algo más compactas.
+
 ## [2.7.5] - 2026-11-10
 
 ### Añadido

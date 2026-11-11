@@ -84,8 +84,9 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(3,8,20,.88);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
 .menu{display:none}.menu.show{display:block}
 .brand{display:flex;align-items:center;gap:8px;color:${C.cyan};font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:14px;white-space:nowrap;text-shadow:0 0 10px ${C.cyan}aa;margin-right:6px}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
-nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 11px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;scroll-behavior:smooth;flex:1;min-width:0}nav::-webkit-scrollbar{display:none}
+.navar{all:unset;flex:none;cursor:pointer;width:28px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:10px;color:${C.cyan};font-size:22px;line-height:1;border:1px solid #12304d;background:#071426}.navar:hover{background:#0b1a30}.navar.off{display:none}
+nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
 nav button ha-icon{--mdc-icon-size:18px}
 nav button:hover{color:${C.text};background:#0b1a30}
 nav button.on{color:${C.cyan};background:${C.cyan}14;box-shadow:inset 0 -2px ${C.cyan}}
@@ -327,7 +328,7 @@ class CentroControlPanel extends HTMLElement {
     if (this._built) return;
     this._built = true;
     const root = this.shadowRoot;
-    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><nav></nav><button class="laybtn rotbtn" data-rot="toggle"></button><button class="laybtn" data-lay="toggle" title="Mover y redimensionar tarjetas y gráficas en este dispositivo">${icon("mdi:view-dashboard-edit-outline")}<span>Diseño</span></button></header><main><div class="grid"></div></main>`;
+    root.innerHTML = `<style>${CSS}</style><header><span class="menu"></span><div class="brand">${icon("mdi:atom-variant")}<span class="t"></span></div><button class="navar off" data-nav="l" title="Pestañas anteriores">‹</button><nav></nav><button class="navar off" data-nav="r" title="Más pestañas">›</button><button class="laybtn rotbtn" data-rot="toggle"></button><button class="laybtn" data-lay="toggle" title="Mover y redimensionar tarjetas y gráficas en este dispositivo">${icon("mdi:view-dashboard-edit-outline")}<span>Diseño</span></button></header><main><div class="grid"></div></main>`;
     const holder = root.querySelector(".menu");
     this._menu = document.createElement("ha-menu-button");
     holder.appendChild(this._menu);
@@ -336,6 +337,9 @@ class CentroControlPanel extends HTMLElement {
     holder.classList.toggle("show", !!this._narrow);
     this._grid = root.querySelector(".grid");
     root.addEventListener("click", (e) => this._click(e));
+    const nav = root.querySelector("nav");
+    if (nav) nav.addEventListener("scroll", () => this._navArrows(), { passive: true });
+    if (typeof window.addEventListener === "function") window.addEventListener("resize", () => this._navArrows());
     root.addEventListener("change", (e) => this._change(e));
     root.addEventListener("input", (e) => {
       this._busy = Date.now() + 2500;
@@ -584,10 +588,22 @@ class CentroControlPanel extends HTMLElement {
       history.replaceState(null, "", "#config");
       this._layoutKey = "";
     }
-    root.querySelector("nav").innerHTML = TABS.filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
+    const navEl = root.querySelector("nav");
+    const keepScroll = navEl.scrollLeft;
+    const tabChanged = this._navTab !== this._tab;
+    this._navTab = this._tab;
+    navEl.innerHTML = TABS.filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
       const badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
       return `<button class="${k === this._tab ? "on" : ""}" data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
     }).join("");
+    navEl.style.scrollBehavior = "auto";
+    navEl.scrollLeft = keepScroll;
+    if (tabChanged) {
+      const on = navEl.querySelector("button.on");
+      if (on && (on.offsetLeft < navEl.scrollLeft || on.offsetLeft + on.offsetWidth > navEl.scrollLeft + navEl.clientWidth)) navEl.scrollLeft = Math.max(0, on.offsetLeft - (navEl.clientWidth - on.offsetWidth) / 2);
+    }
+    navEl.style.scrollBehavior = "";
+    this._navArrows();
     let sections;
     try {
       sections = this["v_" + this._tab]();
@@ -743,7 +759,23 @@ class CentroControlPanel extends HTMLElement {
   _fire(type, detail) {
     this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true }));
   }
+  /** Shows the ‹ › arrows only when the tab bar overflows, and only on the side that still has tabs. */
+  _navArrows() {
+    const r = this.shadowRoot;
+    const nav = r && r.querySelector && r.querySelector("nav");
+    if (!nav) return;
+    const max = nav.scrollWidth - nav.clientWidth;
+    const l = r.querySelector('[data-nav="l"]'), rr = r.querySelector('[data-nav="r"]');
+    if (l) l.classList.toggle("off", !(max > 2 && nav.scrollLeft > 2));
+    if (rr) rr.classList.toggle("off", !(max > 2 && nav.scrollLeft < max - 2));
+  }
   _click(e) {
+    const arrow = e.target.closest && e.target.closest("[data-nav]");
+    if (arrow) {
+      const nav = this.shadowRoot.querySelector("nav");
+      nav.scrollBy({ left: (arrow.dataset.nav === "l" ? -1 : 1) * Math.max(160, nav.clientWidth * 0.6), behavior: "smooth" });
+      return;
+    }
     const bell = e.target.closest("[data-bell]");
     if (bell) {
       e.stopPropagation();

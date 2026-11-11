@@ -1,13 +1,14 @@
 # Estado
 
-Versión publicada: v2.7.5 (v2.7.6 en PR) · Commit de referencia: `e9cb896` · Actualizado: 2026-11-10
+Versión publicada: v2.7.6 (v2.8.0 en PR) · Commit de referencia: `89e2fcc` · Actualizado: 2026-11-11
 
 ## Funciona (comprobado)
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
 - Detecta Gas TUR si está instalado.
 - v2.6.0: botón Rotar + pestaña Configuración (rotación de pestañas por dispositivo). Falta probarla en la tablet real.
 - v2.7.0: Solar con controles del Deye (carga por red, programas 1 y 2), nubosidad a 5 días y recomendación de carga nocturna. Probado con las opciones reales de un Deye (Solarman).
-- v2.7.6 (PR): la barra de pestañas va en una línea con deslizamiento y flechas ‹ › en vez de quedar tapada por Rotar/Diseño.
+- v2.8.0 (PR): pestaña Luz junto a Gas con los datos de Factusol (detección por registro de entidades) e importación de CSV de i-DE, calibración, reconstrucción del historial y registro de facturas. Probada con estados simulados y pytest; falta probarla en la casa real.
+- v2.7.6: la barra de pestañas va en una línea con deslizamiento y flechas ‹ › en vez de quedar tapada por Rotar/Diseño.
 - v2.7.5: pestañas visibles/ocultas por dispositivo en Configuración (las ocultas no rotan).
 - v2.7.4: intensidad de carga por red en vatios y limitada a la potencia contratada menos el consumo de la casa; programas 1 y 2 sin deslizador de potencia; SOC nocturno manual junto al aconsejado; tarjetas Estado/Fallo/Alarma del inversor en verde/ámbar/rojo; pestaña Enchufes y luces/enchufes dinámicos; mapas de nubes (radar) y rayos al final de Temperaturas; ventana emergente del videoportero con imagen en directo y botón de abrir puerta (opcional). Sin probar en el videoportero real.
 - v2.7.3: previsión de nubes robusta (reintento cada 2 min, daily/twice_daily/hourly, hora local) y diagnóstico en el sensor y en la pestaña Solar.
@@ -22,3 +23,11 @@ Versión publicada: v2.7.5 (v2.7.6 en PR) · Commit de referencia: `e9cb896` · 
 
 ## Últimos cierres
 <!-- Pegar aquí el bloque CIERRE de cada tarea (ver CLAUDE.md). Conservar solo los 5 últimos. -->
+
+**Centro de Control · feat/pestana-luz-factusol · v2.8.0**
+- Objetivo: pestaña Luz junto a Gas con todos los datos de Factusol y su importación/calibración.
+- Cambios: `manager.luz_entities()` (registro, plataforma `factusol`), `ctx.luz`, `v_luz` en el JS, vista Luz condicional en el panel YAML, estilos de formulario; README y CHANGELOG.
+- Pruebas: pytest 74 OK (nuevo test de la vista Luz); humo del JS con estados simulados (node).
+- Verificado: no se tocó la detección de Gas TUR; sin Factusol la pestaña muestra un aviso.
+- Pendientes: probar en la casa real (CSV real y registro de factura); Factusol ≥ 0.1.1 necesario.
+- Próximo paso: fusionar con CI en verde y actualizar desde HACS.

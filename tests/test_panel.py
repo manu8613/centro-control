@@ -270,3 +270,20 @@ def test_yaml_dump_roundtrip():
     yaml = pytest.importorskip("yaml")
     panel = build_panel(context())
     assert yaml.safe_load(yaml.safe_dump(panel, allow_unicode=True)) == panel
+
+
+def test_luz_tab_only_with_factusol():
+    assert "luz" not in [v["path"] for v in build_panel(context())["views"]]
+    luz = {
+        "factura_estimada": "sensor.factusol_factura_estimada",
+        "factura_a_pagar": "sensor.factusol_factura_a_pagar",
+        "precio_energia": "sensor.factusol_precio_energia",
+        "periodo_actual": "sensor.factusol_periodo_actual",
+    }
+    panel = build_panel(context(luz=luz))
+    paths = [v["path"] for v in panel["views"]]
+    assert paths.index("luz") == paths.index("gas") + 1
+    assert len(paths) == 13
+    env = FakeHA().env()
+    for template in _templates(panel, []):
+        assert "Undefined" not in env.from_string(template).render()

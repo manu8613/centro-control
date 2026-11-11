@@ -1,13 +1,14 @@
 # Estado
 
-Versión publicada: v2.7.4 (v2.7.5 en PR) · Commit de referencia: `daf398c` · Actualizado: 2026-11-10
+Versión publicada: v2.7.5 (v2.7.6 en PR) · Commit de referencia: `e9cb896` · Actualizado: 2026-11-10
 
 ## Funciona (comprobado)
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
 - Detecta Gas TUR si está instalado.
 - v2.6.0: botón Rotar + pestaña Configuración (rotación de pestañas por dispositivo). Falta probarla en la tablet real.
 - v2.7.0: Solar con controles del Deye (carga por red, programas 1 y 2), nubosidad a 5 días y recomendación de carga nocturna. Probado con las opciones reales de un Deye (Solarman).
-- v2.7.5 (PR): pestañas visibles/ocultas por dispositivo en Configuración (las ocultas no rotan).
+- v2.7.6 (PR): la barra de pestañas pasa a una segunda fila en vez de quedar tapada por Rotar/Diseño.
+- v2.7.5: pestañas visibles/ocultas por dispositivo en Configuración (las ocultas no rotan).
 - v2.7.4: intensidad de carga por red en vatios y limitada a la potencia contratada menos el consumo de la casa; programas 1 y 2 sin deslizador de potencia; SOC nocturno manual junto al aconsejado; tarjetas Estado/Fallo/Alarma del inversor en verde/ámbar/rojo; pestaña Enchufes y luces/enchufes dinámicos; mapas de nubes (radar) y rayos al final de Temperaturas; ventana emergente del videoportero con imagen en directo y botón de abrir puerta (opcional). Sin probar en el videoportero real.
 - v2.7.3: previsión de nubes robusta (reintento cada 2 min, daily/twice_daily/hourly, hora local) y diagnóstico en el sensor y en la pestaña Solar.
 - v2.7.2: controles numéricos del Deye con valor exacto en tiempo real y caja editable.

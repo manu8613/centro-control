@@ -81,11 +81,11 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
  repeating-linear-gradient(0deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),repeating-linear-gradient(90deg, rgba(0,229,255,.035) 0 1px, transparent 1px 44px),
  linear-gradient(180deg,#030712,#060d20)}
 *{box-sizing:border-box}
-header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(3,8,20,.88);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:flex-start;gap:6px;padding:6px 10px;background:rgba(3,8,20,.88);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
 .menu{display:none}.menu.show{display:block}
 .brand{display:flex;align-items:center;gap:8px;color:${C.cyan};font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:14px;white-space:nowrap;text-shadow:0 0 10px ${C.cyan}aa;margin-right:6px}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0}
-nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:6px;padding:8px 11px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
+nav{display:flex;flex-wrap:wrap;gap:2px;flex:1;min-width:0}
+nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
 nav button ha-icon{--mdc-icon-size:18px}
 nav button:hover{color:${C.text};background:#0b1a30}
 nav button.on{color:${C.cyan};background:${C.cyan}14;box-shadow:inset 0 -2px ${C.cyan}}

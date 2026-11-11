@@ -1667,7 +1667,7 @@ class CentroControlPanel extends HTMLElement {
   v_luz() {
     const f = this.cfg.luz || {};
     if (!Object.keys(f).length)
-      return [{ cards: [this.title("t", "Luz", "Factura 2.0TD con Factusol", "mdi:flash", C.amber), this.empty("e", "Instala Factusol desde HACS (manu8613/Factusol) y esta pestaña se rellena sola, con la factura, la hucha, la calibración y la importación de facturas y CSV de i-DE.")] }];
+      return [{ cards: [this.title("t", "Luz", "Factura 2.0TD con Factusol", "mdi:flash", C.amber), this.empty("e", "Instala Factusol desde HACS (manu8613/Factusol) y esta pestaña se rellena sola, con la factura, la hucha, la calibración y la importación de facturas y CSV de la distribuidora.")] }];
     const N = (k) => this.n(f[k]);
     const at = (k) => this.st(f[k])?.attributes || {};
     const bill = at("factura_estimada");
@@ -1709,13 +1709,13 @@ class CentroControlPanel extends HTMLElement {
     const meses = at("historial_facturas").meses || [];
     const maxB = Math.max(1, ...meses.map((m) => Math.abs(dec(m.total_bruto))));
     const hist = meses.slice(-12).reverse().map((m) => `<tr><td>${fmtDate(m.ciclo)} ${m.real ? "" : `<span class="small muted" title="Estimada">∿</span>`}${m.cerrado ? "" : `<span class="small muted"> en curso</span>`}</td><td class="r">${kwh(m.consumo_kwh, 0)}</td><td class="r">${kwh(m.excedente_kwh, 0)}</td><td class="r" style="color:${C.amber}"><b>${eur(m.total_bruto)}</b><div style="height:3px;margin-top:2px;border-radius:2px;background:${C.amber};width:${Math.round((Math.abs(dec(m.total_bruto)) / maxB) * 100)}%"></div></td><td class="r">${eur(m.total_a_pagar)}</td><td class="r" style="color:${C.gold}">${eur(m.coste_real)}</td><td class="r" style="color:${C.pink}">${eur(m.saldo_hucha)}</td></tr>`).join("");
-    const histCard = this.card("fh", `<h3>${icon("mdi:history")}Historial de facturas</h3>${prev.length ? `<div class="small muted" style="margin-bottom:6px">${prev.join(" · ")}</div>` : ""}${hist ? `<table><tr><th>Ciclo</th><th class="r">Consumo</th><th class="r">Excedente</th><th class="r">Bruto</th><th class="r">A pagar</th><th class="r">Coste real</th><th class="r">Hucha</th></tr>${hist}</table><div class="small muted" style="margin-top:6px">∿ estimada con el libro de horas · sin marca = factura registrada</div>` : `<div class="empty">Aún no hay ciclos. Importa un CSV de i-DE o registra una factura.</div>`}`, { c: C.amber });
+    const histCard = this.card("fh", `<h3>${icon("mdi:history")}Historial de facturas</h3>${prev.length ? `<div class="small muted" style="margin-bottom:6px">${prev.join(" · ")}</div>` : ""}${hist ? `<table><tr><th>Ciclo</th><th class="r">Consumo</th><th class="r">Excedente</th><th class="r">Bruto</th><th class="r">A pagar</th><th class="r">Coste real</th><th class="r">Hucha</th></tr>${hist}</table><div class="small muted" style="margin-top:6px">∿ estimada con el libro de horas · sin marca = factura registrada</div>` : `<div class="empty">Aún no hay ciclos. Importa un CSV de la distribuidora o registra una factura.</div>`}`, { c: C.amber });
     // calibración
     const dImp = N("desfase_importacion"), dExp = N("desfase_exportacion");
     const ult = this.s(f.ultimo_dato_oficial);
     const num = (key, d) => (f[key] ? fmt(N(key), d) : "—");
     const calState = this.card("fc", `<h3>${icon("mdi:tune-vertical")}Calibración de la pinza</h3>
-      <table><tr><th></th><th class="r">Desfase con i-DE</th><th class="r">Factor</th><th class="r">Desfase Wh/h</th></tr>
+      <table><tr><th></th><th class="r">Desfase con la distribuidora</th><th class="r">Factor</th><th class="r">Desfase Wh/h</th></tr>
       <tr><td>Importación</td><td class="r">${isNum(dImp) ? fmt(dImp, 2) + " %" : "—"}</td><td class="r">${num("factor_importacion", 4)}</td><td class="r">${num("desfase_importacion_wh", 2)}</td></tr>
       <tr><td>Exportación</td><td class="r">${isNum(dExp) ? fmt(dExp, 2) + " %" : "—"}</td><td class="r">${num("factor_exportacion", 4)}</td><td class="r">${num("desfase_exportacion_wh", 2)}</td></tr></table>
       <div class="small muted" style="margin-top:6px">Último dato oficial: ${ult && ult !== "unknown" ? fmtDate(ult, true) : "ninguno todavía"}. Las horas con dato oficial se facturan con ese dato; el factor y el desfase solo corrigen las horas aún sin dato.</div>`, { c: C.cyan });
@@ -1724,8 +1724,8 @@ class CentroControlPanel extends HTMLElement {
       <div class="small muted" style="margin-bottom:8px">Sube la factura de luz en PDF (puedes elegir varias): se leen las fechas del periodo, los kWh por tramo, excedentes, hucha y total, y el ciclo pasa a durar los días que cobró la factura. Si los precios han cambiado, se actualiza la tarifa. El PDF no se guarda en ningún sitio y se quita del selector al terminar.</div>
       <input data-luzpdfs type="file" accept=".pdf,application/pdf" multiple style="width:100%;margin-bottom:8px">
       <button class="btn full" style="--c:${C.amber}" data-luz="pdf">${icon("mdi:file-upload-outline")}Importar factura(s)</button>`, { c: C.amber });
-    const csvCard = this.card("fi", `<h3>${icon("mdi:file-delimited-outline")}Importar CSV de i-DE</h3>
-      <div class="small muted" style="margin-bottom:8px">Descarga el CSV de curvas horarias (periodo o facturado) desde tu área de cliente de i-DE y súbelo aquí; puedes elegir varios. Después calcula la calibración.</div>
+    const csvCard = this.card("fi", `<h3>${icon("mdi:file-delimited-outline")}Importar CSV de la distribuidora</h3>
+      <div class="small muted" style="margin-bottom:8px">Descarga el CSV de curvas horarias (periodo o facturado) desde tu área de cliente de la distribuidora y súbelo aquí; puedes elegir varios. Después calcula la calibración.</div>
       <input data-luzfiles type="file" accept=".csv,.txt,text/csv" multiple style="width:100%;margin-bottom:8px">
       <button class="btn full" style="--c:${C.cyan}" data-luz="import">${icon("mdi:upload")}Importar CSV</button>`, { c: C.cyan });
     const calCard = this.card("fk", `<h3>${icon("mdi:scale-balance")}Ajuste y calibración</h3>
@@ -1756,7 +1756,7 @@ class CentroControlPanel extends HTMLElement {
       return `<tr><td>${k === "importacion" ? "Importación" : "Exportación"}</td><td class="r">${r.horas ?? "—"}</td><td class="r">${fmt(r.propio_kwh, 0)}</td><td class="r">${fmt(r.oficial_kwh, 0)}</td><td class="r">${fmt(r.desfase_pct, 2)} %</td><td class="r">${fmt(r.factor_minimos_cuadrados ?? r.factor, 4)}</td><td class="r">${fmt(r.desfase_wh_por_hora, 2)}</td><td class="r">${fmt(r.r2, 3)}</td></tr>`;
     }).join("");
     if (!fits) return `<pre class="small" style="white-space:pre-wrap">${esc(JSON.stringify(rep, null, 1).slice(0, 1500))}</pre>`;
-    return `<table><tr><th></th><th class="r">Horas</th><th class="r">Pinza kWh</th><th class="r">i-DE kWh</th><th class="r">Desfase</th><th class="r">Factor</th><th class="r">Wh/h</th><th class="r">R²</th></tr>${fits}</table>${rep.aplicada ? `<div class="small" style="color:${C.green};margin-top:6px">✓ Calibración aplicada.</div>` : `<div class="small muted" style="margin-top:6px">Informe sin aplicar: pulsa «Aplicar calibración» para usarlo.</div>`}`;
+    return `<table><tr><th></th><th class="r">Horas</th><th class="r">Pinza kWh</th><th class="r">Oficial kWh</th><th class="r">Desfase</th><th class="r">Factor</th><th class="r">Wh/h</th><th class="r">R²</th></tr>${fits}</table>${rep.aplicada ? `<div class="small" style="color:${C.green};margin-top:6px">✓ Calibración aplicada.</div>` : `<div class="small muted" style="margin-top:6px">Informe sin aplicar: pulsa «Aplicar calibración» para usarlo.</div>`}`;
   }
   async _luzAction(act) {
     if (this._luzBusy) return;

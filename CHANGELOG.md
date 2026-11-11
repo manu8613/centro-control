@@ -19,7 +19,7 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
 ### Añadido
 - Nueva pestaña **Luz**, junto a Gas, que muestra todos los datos de [Factusol](https://github.com/manu8613/Factusol) (factura 2.0TD): periodo y precios, factura del ciclo con su desglose, a pagar, coste real, hucha, historial de facturas y estado de la calibración de la pinza. Se detecta sola: si Factusol no está instalado, la pestaña explica cómo conseguirlo.
-- Desde la pestaña Luz se pueden **importar los CSV de i-DE** (varios a la vez), **calcular y aplicar la calibración**, **reconstruir el historial** y **registrar una factura de luz** sin salir del panel. Necesita Factusol 0.1.1 o superior.
+- Desde la pestaña Luz se pueden **importar los CSV de la distribuidora** (varios a la vez), **calcular y aplicar la calibración**, **reconstruir el historial** y **registrar una factura de luz** sin salir del panel. Necesita Factusol 0.1.1 o superior.
 - En el panel YAML de Lovelace se añade también la vista Luz cuando Factusol está instalado.
 
 ## [2.7.6] - 2026-11-11

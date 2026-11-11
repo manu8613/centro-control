@@ -1676,6 +1676,12 @@ class CentroControlPanel extends HTMLElement {
     const perName = { punta: "Punta", llano: "Llano", valle: "Valle" }[per] || "—";
     const perCol = { punta: C.red, llano: C.amber, valle: C.green }[per] || C.muted;
     const k = (key, ent, value, label, ic, c, w = 6) => ent && cards.push(this.kpi(key, ent, value, label, ic, c, w));
+    if (f.saldo_hucha_proyectado) {
+      const proj = N("saldo_hucha_proyectado"), billed = N("saldo_hucha_facturado");
+      const delta = isNum(proj) && isNum(billed) ? proj - billed : null;
+      const trend = delta === null || Math.abs(delta) < 0.005 ? "" : `<div class="small" style="color:${delta > 0 ? C.green : C.amber}">${delta > 0 ? "▲ +" : "▼ −"}${eur(Math.abs(delta))} este ciclo</div>`;
+      cards.push(this.card("hu", `<div class="kpi" style="align-items:center"><div class="ic">${icon("mdi:piggy-bank")}</div><div style="flex:1"><div class="l">Hucha restante</div><div class="big" style="--c:${C.pink};font-size:30px">${eur(proj)}</div><div class="small muted">Facturada hasta ahora: ${eur(billed)}</div>${trend}</div></div>`, { c: C.pink, w: 12, click: f.saldo_hucha_proyectado }));
+    }
     k("pe", f.periodo_actual, perName, "Periodo ahora", "mdi:clock-time-four", perCol);
     k("pr", f.precio_energia, `${fmt(N("precio_energia"), 5)} €/kWh`, "Precio de la energía", "mdi:cash", C.amber);
     k("ps", f.precio_excedentes, `${fmt(N("precio_excedentes"), 5)} €/kWh`, "Precio de excedentes", "mdi:cash-plus", C.lime);

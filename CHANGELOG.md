@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.9.1] - 2026-11-11
+
+### Añadido
+- Pestaña Luz: indicador destacado **Hucha restante** (saldo proyectado al cierre del ciclo), con el saldo ya facturado y lo que sube o baja en el ciclo en curso.
+
 ## [2.9.0] - 2026-11-11
 
 ### Añadido

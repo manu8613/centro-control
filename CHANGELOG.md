@@ -8,6 +8,13 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.9.0] - 2026-11-11
+
+### Añadido
+- Pestaña Luz: nueva tarjeta **Importar factura en PDF**. Eliges uno o varios PDF de la factura de luz y Factusol lee las fechas, los kWh por tramo, los excedentes, la hucha y el total, fija el ciclo con los días que cobró la factura y actualiza la tarifa si los precios cambiaron. El PDF no se guarda en ningún sitio y se quita del selector al terminar.
+- El formulario manual de factura admite el primer día del periodo.
+- Necesita Factusol 0.2.0 o superior.
+
 ## [2.8.0] - 2026-11-11
 
 ### Añadido

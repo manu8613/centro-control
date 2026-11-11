@@ -117,6 +117,36 @@ GAS_TUR_KEYS = (
     "precio_m3",
     "factor_conversion",
 )
+FACTUSOL_PLATFORM = "factusol"
+FACTUSOL_KEYS = (
+    "periodo_actual",
+    "precio_energia",
+    "precio_excedentes",
+    "consumo_punta",
+    "consumo_llano",
+    "consumo_valle",
+    "consumo_total",
+    "excedentes",
+    "factura_estimada",
+    "hucha_aplicada",
+    "factura_a_pagar",
+    "hucha_ingreso",
+    "coste_real",
+    "saldo_hucha_proyectado",
+    "saldo_hucha_facturado",
+    "factura_anterior",
+    "coste_real_anterior",
+    "coste_real_ano",
+    "historial_facturas",
+    "costes_fijos",
+    "desfase_importacion",
+    "desfase_exportacion",
+    "ultimo_dato_oficial",
+    "factor_importacion",
+    "factor_exportacion",
+    "desfase_importacion_wh",
+    "desfase_exportacion_wh",
+)
 WEATHER_PLATFORMS = frozenset(
     {
         "accuweather",
@@ -291,6 +321,21 @@ class CentroManager(DataUpdateCoordinator[None]):
                 if key in GAS_TUR_KEYS and key not in found:
                     found[key] = entry.entity_id
         found.update({k: v for k, v in manual.items() if v})
+        return found
+
+    def luz_entities(self) -> dict[str, str]:
+        """Entities of the Factusol integration (electricity bill), if it is installed.
+
+        Factusol unique ids are "<entry_id>_<key>"; they are looked up in the registry on
+        every call so the tab appears as soon as Factusol is set up, without a restart.
+        """
+        found: dict[str, str] = {}
+        for entry in er.async_get(self.hass).entities.values():
+            if entry.platform != FACTUSOL_PLATFORM or not entry.unique_id or entry.disabled_by:
+                continue
+            key = entry.unique_id.split("_", 1)[1] if "_" in entry.unique_id else ""
+            if key in FACTUSOL_KEYS and key not in found:
+                found[key] = entry.entity_id
         return found
 
     @callback

@@ -1,6 +1,6 @@
 """Lovelace dashboard of Centro de Control (pure data, no Home Assistant imports).
 
-Twelve tabs with a dark, neon "control room" look. Needs, from HACS:
+Twelve tabs (thirteen when Factusol is installed) with a dark, neon "control room" look. Needs, from HACS:
 Mushroom, ApexCharts card, card-mod and Power Flow Card Plus.
 
 ``build_panel`` receives the real entity ids (ours and the user's) and returns
@@ -102,6 +102,7 @@ class PanelContext:
     temperatures: list[str] = field(default_factory=list)
     humidities: list[str] = field(default_factory=list)
     gas: dict[str, str] = field(default_factory=dict)  # Gas TUR / manual gas entities
+    luz: dict[str, str] = field(default_factory=dict)  # Factusol (electricity bill) entities
 
     def s(self, key: str) -> Any:
         value = self.settings.get(key)
@@ -329,6 +330,7 @@ class Templates:
 
 def build_panel(ctx: PanelContext, base_path: str = "centro-control") -> dict[str, Any]:
     t = Templates(ctx.ids)
+    gas_view = _gas(ctx, t)
     views = [
         _overview(ctx, t, base_path),
         _grid(ctx, t),
@@ -338,7 +340,8 @@ def build_panel(ctx: PanelContext, base_path: str = "centro-control") -> dict[st
         _problems(ctx, t),
         _cost(ctx, t),
         _co2(ctx, t),
-        _gas(ctx, t),
+        gas_view,
+        *([_luz(ctx)] if ctx.luz else []),
         _lights(ctx, t),
         _climate(ctx, t),
         _irrigation(ctx, t),
@@ -1354,6 +1357,33 @@ def _gas(ctx: PanelContext, t: Templates) -> dict[str, Any]:
     return view(
         "Gas", "gas", "mdi:fire", [section(cards), section(bill or [_empty("Sin datos de factura de gas.")]), section(charts, span=2)]
     )
+
+
+# ---------------------------------------------------------------------- 9b. luz (Factusol)
+
+
+def _luz(ctx: PanelContext) -> dict[str, Any]:
+    """Electricity bill from the Factusol integration (only built when it is installed)."""
+    f = ctx.luz
+    cards: list[dict[str, Any]] = [title("Luz", "Factura 2.0TD de Factusol", "mdi:flash", AMBER)]
+    spec = (
+        ("factura_estimada", "Factura del ciclo (bruto)", "mdi:receipt-text", AMBER, 2, "€"),
+        ("factura_a_pagar", "A pagar", "mdi:cash-check", GREEN, 2, "€"),
+        ("coste_real", "Coste real", "mdi:cash-multiple", GOLD, 2, "€"),
+        ("saldo_hucha_proyectado", "Hucha proyectada", "mdi:piggy-bank", PINK, 2, "€"),
+        ("consumo_total", "Consumo neto del ciclo", "mdi:home-lightning-bolt", CYAN, 1, "kWh"),
+        ("excedentes", "Excedentes del ciclo", "mdi:solar-power-variant", LIME, 1, "kWh"),
+        ("precio_energia", "Precio de la energía", "mdi:cash", AMBER, 5, "€/kWh"),
+        ("precio_excedentes", "Precio de los excedentes", "mdi:cash-plus", LIME, 5, "€/kWh"),
+    )
+    for key, label, icon, color, dec, unit in spec:
+        if e := f.get(key):
+            cards.append(tpl(e, MACROS + "{{ n(states('" + e + "'), " + str(dec) + ") }} " + unit, label, icon, color))
+    if e := f.get("periodo_actual"):
+        cards.append(
+            tpl(e, "{{ states('" + e + "') | capitalize }}", "Periodo tarifario ahora", "mdi:clock-time-four", VIOLET)
+        )
+    return view("Luz", "luz", "mdi:flash", [section(cards)])
 
 
 # ---------------------------------------------------------------------- 10. luces

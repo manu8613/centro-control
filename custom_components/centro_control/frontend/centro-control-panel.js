@@ -25,6 +25,7 @@ const TABS = [
   ["coste", "Coste", "mdi:cash-multiple"],
   ["co2", "CO₂", "mdi:leaf-circle"],
   ["gas", "Gas", "mdi:fire"],
+  ["luz", "Luz", "mdi:flash"],
   ["luces", "Luces", "mdi:lightbulb-group"],
   ["enchufes", "Enchufes", "mdi:power-socket-eu"],
   ["clima", "Temperaturas", "mdi:thermometer"],
@@ -140,6 +141,7 @@ th{color:${C.muted};font-weight:600;font-size:11px;text-transform:uppercase;lett
 .btn{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 14px;border-radius:12px;border:1px solid color-mix(in srgb,var(--c) 50%,transparent);color:var(--c);background:color-mix(in srgb,var(--c) 10%,transparent);font-weight:600;font-size:13px}
 .btn:hover{background:color-mix(in srgb,var(--c) 22%,transparent);box-shadow:0 0 14px color-mix(in srgb,var(--c) 40%,transparent)}
 .btn.full{display:flex;width:100%}
+.fldrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:8px}.fld{display:flex;flex-direction:column;gap:3px;flex:1 1 130px;min-width:120px}.fld span{font-size:11px;color:${C.muted}}.fld input,.fld select{font:inherit;color:inherit;background:rgba(255,255,255,.06);border:1px solid ${C.muted};border-radius:8px;padding:7px 8px;box-sizing:border-box;width:100%;color-scheme:dark}
 .bar{height:8px;border-radius:5px;background:#0d1c33;overflow:hidden}.bar>i{display:block;height:100%;border-radius:5px;background:var(--b,var(--c));box-shadow:0 0 8px var(--b,var(--c))}
 .row{display:flex;align-items:center;gap:10px;padding:5px 0}.row .n{flex:0 0 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row .bar{flex:1}.row .x{flex:0 0 auto;text-align:right;min-width:72px;font-variant-numeric:tabular-nums}
 input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:8px;border-radius:5px;background:#0d1c33;outline:none}
@@ -811,11 +813,12 @@ class CentroControlPanel extends HTMLElement {
       return this._applyAdvice(adv.dataset.adv);
     }
     if (this._edit && !e.target.closest("nav")) return;
-    const t = e.target.closest("[data-set],[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp]");
+    const t = e.target.closest("[data-set],[data-tab],[data-more],[data-toggle],[data-press],[data-select],[data-service],[data-temp],[data-luz]");
     if (!t) return;
     const d = t.dataset;
     if (d.set !== undefined && d.flag !== undefined) return this._flagSet(d.set, d.flag === "on");
     if (d.set !== undefined && d.val !== undefined) return this._write(d.set, d.val);
+    if (d.luz) return this._luzAction(d.luz);
     if (d.tab) return this._go(d.tab);
     if (d.select) return this._hass.callService("select", "select_option", { entity_id: d.select, option: d.option });
     if (d.press) {
@@ -1658,6 +1661,166 @@ class CentroControlPanel extends HTMLElement {
     charts.push(this.chartCard("g30", "Gas 30 días (m³)", C.violet, { kind: "days", unit: "m³", series: [{ name: "Gas", field: "gas_m3", color: C.violet }] }));
     charts.push(this.chartCard("g12", "Gas por meses (m³)", C.violet, { kind: "months", unit: "m³", count: 12, series: [{ name: "Gas", field: "gas_m3", color: C.violet }] }));
     return [{ cards }, { cls: "w2", cards: charts }];
+  }
+
+  // ---------------------------------------------------------------- 9b luz (Factusol)
+  v_luz() {
+    const f = this.cfg.luz || {};
+    if (!Object.keys(f).length)
+      return [{ cards: [this.title("t", "Luz", "Factura 2.0TD con Factusol", "mdi:flash", C.amber), this.empty("e", "Instala Factusol desde HACS (manu8613/Factusol) y esta pestaña se rellena sola, con la factura, la hucha, la calibración y la importación de facturas y CSV de i-DE.")] }];
+    const N = (k) => this.n(f[k]);
+    const at = (k) => this.st(f[k])?.attributes || {};
+    const bill = at("factura_estimada");
+    const cards = [this.title("t", "Luz", "Factura 2.0TD · neteo horario, excedentes y hucha (Factusol)", "mdi:flash", C.amber)];
+    const per = this.s(f.periodo_actual);
+    const perName = { punta: "Punta", llano: "Llano", valle: "Valle" }[per] || "—";
+    const perCol = { punta: C.red, llano: C.amber, valle: C.green }[per] || C.muted;
+    const k = (key, ent, value, label, ic, c, w = 6) => ent && cards.push(this.kpi(key, ent, value, label, ic, c, w));
+    k("pe", f.periodo_actual, perName, "Periodo ahora", "mdi:clock-time-four", perCol);
+    k("pr", f.precio_energia, `${fmt(N("precio_energia"), 5)} €/kWh`, "Precio de la energía", "mdi:cash", C.amber);
+    k("ps", f.precio_excedentes, `${fmt(N("precio_excedentes"), 5)} €/kWh`, "Precio de excedentes", "mdi:cash-plus", C.lime);
+    k("fe", f.factura_estimada, eur(N("factura_estimada")), "Factura del ciclo (bruto)", "mdi:receipt-text", C.amber);
+    k("fp", f.factura_a_pagar, eur(N("factura_a_pagar")), "A pagar (tras la hucha)", "mdi:cash-check", C.green);
+    k("cr", f.coste_real, eur(N("coste_real")), "Coste real del ciclo", "mdi:cash-multiple", C.gold);
+    k("ct", f.consumo_total, kwh(N("consumo_total")), "Consumo neto del ciclo", "mdi:home-lightning-bolt", C.cyan);
+    k("ex", f.excedentes, kwh(N("excedentes")), "Excedentes del ciclo", "mdi:solar-power-variant", C.lime);
+    const dec = (v) => (isNum(v) ? v : 0);
+    const kw = bill.kwh || {}, en = bill.energia || {};
+    const rows = [];
+    const row = (label, calc, val, neg = false) => rows.push(`<tr><td>${esc(label)}</td><td class="small muted">${calc}</td><td class="r">${neg ? "−" : ""}${eur(Math.abs(dec(val)))}</td></tr>`);
+    if (isNum(bill.potencia)) {
+      row("Potencia contratada", `${fmt(bill.dias, 0)} días`, bill.potencia);
+      for (const p of ["punta", "llano", "valle"]) row(`Energía ${p}`, kwh(kw[p], 2), en[p]);
+      row("Compensación de excedentes", kwh(bill.excedente_kwh, 2), bill.compensacion, true);
+      if (dec(bill.bono_social)) row("Bono social", "", bill.bono_social);
+      row("Impuesto eléctrico", "", bill.impuesto_electrico);
+      row("Alquiler y otros servicios", "", bill.servicios);
+      row("IVA", "", bill.iva);
+    }
+    const hucha = `<div class="small muted" style="margin-top:8px">Hucha: ${eur(bill.saldo_hucha_inicial)} al empezar → aplicada ${eur(bill.hucha_aplicada)} · ingreso ${eur(bill.hucha_ingreso)} → <b style="color:${C.pink}">${eur(N("saldo_hucha_proyectado"))}</b> al cierre (facturada: ${eur(N("saldo_hucha_facturado"))}).</div>`;
+    const cyc = isNum(bill.horas_oficiales) ? `<div class="small muted" style="margin-bottom:6px">${fmtDate(bill.ciclo_inicio)} – ${fmtDate(bill.ciclo_fin)} · horas con dato oficial ${bill.horas_oficiales ?? 0}, con pinza ${bill.horas_propias ?? 0}, sin dato ${bill.horas_sin_datos ?? 0}</div>` : "";
+    const billCard = rows.length
+      ? this.card("fb", `<h3>${icon("mdi:receipt-text-clock")}Factura del ciclo en curso</h3>${cyc}<table><tr><th>Concepto</th><th>Cálculo</th><th class="r">Importe</th></tr>${rows.join("")}<tr class="tot"><td>TOTAL</td><td></td><td class="r">${eur(bill.total_bruto)}</td></tr></table>${hucha}`, { c: C.amber })
+      : this.card("fb", `<div class="loading">Calculando…</div>`, { c: C.amber });
+    const prev = [];
+    if (f.factura_anterior) prev.push(`Factura anterior: <b>${eur(N("factura_anterior"))}</b>`);
+    if (f.coste_real_anterior) prev.push(`coste real <b>${eur(N("coste_real_anterior"))}</b>`);
+    if (f.coste_real_ano) prev.push(`coste real del año <b>${eur(N("coste_real_ano"))}</b>`);
+    const meses = at("historial_facturas").meses || [];
+    const maxB = Math.max(1, ...meses.map((m) => Math.abs(dec(m.total_bruto))));
+    const hist = meses.slice(-12).reverse().map((m) => `<tr><td>${fmtDate(m.ciclo)} ${m.real ? "" : `<span class="small muted" title="Estimada">∿</span>`}${m.cerrado ? "" : `<span class="small muted"> en curso</span>`}</td><td class="r">${kwh(m.consumo_kwh, 0)}</td><td class="r">${kwh(m.excedente_kwh, 0)}</td><td class="r" style="color:${C.amber}"><b>${eur(m.total_bruto)}</b><div style="height:3px;margin-top:2px;border-radius:2px;background:${C.amber};width:${Math.round((Math.abs(dec(m.total_bruto)) / maxB) * 100)}%"></div></td><td class="r">${eur(m.total_a_pagar)}</td><td class="r" style="color:${C.gold}">${eur(m.coste_real)}</td><td class="r" style="color:${C.pink}">${eur(m.saldo_hucha)}</td></tr>`).join("");
+    const histCard = this.card("fh", `<h3>${icon("mdi:history")}Historial de facturas</h3>${prev.length ? `<div class="small muted" style="margin-bottom:6px">${prev.join(" · ")}</div>` : ""}${hist ? `<table><tr><th>Ciclo</th><th class="r">Consumo</th><th class="r">Excedente</th><th class="r">Bruto</th><th class="r">A pagar</th><th class="r">Coste real</th><th class="r">Hucha</th></tr>${hist}</table><div class="small muted" style="margin-top:6px">∿ estimada con el libro de horas · sin marca = factura registrada</div>` : `<div class="empty">Aún no hay ciclos. Importa un CSV de i-DE o registra una factura.</div>`}`, { c: C.amber });
+    // calibración
+    const dImp = N("desfase_importacion"), dExp = N("desfase_exportacion");
+    const ult = this.s(f.ultimo_dato_oficial);
+    const num = (key, d) => (f[key] ? fmt(N(key), d) : "—");
+    const calState = this.card("fc", `<h3>${icon("mdi:tune-vertical")}Calibración de la pinza</h3>
+      <table><tr><th></th><th class="r">Desfase con i-DE</th><th class="r">Factor</th><th class="r">Desfase Wh/h</th></tr>
+      <tr><td>Importación</td><td class="r">${isNum(dImp) ? fmt(dImp, 2) + " %" : "—"}</td><td class="r">${num("factor_importacion", 4)}</td><td class="r">${num("desfase_importacion_wh", 2)}</td></tr>
+      <tr><td>Exportación</td><td class="r">${isNum(dExp) ? fmt(dExp, 2) + " %" : "—"}</td><td class="r">${num("factor_exportacion", 4)}</td><td class="r">${num("desfase_exportacion_wh", 2)}</td></tr></table>
+      <div class="small muted" style="margin-top:6px">Último dato oficial: ${ult && ult !== "unknown" ? fmtDate(ult, true) : "ninguno todavía"}. Las horas con dato oficial se facturan con ese dato; el factor y el desfase solo corrigen las horas aún sin dato.</div>`, { c: C.cyan });
+    const inp = (name, label, type = "number", extra = "") => `<label class="fld"><span>${esc(label)}</span><input data-luzf="${name}" type="${type}" ${type === "number" ? 'inputmode="decimal" step="0.01"' : ""} ${extra}></label>`;
+    const csvCard = this.card("fi", `<h3>${icon("mdi:file-delimited-outline")}Importar CSV de i-DE</h3>
+      <div class="small muted" style="margin-bottom:8px">Descarga el CSV de curvas horarias (periodo o facturado) desde tu área de cliente de i-DE y súbelo aquí; puedes elegir varios. Después calcula la calibración.</div>
+      <input data-luzfiles type="file" accept=".csv,.txt,text/csv" multiple style="width:100%;margin-bottom:8px">
+      <button class="btn full" style="--c:${C.cyan}" data-luz="import">${icon("mdi:upload")}Importar CSV</button>`, { c: C.cyan });
+    const calCard = this.card("fk", `<h3>${icon("mdi:scale-balance")}Ajuste y calibración</h3>
+      <div class="fldrow">${inp("cal_desde", "Desde (opcional)", "date")}${inp("cal_hasta", "Hasta (opcional)", "date")}
+      <label class="fld"><span>Modo</span><select data-luzf="cal_modo"><option value="factor">Solo factor</option><option value="factor_y_desfase">Factor y desfase</option></select></label></div>
+      <div class="fldrow"><button class="btn" style="--c:${C.cyan}" data-luz="report">${icon("mdi:chart-bell-curve-cumulative")}Calcular informe</button>
+      <button class="btn" style="--c:${C.green}" data-luz="apply">${icon("mdi:check-circle-outline")}Aplicar calibración</button></div>
+      <div class="fldrow" style="margin-top:10px">${inp("rb_desde", "Reconstruir historial desde", "date")}<button class="btn" style="--c:${C.violet}" data-luz="rebuild">${icon("mdi:database-refresh")}Reconstruir</button></div>`, { c: C.green });
+    const billForm = this.card("fr", `<h3>${icon("mdi:receipt-text-plus")}Registrar factura de luz</h3>
+      <div class="small muted" style="margin-bottom:8px">Pasa los datos de la factura real para fijar el ciclo y la hucha. Solo la fecha de fin es obligatoria; lo que dejes vacío se calcula.</div>
+      <div class="fldrow">${inp("b_fecha_fin", "Fecha de fin del ciclo", "date")}${inp("b_total_bruto", "Total (€)")}${inp("b_hucha_aplicada", "Hucha aplicada (€)")}${inp("b_total_a_pagar", "A pagar (€)")}${inp("b_hucha_ingreso", "Ingreso a la hucha (€)")}${inp("b_saldo_hucha_final", "Saldo hucha final (€)")}${inp("b_consumo_punta", "Consumo punta (kWh)")}${inp("b_consumo_llano", "Consumo llano (kWh)")}${inp("b_consumo_valle", "Consumo valle (kWh)")}${inp("b_excedente_kwh", "Excedente (kWh)")}</div>
+      <button class="btn full" style="--c:${C.amber}" data-luz="bill">${icon("mdi:content-save-check")}Registrar factura</button>`, { c: C.amber });
+    const o = this._luzOut;
+    const outCard = this.card("fo", o ? `<h3>${icon(o.ok ? "mdi:check-circle" : "mdi:alert-circle")}${esc(o.title)}</h3>${o.html}` : `<div class="empty">${icon("mdi:information-outline")} Aquí verás el resultado de cada acción.</div>`, { c: o ? (o.ok ? C.green : C.red) : C.muted });
+    return [{ cards }, { cls: "w2", cards: [billCard, histCard] }, { cls: "w2", cards: [calState, csvCard, calCard, billForm, outCard] }];
+  }
+  async _luzCall(service, data = {}) {
+    const r = await this._hass.callWS({ type: "call_service", domain: "factusol", service, service_data: data, return_response: true });
+    return r?.response ?? {};
+  }
+  _luzVal(name) {
+    return this.shadowRoot.querySelector(`[data-luzf="${name}"]`)?.value?.trim() || "";
+  }
+  _luzReport(rep) {
+    const fits = ["importacion", "exportacion"].map((k) => {
+      const r = rep?.[k];
+      if (!r) return "";
+      return `<tr><td>${k === "importacion" ? "Importación" : "Exportación"}</td><td class="r">${r.horas ?? "—"}</td><td class="r">${fmt(r.propio_kwh, 0)}</td><td class="r">${fmt(r.oficial_kwh, 0)}</td><td class="r">${fmt(r.desfase_pct, 2)} %</td><td class="r">${fmt(r.factor_minimos_cuadrados ?? r.factor, 4)}</td><td class="r">${fmt(r.desfase_wh_por_hora, 2)}</td><td class="r">${fmt(r.r2, 3)}</td></tr>`;
+    }).join("");
+    if (!fits) return `<pre class="small" style="white-space:pre-wrap">${esc(JSON.stringify(rep, null, 1).slice(0, 1500))}</pre>`;
+    return `<table><tr><th></th><th class="r">Horas</th><th class="r">Pinza kWh</th><th class="r">i-DE kWh</th><th class="r">Desfase</th><th class="r">Factor</th><th class="r">Wh/h</th><th class="r">R²</th></tr>${fits}</table>${rep.aplicada ? `<div class="small" style="color:${C.green};margin-top:6px">✓ Calibración aplicada.</div>` : `<div class="small muted" style="margin-top:6px">Informe sin aplicar: pulsa «Aplicar calibración» para usarlo.</div>`}`;
+  }
+  async _luzAction(act) {
+    if (this._luzBusy) return;
+    const done = (title, html, ok = true) => {
+      this._luzOut = { title, html, ok };
+      this._luzBusy = false;
+      this._schedule(true);
+    };
+    const fail = (title, err) => done(title, `<div class="small" style="color:${C.red}">${esc(err?.message || err?.code || String(err))}</div>`, false);
+    const num = (name) => {
+      const v = this._luzVal(name).replace(",", ".");
+      return v === "" || isNaN(Number(v)) ? null : Number(v);
+    };
+    this._luzBusy = true;
+    this._luzOut = { title: "Trabajando…", html: `<div class="loading">Un momento, esto puede tardar con ficheros grandes.</div>`, ok: true };
+    this._schedule(true);
+    try {
+      if (act === "import") {
+        const files = [...(this.shadowRoot.querySelector("[data-luzfiles]")?.files || [])];
+        if (!files.length) return done("Importar CSV", `<div class="small">Elige antes uno o varios ficheros CSV.</div>`, false);
+        const lines = [];
+        for (const file of files) {
+          const text = await file.text();
+          if (text.length > 8000000) {
+            lines.push(`<tr><td>${esc(file.name)}</td><td style="color:${C.red}">Demasiado grande (máx. 8 MB)</td></tr>`);
+            continue;
+          }
+          try {
+            const r = await this._luzCall("importar_datos_distribuidora", { contenido: text });
+            const detail = Object.entries(r || {}).filter(([, v]) => typeof v !== "object").map(([kk, v]) => `${esc(kk.replace(/_/g, " "))}: ${esc(v)}`).join(" · ");
+            lines.push(`<tr><td>${esc(file.name)}</td><td>${detail || "Importado"}</td></tr>`);
+          } catch (err) {
+            lines.push(`<tr><td>${esc(file.name)}</td><td style="color:${C.red}">${esc(err?.message || err?.code || String(err))}</td></tr>`);
+          }
+        }
+        return done("Importar CSV", `<table>${lines.join("")}</table><div class="small muted" style="margin-top:6px">Ahora puedes calcular la calibración.</div>`);
+      }
+      if (act === "report" || act === "apply") {
+        if (act === "apply" && !confirm("¿Aplicar la calibración? Cambia el factor y el desfase que se usan para las horas sin dato oficial.")) return done("Calibración", `<div class="small">Cancelado.</div>`, false);
+        const data = { modo: this._luzVal("cal_modo") || "factor", aplicar: act === "apply" };
+        if (this._luzVal("cal_desde")) data.desde = this._luzVal("cal_desde");
+        if (this._luzVal("cal_hasta")) data.hasta = this._luzVal("cal_hasta");
+        const rep = await this._luzCall("calibrar", data);
+        return done(act === "apply" ? "Calibración aplicada" : "Informe de calibración", this._luzReport(rep));
+      }
+      if (act === "rebuild") {
+        const desde = this._luzVal("rb_desde");
+        if (!desde) return done("Reconstruir historial", `<div class="small">Indica la fecha desde la que reconstruir.</div>`, false);
+        const r = await this._luzCall("reconstruir_historial", { desde });
+        const detail = Object.entries(r || {}).filter(([, v]) => typeof v !== "object").map(([kk, v]) => `${esc(kk.replace(/_/g, " "))}: ${esc(v)}`).join(" · ");
+        return done("Historial reconstruido", `<div class="small">${detail || "Hecho."}</div>`);
+      }
+      if (act === "bill") {
+        const fin = this._luzVal("b_fecha_fin");
+        if (!fin) return done("Registrar factura", `<div class="small">La fecha de fin del ciclo es obligatoria.</div>`, false);
+        const data = { fecha_fin: fin };
+        for (const kk of ["total_bruto", "hucha_aplicada", "total_a_pagar", "hucha_ingreso", "saldo_hucha_final", "consumo_punta", "consumo_llano", "consumo_valle", "excedente_kwh"]) {
+          const v = num("b_" + kk);
+          if (v !== null) data[kk] = v;
+        }
+        const r = await this._luzCall("registrar_factura", data);
+        const detail = Object.entries(r || {}).filter(([, v]) => typeof v !== "object").map(([kk, v]) => `${esc(kk.replace(/_/g, " "))}: ${esc(v)}`).join(" · ");
+        return done("Factura registrada", `<div class="small">${detail || `Ciclo hasta el ${esc(fin)} registrado.`}</div>`);
+      }
+      done("Luz", `<div class="small">Acción desconocida.</div>`, false);
+    } catch (err) {
+      fail("No se pudo completar", err);
+    }
   }
 
   // ---------------------------------------------------------------- 10 luces

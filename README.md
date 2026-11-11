@@ -35,7 +35,7 @@ Datos de ejemplo, no de ninguna casa real.
 El botón **Diseño** permite mover y redimensionar secciones, tarjetas y
 gráficas; cada dispositivo guarda su propio diseño.
 
-## Las 13 pestañas
+## Las 14 pestañas
 
 | Pestaña | Qué enseña |
 |:--|:--|
@@ -48,6 +48,7 @@ gráficas; cada dispositivo guarda su propio diseño.
 | **Coste** | Luz y gas juntos: total previsto, factura en curso de cada uno línea a línea, previsiones, las tres siguientes facturas de luz y simulador «¿y si…?». |
 | **CO₂** | CO₂ evitado, emitido por la red y el gas, huella neta, equivalencias en árboles y km, independencia energética. |
 | **Gas** | Consumo y coste (detecta [Gas TUR](https://github.com/manu8613/gas-tur) automáticamente) y gráficas. |
+| **Luz** | Datos de [Factusol](https://github.com/manu8613/Factusol) (detección automática): factura del ciclo y su desglose, hucha, historial de facturas y calibración de la pinza; permite importar los CSV de i-DE, calibrar y registrar facturas. |
 | **Luces** | Encendidas, interior y exterior, sin conexión, control de cada luz y «Apagar todas». Se leen en directo: una luz nueva aparece sola. |
 | **Temperaturas** (final) | Mapa de nubes y lluvia en tiempo real (requiere *Weather Radar Card* de HACS) y mapa de rayos (requiere la integración *Blitzortung*). |
 | **Videoportero** (ventana emergente) | Al llamar al timbre aparece sobre cualquier pestaña la imagen en directo y un botón «Abrir puerta» (solo si lo configuras, con doble toque). Configurar → Videoportero o pestaña Configuración del panel. |

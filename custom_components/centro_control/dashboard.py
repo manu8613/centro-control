@@ -140,6 +140,7 @@ def build_context(hass: HomeAssistant, manager: CentroManager) -> PanelContext:
         temperatures=manager.temperature_entities(),
         humidities=manager.humidity_entities(),
         gas=dict(manager.gas_entities),
+        luz=manager.luz_entities(),
     )
 
 
@@ -175,6 +176,7 @@ def panel_config(hass: HomeAssistant, manager: CentroManager) -> dict[str, Any]:
         "temperatures": ctx.temperatures,
         "humidities": ctx.humidities,
         "gas": ctx.gas,
+        "luz": ctx.luz,
     }
 
 

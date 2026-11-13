@@ -71,6 +71,7 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 .bellh{display:flex;align-items:center;gap:8px}.bellh .muted{flex:1}
 .bellx{margin-left:auto;background:none;border:0;color:inherit;cursor:pointer;font-size:20px}
 .bellv{min-height:180px;display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden}.bellv>*{width:100%}
+.ordl{display:flex;flex-direction:column;gap:4px;margin-top:8px}.ordr{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:8px;background:#071426;border:1px solid #12304d}.ordr span{flex:1;font-size:13px}.ordr.dis{opacity:.4}.ordb{all:unset;cursor:pointer;width:30px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #12304d;color:${C.cyan};font-size:13px}.ordb:hover{background:#0b1a30}.ordb[disabled]{opacity:.25;cursor:default}
 .chip.dis{opacity:.35;text-decoration:line-through;cursor:default}
 .bellin{width:100%;box-sizing:border-box;background:#0b1220;color:inherit;border:1px solid #334155;border-radius:8px;padding:6px 8px;font-size:13px}
 .bellf{display:flex;justify-content:flex-end}
@@ -437,6 +438,7 @@ class CentroControlPanel extends HTMLElement {
       on: r.on === true,
       secs: ROT_SECS.includes(r.secs) ? r.secs : ROT_DEFAULT.secs,
       resume: ROT_RESUME.includes(r.resume) ? r.resume : ROT_DEFAULT.resume,
+      order: Array.isArray(r.order) ? r.order.filter((k, i) => TABS.some((t) => t[0] === k && k !== "config") && r.order.indexOf(k) === i) : [],
       hide: Array.isArray(r.hide) ? r.hide.filter((k) => TABS.some((t) => t[0] === k && k !== "config")) : [],
       off: Array.isArray(r.off) ? r.off.filter((k) => TABS.some((t) => t[0] === k && k !== "config")) : [],
     };
@@ -449,10 +451,17 @@ class CentroControlPanel extends HTMLElement {
       /* modo privado: los ajustes duran hasta recargar la página */
     }
   }
+  /** Tabs in the order chosen on this device (Configuración); tabs not in the saved order keep their default place after it; Configuración is always last. */
+  _orderedTabs() {
+    const ord = this._rotLoad().order;
+    const rest = TABS.filter((t) => t[0] !== "config" && !ord.includes(t[0]));
+    const first = ord.map((k) => TABS.find((t) => t[0] === k));
+    return [...first, ...rest, TABS.find((t) => t[0] === "config")];
+  }
   _rotKeys() {
     const off = this._rotLoad().off;
     const hide = this._rotLoad().hide;
-    return TABS.map((t) => t[0]).filter((k) => k !== "config" && !off.includes(k) && !hide.includes(k));
+    return this._orderedTabs().map((t) => t[0]).filter((k) => k !== "config" && !off.includes(k) && !hide.includes(k));
   }
   /** A tab hidden in Configuración is neither in the bar nor in the rotation (Configuración itself can't be hidden). */
   _tabVisible(k) {
@@ -476,7 +485,7 @@ class CentroControlPanel extends HTMLElement {
     const keys = this._rotKeys();
     const idle = !this._edit && this._tab !== "config" && Date.now() >= this._busy;
     if (idle && keys.length > 1) {
-      const all = TABS.map((t) => t[0]);
+      const all = this._orderedTabs().map((t) => t[0]);
       for (let step = 1; step <= all.length; step++) {
         const k = all[(all.indexOf(this._tab) + step) % all.length];
         if (keys.includes(k)) {
@@ -502,6 +511,12 @@ class CentroControlPanel extends HTMLElement {
     else if (d.rot === "resume" && ROT_RESUME.includes(Number(d.v))) r.resume = Number(d.v);
     else if (d.rot === "tab" && TABS.some((t) => t[0] === d.v && d.v !== "config")) r.off = r.off.includes(d.v) ? r.off.filter((k) => k !== d.v) : [...r.off, d.v];
     else if (d.rot === "vis" && TABS.some((t) => t[0] === d.v && d.v !== "config")) r.hide = r.hide.includes(d.v) ? r.hide.filter((k) => k !== d.v) : [...r.hide, d.v];
+    else if (d.rot === "ord" && TABS.some((t) => t[0] === d.v && d.v !== "config")) {
+      const cur = this._orderedTabs().map((t) => t[0]).filter((k) => k !== "config");
+      const i = cur.indexOf(d.v), j = i + (Number(d.d) < 0 ? -1 : 1);
+      if (j >= 0 && j < cur.length) [cur[i], cur[j]] = [cur[j], cur[i]];
+      r.order = cur;
+    } else if (d.rot === "ordreset") r.order = [];
     else if (d.rot === "visall") r.hide = [];
     else if (d.rot === "visnone") r.hide = TABS.map((t) => t[0]).filter((k) => k !== "config");
     else if (d.rot === "all") r.off = [];
@@ -594,7 +609,7 @@ class CentroControlPanel extends HTMLElement {
     const keepScroll = navEl.scrollLeft;
     const tabChanged = this._navTab !== this._tab;
     this._navTab = this._tab;
-    navEl.innerHTML = TABS.filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
+    navEl.innerHTML = this._orderedTabs().filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
       const badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
       return `<button class="${k === this._tab ? "on" : ""}" data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
     }).join("");
@@ -2261,7 +2276,7 @@ class CentroControlPanel extends HTMLElement {
     const tabsCard = this.card(
       "rtabs",
       `<h3>${icon("mdi:tab-search")}Pestañas en la rotación</h3>
-      <div class="chips">${TABS.filter((t) => t[0] !== "config").map(([k, l, ic]) => (r.hide.includes(k) ? `<span class="chip dis" title="Oculta: actívala en «Pestañas visibles»">${icon(ic)}${esc(l)}</span>` : chip("tab", k, l, !r.off.includes(k), icon(ic)))).join("")}</div>
+      <div class="chips">${this._orderedTabs().filter((t) => t[0] !== "config").map(([k, l, ic]) => (r.hide.includes(k) ? `<span class="chip dis" title="Oculta: actívala en «Pestañas visibles»">${icon(ic)}${esc(l)}</span>` : chip("tab", k, l, !r.off.includes(k), icon(ic)))).join("")}</div>
       <div class="chips" style="margin-top:12px"><button class="chip" data-rot="all">Todas</button><button class="chip" data-rot="none">Ninguna</button></div>
       <div class="small muted" style="margin-top:10px">${keys.length} de ${TABS.length - 1 - r.hide.length} pestañas visibles en la rotación; las ocultas no rotan. Estos ajustes se guardan solo en este dispositivo: la tablet y el PC pueden tener los suyos.</div>`,
       { c: C.violet }
@@ -2269,10 +2284,19 @@ class CentroControlPanel extends HTMLElement {
     const visCard = this.card(
       "rvis",
       `<h3>${icon("mdi:eye-outline")}Pestañas visibles</h3>
-      <div class="chips">${TABS.filter((t) => t[0] !== "config").map(([k, l, ic]) => chip("vis", k, l, !r.hide.includes(k), icon(ic))).join("")}</div>
+      <div class="chips">${this._orderedTabs().filter((t) => t[0] !== "config").map(([k, l, ic]) => chip("vis", k, l, !r.hide.includes(k), icon(ic))).join("")}</div>
       <div class="chips" style="margin-top:12px"><button class="chip" data-rot="visall">Mostrar todas</button><button class="chip" data-rot="visnone">Ocultar todas</button></div>
       <div class="small muted" style="margin-top:10px">Las pestañas ocultas desaparecen de la barra y tampoco entran en la rotación. Configuración siempre se ve. Se guarda solo en este dispositivo.</div>`,
       { c: C.green }
+    );
+    const ordTabs = this._orderedTabs().filter((t) => t[0] !== "config");
+    const ordCard = this.card(
+      "rord",
+      `<h3>${icon("mdi:sort")}Orden de las pestañas</h3>
+      <div class="ordl">${ordTabs.map(([k, l, ic], i) => `<div class="ordr ${r.hide.includes(k) ? "dis" : ""}">${icon(ic)}<span>${esc(l)}</span><button class="ordb" data-rot="ord" data-v="${k}" data-d="-1" title="Subir" ${i === 0 ? "disabled" : ""}>▲</button><button class="ordb" data-rot="ord" data-v="${k}" data-d="1" title="Bajar" ${i === ordTabs.length - 1 ? "disabled" : ""}>▼</button></div>`).join("")}</div>
+      <div class="chips" style="margin-top:12px"><button class="chip" data-rot="ordreset">Orden original</button></div>
+      <div class="small muted" style="margin-top:10px">Cambia el orden de la barra y de la rotación automática. Configuración siempre queda al final. Se guarda solo en este dispositivo.</div>`,
+      { c: C.purple || C.cyan }
     );
     const ids = Object.keys(this._hass?.states || {}).sort();
     const opts = (re) => ids.filter((e) => re.test(e)).map((e) => `<option value="${esc(e)}">${esc(this.name(e))}</option>`).join("");
@@ -2288,7 +2312,7 @@ class CentroControlPanel extends HTMLElement {
       <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar.</div>`,
       { c: C.amber }
     );
-    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, visCard, tabsCard, bellCard] }];
+    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, visCard, ordCard, tabsCard, bellCard] }];
   }
 }
 

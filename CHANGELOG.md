@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.11.0] - 2026-11-13
+
+### Añadido
+- Configuración: nueva tarjeta «Orden de las pestañas» para reordenar con ▲ ▼ las pestañas de la barra en este dispositivo, con botón «Orden original». La rotación automática sigue el mismo orden; Configuración queda siempre al final y las pestañas nuevas de futuras versiones se añaden después de las ordenadas.
+
 ## [2.10.0] - 2026-11-13
 - Pestaña Luz: aviso rojo cuando la última factura importada cambia algún precio respecto a la anterior (potencia, energía punta, llano o valle, excedentes, bono social o alquiler), con el precio de antes, el de ahora y la variación en %.
 - Pestaña Luz: nueva tarjeta «Precios en las facturas» con el histórico de precios de cada factura importada; los precios que cambian se marcan con ▲/▼ y muestran el anterior al pasar el ratón.

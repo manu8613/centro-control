@@ -1,6 +1,6 @@
 # Estado
 
-Versión publicada: v2.9.1 (v2.10.0 en PR) · Commit de referencia: `e909e9f` · Actualizado: 2026-11-13
+Versión publicada: v2.10.0 (v2.11.0 en PR) · Commit de referencia: `c11bc39` · Actualizado: 2026-11-13
 
 ## Funciona (comprobado)
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
@@ -41,8 +41,8 @@ Versión publicada: v2.9.1 (v2.10.0 en PR) · Commit de referencia: `e909e9f` ·
 - Pendientes: probar con una factura real tras actualizar Factusol a 0.2.0.
 
 ## Último cierre
-**Centro de Control · feat/alerta-precios · v2.10.0**
-- Objetivo: avisar en la pestaña Luz si una factura cambia el precio de la potencia o de los periodos y mostrar el histórico de precios.
-- Cambios: aviso rojo y tarjeta «Precios en las facturas» (sensores `alerta_precios` e `historial_precios` de Factusol 0.3.0), detalle de cambios al importar un PDF, claves nuevas en la detección de Factusol.
-- Pruebas: pytest en verde y pruebas de humo del panel con Node (con cambios, sin cambios y sin los sensores nuevos).
-- Pendientes: probar en la instalación real con la factura de octubre; depende de que Factusol 0.3.0 esté instalada.
+**Centro de Control · feat/orden-pestanas · v2.11.0**
+- Objetivo: poder ordenar las pestañas desde Configuración.
+- Cambios: tarjeta «Orden de las pestañas» (▲ ▼ y «Orden original»), guardada por dispositivo; barra y rotación siguen ese orden; Configuración siempre al final.
+- Pruebas: pytest en verde y pruebas de Node del panel (mover, límites, persistencia, orden saneado con pestañas nuevas); captura de Configuración.
+- Pendientes: probar en la tablet.

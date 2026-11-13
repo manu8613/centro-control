@@ -1,13 +1,14 @@
 # Estado
 
-Versión publicada: v2.8.0 (v2.9.0 en PR) · Commit de referencia: `89e2fcc` · Actualizado: 2026-11-11
+Versión publicada: v2.9.0 (v2.9.1 en PR) · Commit de referencia: `89e2fcc` · Actualizado: 2026-11-11
 
 ## Funciona (comprobado)
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
 - Detecta Gas TUR si está instalado.
 - v2.6.0: botón Rotar + pestaña Configuración (rotación de pestañas por dispositivo). Falta probarla en la tablet real.
 - v2.7.0: Solar con controles del Deye (carga por red, programas 1 y 2), nubosidad a 5 días y recomendación de carga nocturna. Probado con las opciones reales de un Deye (Solarman).
-- v2.9.0 (PR): importar facturas de luz en PDF desde la pestaña Luz (necesita Factusol 0.2.0). Probado con datos simulados; falta con la casa real.
+- v2.9.1 (PR): indicador «Hucha restante» en la pestaña Luz.
+- v2.9.0: importar facturas de luz en PDF desde la pestaña Luz (necesita Factusol 0.2.0). Probado con datos simulados; falta con la casa real.
 - v2.8.0: pestaña Luz junto a Gas con los datos de Factusol (detección por registro de entidades) e importación de CSV de la distribuidora, calibración, reconstrucción del historial y registro de facturas. Probada con estados simulados y pytest; falta probarla en la casa real.
 - v2.7.6: la barra de pestañas va en una línea con deslizamiento y flechas ‹ › en vez de quedar tapada por Rotar/Diseño.
 - v2.7.5: pestañas visibles/ocultas por dispositivo en Configuración (las ocultas no rotan).

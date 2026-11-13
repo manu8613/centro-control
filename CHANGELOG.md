@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.10.0] - 2026-11-13
+- Pestaña Luz: aviso rojo cuando la última factura importada cambia algún precio respecto a la anterior (potencia, energía punta, llano o valle, excedentes, bono social o alquiler), con el precio de antes, el de ahora y la variación en %.
+- Pestaña Luz: nueva tarjeta «Precios en las facturas» con el histórico de precios de cada factura importada; los precios que cambian se marcan con ▲/▼ y muestran el anterior al pasar el ratón.
+- Al importar un PDF, el resultado muestra los cambios de precio de esa factura. Necesita Factusol 0.3.0 o posterior (sin ella, el aviso y la tarjeta salen vacíos); las facturas importadas antes no tienen precios guardados: vuelve a importar su PDF para completar el histórico.
+
 ## [2.9.1] - 2026-11-11
 
 ### Añadido

@@ -1,6 +1,6 @@
 # Estado
 
-Versión publicada: v2.10.0 (v2.11.0 en PR) · Commit de referencia: `c11bc39` · Actualizado: 2026-11-13
+Versión publicada: v2.11.0 (v2.12.0 en PR) · Commit de referencia: `f46e247` · Actualizado: 2026-11-13
 
 ## Funciona (comprobado)
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
@@ -41,8 +41,8 @@ Versión publicada: v2.10.0 (v2.11.0 en PR) · Commit de referencia: `c11bc39` �
 - Pendientes: probar con una factura real tras actualizar Factusol a 0.2.0.
 
 ## Último cierre
-**Centro de Control · feat/orden-pestanas · v2.11.0**
-- Objetivo: poder ordenar las pestañas desde Configuración.
-- Cambios: tarjeta «Orden de las pestañas» (▲ ▼ y «Orden original»), guardada por dispositivo; barra y rotación siguen ese orden; Configuración siempre al final.
-- Pruebas: pytest en verde y pruebas de Node del panel (mover, límites, persistencia, orden saneado con pestañas nuevas); captura de Configuración.
-- Pendientes: probar en la tablet.
+**Centro de Control · feat/arrastrar-tarjetas · v2.12.0**
+- Objetivo: poder desanclar las tarjetas y moverlas con el ratón a otra sección (diseño 100 % personalizable).
+- Cambios: en modo Diseño las tarjetas y gráficas se arrastran dentro de su sección o a otra; el movimiento se guarda por pestaña y dispositivo (`move` en `centro_control_diseno`); secciones vacías ocultas fuera del modo edición.
+- Pruebas: pytest en verde, pruebas de Node (reubicar, orden, vaciar/ocultar sección, volver a la original, no-op) y arrastre simulado en Chrome headless.
+- Pendientes: probar con ratón real en el PC; en táctil siguen las flechas.

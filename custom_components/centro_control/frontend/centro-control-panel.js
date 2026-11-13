@@ -116,6 +116,7 @@ main.edit .sec{outline:1px dashed ${C.amber}55;outline-offset:4px;border-radius:
 .lay{position:absolute;top:0;right:0;z-index:3;display:flex;gap:4px;align-items:center}
 .lay.sl{left:0;right:auto;top:0;color:${C.amber};font-size:11px;letter-spacing:1px;text-transform:uppercase}
 .card .lay{top:6px;right:6px}.card .lay button{padding:3px 7px;background:#060d20ee}
+main.edit .card[draggable]{cursor:grab}main.edit .card.dragging{opacity:.35}.card.dropb{box-shadow:-5px 0 0 #22d3ee,0 0 18px #22d3ee66}.card.dropa{box-shadow:5px 0 0 #22d3ee,0 0 18px #22d3ee66}.sec.dropsec{outline:2px solid #22d3ee!important;background:#22d3ee0d}.sec.emptysec{min-height:90px}main.edit .sec.emptysec::after{content:"Sección vacía: suelta aquí una tarjeta";color:#64748b;font-size:12px;align-self:center;grid-column:1/-1;text-align:center}
 main.edit .card,main.edit .title{cursor:default}main.edit .card{padding-top:34px}
 .card{--c:${C.cyan};position:relative;grid-column:span 12;background:linear-gradient(150deg,rgba(10,20,44,.92),rgba(3,8,20,.94));border:1px solid color-mix(in srgb,var(--c) 34%,transparent);
  border-radius:16px;padding:12px 14px;font-size:13px;overflow:hidden;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 8%,transparent),0 0 22px color-mix(in srgb,var(--c) 14%,transparent),0 8px 24px rgba(0,0,0,.45)}
@@ -344,6 +345,11 @@ class CentroControlPanel extends HTMLElement {
     if (nav) nav.addEventListener("scroll", () => this._navArrows(), { passive: true });
     if (typeof window.addEventListener === "function") window.addEventListener("resize", () => this._navArrows());
     root.addEventListener("change", (e) => this._change(e));
+    root.addEventListener("dragstart", (e) => this._dragStart(e));
+    root.addEventListener("dragover", (e) => this._dragOver(e));
+    root.addEventListener("dragleave", (e) => this._dragMark(null));
+    root.addEventListener("drop", (e) => this._drop(e));
+    root.addEventListener("dragend", () => this._dragEnd());
     root.addEventListener("input", (e) => {
       this._busy = Date.now() + 2500;
       const t = e.target;
@@ -589,6 +595,10 @@ class CentroControlPanel extends HTMLElement {
 
   _render() {
     if (!this._hass || !this.cfg) return;
+    if (this._dragging) {
+      this._schedule();
+      return;
+    }
     if (!this._force && Date.now() < this._busy) {
       this._schedule();
       return;
@@ -630,14 +640,14 @@ class CentroControlPanel extends HTMLElement {
     }
     sections = this._applyLayout(sections);
     if (this._edit)
-      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: mueve las secciones y las gráficas con las flechas y cambia su ancho con ⤢. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
+      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: arrastra las tarjetas y gráficas con el ratón a otro sitio o a otra sección (en pantallas táctiles, usa las flechas) y cambia su ancho con ⤢. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
     sections.push({ cls: "wall", cards: [{ k: "foot", html: "", cls: "foot", attrs: "", c: C.muted, foot: true }] });
     const layout = (this._edit ? "E" : "") + this._tab + "|" + sections.map((s) => (s.cls || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
     if (layout !== this._layoutKey) {
       this._layoutKey = layout;
       this._cards.clear();
       this._grid.innerHTML = sections
-        .map((s) => `<div class="sec ${s.cls || ""}">${s.tools || ""}${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.attrs}></div>`).join("")}</div>`)
+        .map((s) => `<div class="sec ${s.cls || ""}"${s.id && s.id !== "_lay" ? ` data-sec="${esc(s.id)}"` : ""}>${s.tools || ""}${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.drag ? ' draggable="true"' : ""}${c.attrs}></div>`).join("")}</div>`)
         .join("");
       this._grid.querySelectorAll("[data-k]").forEach((el) => this._cards.set(el.dataset.k, { el, html: null }));
     }
@@ -690,14 +700,31 @@ class CentroControlPanel extends HTMLElement {
   }
   _layTab() {
     const all = this._layLoad();
-    return (all[this._tab] = all[this._tab] || { order: [], w: {}, cards: {}, cw: {} });
+    const L = (all[this._tab] = all[this._tab] || { order: [], w: {}, cards: {}, cw: {} });
+    if (!L.move) L.move = {};
+    return L;
   }
   _applyLayout(sections) {
     const L = this._layTab();
     sections.forEach((s, i) => {
       s.id = s.id || (s.cards[0] && s.cards[0].k) || "s" + i;
       s._i = i;
+    });
+    // Cards dragged to another section (Diseño): relocate them before ordering. Section ids come from the native cards, so they stay stable.
+    this._native = {};
+    sections.forEach((s) => s.cards.forEach((c) => (this._native[c.k] = s.id)));
+    for (const [k, to] of Object.entries(L.move || {})) {
+      const dst = sections.find((x) => x.id === to);
+      const src = sections.find((x) => x.cards.some((c) => c.k === k));
+      const c = src && src.cards.find((x) => x.k === k);
+      if (!dst || !c || src === dst || c.foot) continue;
+      src.cards = src.cards.filter((x) => x !== c);
+      dst.cards.push(c);
+    }
+    if (!this._edit) sections = sections.filter((x) => x.cards.length);
+    sections.forEach((s) => {
       if (s.cards.length && s.cards.every((c) => c.chart) && s.cls !== "wall") s.cls = "charts";
+      if (!s.cards.length) s.cls = ((s.cls || "") + " emptysec").trim();
     });
     const rank = (s) => (L.order.includes(s.id) ? L.order.indexOf(s.id) : s._i - 0.5);
     sections.sort((a, b) => rank(a) - rank(b) || a._i - b._i);
@@ -717,6 +744,7 @@ class CentroControlPanel extends HTMLElement {
         if (this._edit && !c.foot && c.cls.split(" ").includes("card")) {
           const tools = `<div class="lay"><button data-lay="card-prev" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Antes">◀</button><button data-lay="card-next" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Después">▶</button><button data-lay="card-w" data-id="${esc(c.k)}" title="Ancho">⤢</button></div>`;
           c.html += tools;
+          c.drag = true;
         }
       }
       if (this._edit) {
@@ -725,6 +753,71 @@ class CentroControlPanel extends HTMLElement {
       }
     });
     return sections;
+  }
+  // ---- Diseño: arrastrar tarjetas con el ratón (entre secciones y dentro de una)
+  _dragTarget(e) {
+    const path = e.composedPath ? e.composedPath() : [];
+    const els = path.filter((n) => n && n.nodeType === 1);
+    const isSec = (n) => n.classList && n.classList.contains("sec") && n.hasAttribute("data-sec");
+    const card = els.find((n) => n.hasAttribute && n.hasAttribute("data-k") && n.parentElement && isSec(n.parentElement));
+    const sec = els.find(isSec);
+    return { card, sec };
+  }
+  _dragStart(e) {
+    const el = e.target && e.target.closest && e.target.closest("[draggable][data-k]");
+    if (!this._edit || !el) return;
+    this._dragging = el.dataset.k;
+    el.classList.add("dragging");
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", el.dataset.k);
+    }
+  }
+  _dragAfter(e, card) {
+    const r = card.getBoundingClientRect(), pr = card.parentElement.getBoundingClientRect();
+    return r.width > pr.width * 0.85 ? e.clientY > r.top + r.height / 2 : e.clientX > r.left + r.width / 2;
+  }
+  _dragMark(card, after, sec) {
+    this.shadowRoot.querySelectorAll(".dropb,.dropa,.dropsec").forEach((n) => n.classList.remove("dropb", "dropa", "dropsec"));
+    if (card) card.classList.add(after ? "dropa" : "dropb");
+    else if (sec) sec.classList.add("dropsec");
+  }
+  _dragOver(e) {
+    if (!this._dragging) return;
+    const { card, sec } = this._dragTarget(e);
+    if (!sec) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+    this._dragMark(card && card.dataset.k !== this._dragging ? card : null, card ? this._dragAfter(e, card) : false, sec);
+  }
+  _drop(e) {
+    if (!this._dragging) return;
+    e.preventDefault();
+    const k = this._dragging;
+    const { card, sec } = this._dragTarget(e);
+    if (sec) {
+      const to = sec.dataset.sec;
+      const keys = [...sec.children].filter((n) => n.hasAttribute("data-k") && n.dataset.k !== k && n.dataset.k !== "foot").map((n) => n.dataset.k);
+      let idx = keys.length;
+      if (card && card.dataset.k !== k) idx = keys.indexOf(card.dataset.k) + (this._dragAfter(e, card) ? 1 : 0);
+      else if (card) idx = -1;
+      if (idx >= 0) {
+        keys.splice(idx, 0, k);
+        const L = this._layTab();
+        L.cards[to] = keys;
+        if (this._native[k] === to) delete L.move[k];
+        else L.move[k] = to;
+        this._laySave();
+      }
+    }
+    this._dragEnd();
+    this._layoutKey = "";
+    this._schedule(true);
+  }
+  _dragEnd() {
+    this._dragging = null;
+    this._dragMark(null);
+    this.shadowRoot.querySelectorAll(".dragging").forEach((n) => n.classList.remove("dragging"));
   }
   _layAction(d) {
     const L = this._layTab();

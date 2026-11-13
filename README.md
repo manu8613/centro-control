@@ -33,7 +33,8 @@ Datos de ejemplo, no de ninguna casa real.
 <p align="center"><img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/movil.jpg" alt="En el móvil" width="260"> <img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/movil_bateria.jpg" alt="Batería en el móvil" width="260"></p>
 
 El botón **Diseño** permite mover y redimensionar secciones, tarjetas y
-gráficas; cada dispositivo guarda su propio diseño.
+gráficas (con el ratón se arrastran, incluso a otra sección; en táctil, con
+flechas); cada dispositivo guarda su propio diseño.
 
 ## Las 14 pestañas
 

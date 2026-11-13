@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.12.0] - 2026-11-13
+
+### Añadido
+- Modo Diseño: ahora se pueden **arrastrar con el ratón** las tarjetas y gráficas a otro sitio de la misma sección o a **otra sección** (se ve una barra cian donde caerá). Una sección que se queda vacía se oculta al salir del modo diseño y, mientras editas, sigue ahí como zona donde soltar. «Restablecer pestaña» deshace los movimientos. En pantallas táctiles siguen las flechas ◀ ▶ (el arrastre de HTML no funciona con el dedo).
+
 ## [2.11.0] - 2026-11-13
 
 ### Añadido

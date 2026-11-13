@@ -1,6 +1,6 @@
 # Estado
 
-Versión publicada: v2.9.0 (v2.9.1 en PR) · Commit de referencia: `89e2fcc` · Actualizado: 2026-11-11
+Versión publicada: v2.9.1 (v2.10.0 en PR) · Commit de referencia: `e909e9f` · Actualizado: 2026-11-13
 
 ## Funciona (comprobado)
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
@@ -39,3 +39,10 @@ Versión publicada: v2.9.0 (v2.9.1 en PR) · Commit de referencia: `89e2fcc` · 
 - Cambios: tarjeta «Importar factura en PDF» (lee el fichero en el navegador, lo envía en base64 a `factusol.importar_factura_pdf` y lo quita del selector), campo «primer día» en el formulario manual; CHANGELOG.
 - Pruebas: pytest 74 OK; prueba de la acción con Node y un servicio simulado.
 - Pendientes: probar con una factura real tras actualizar Factusol a 0.2.0.
+
+## Último cierre
+**Centro de Control · feat/alerta-precios · v2.10.0**
+- Objetivo: avisar en la pestaña Luz si una factura cambia el precio de la potencia o de los periodos y mostrar el histórico de precios.
+- Cambios: aviso rojo y tarjeta «Precios en las facturas» (sensores `alerta_precios` e `historial_precios` de Factusol 0.3.0), detalle de cambios al importar un PDF, claves nuevas en la detección de Factusol.
+- Pruebas: pytest en verde y pruebas de humo del panel con Node (con cambios, sin cambios y sin los sensores nuevos).
+- Pendientes: probar en la instalación real con la factura de octubre; depende de que Factusol 0.3.0 esté instalada.

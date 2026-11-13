@@ -138,6 +138,8 @@ FACTUSOL_KEYS = (
     "coste_real_anterior",
     "coste_real_ano",
     "historial_facturas",
+    "alerta_precios",
+    "historial_precios",
     "costes_fijos",
     "desfase_importacion",
     "desfase_exportacion",

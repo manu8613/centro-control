@@ -1672,6 +1672,12 @@ class CentroControlPanel extends HTMLElement {
     const at = (k) => this.st(f[k])?.attributes || {};
     const bill = at("factura_estimada");
     const cards = [this.title("t", "Luz", "Factura 2.0TD · neteo horario, excedentes y hucha (Factusol)", "mdi:flash", C.amber)];
+    const alert = at("alerta_precios");
+    if (f.alerta_precios && N("alerta_precios") > 0 && alert.hay_cambios) {
+      const pct = (c) => (isNum(c.variacion_pct) ? `${c.variacion_pct > 0 ? "+" : ""}${fmt(c.variacion_pct, 2)} %` : "");
+      const lines = (alert.cambios || []).map((c) => `<tr><td>${esc(c.nombre)}</td><td class="r">${fmt(c.antes, 6)} → <b>${fmt(c.despues, 6)}</b> ${esc(c.unidad)}</td><td class="r" style="color:${c.despues > c.antes ? C.red : C.green}">${pct(c)}</td></tr>`).join("");
+      cards.push(this.card("pa", `<h3 style="color:${C.red}">${icon("mdi:alert-decagram")}Cambio de precios en tu última factura</h3><div class="small muted" style="margin-bottom:6px">Factura del ${fmtDate(alert.factura_inicio)}${alert.factura_fin ? ` al ${fmtDate(alert.factura_fin)}` : ""}, comparada con la anterior.</div><table>${lines}</table>`, { c: C.red, w: 12, click: f.alerta_precios }));
+    }
     const per = this.s(f.periodo_actual);
     const perName = { punta: "Punta", llano: "Llano", valle: "Valle" }[per] || "—";
     const perCol = { punta: C.red, llano: C.amber, valle: C.green }[per] || C.muted;
@@ -1716,6 +1722,22 @@ class CentroControlPanel extends HTMLElement {
     const maxB = Math.max(1, ...meses.map((m) => Math.abs(dec(m.total_bruto))));
     const hist = meses.slice(-12).reverse().map((m) => `<tr><td>${fmtDate(m.ciclo)} ${m.real ? "" : `<span class="small muted" title="Estimada">∿</span>`}${m.cerrado ? "" : `<span class="small muted"> en curso</span>`}</td><td class="r">${kwh(m.consumo_kwh, 0)}</td><td class="r">${kwh(m.excedente_kwh, 0)}</td><td class="r" style="color:${C.amber}"><b>${eur(m.total_bruto)}</b><div style="height:3px;margin-top:2px;border-radius:2px;background:${C.amber};width:${Math.round((Math.abs(dec(m.total_bruto)) / maxB) * 100)}%"></div></td><td class="r">${eur(m.total_a_pagar)}</td><td class="r" style="color:${C.gold}">${eur(m.coste_real)}</td><td class="r" style="color:${C.pink}">${eur(m.saldo_hucha)}</td></tr>`).join("");
     const histCard = this.card("fh", `<h3>${icon("mdi:history")}Historial de facturas</h3>${prev.length ? `<div class="small muted" style="margin-bottom:6px">${prev.join(" · ")}</div>` : ""}${hist ? `<table><tr><th>Ciclo</th><th class="r">Consumo</th><th class="r">Excedente</th><th class="r">Bruto</th><th class="r">A pagar</th><th class="r">Coste real</th><th class="r">Hucha</th></tr>${hist}</table><div class="small muted" style="margin-top:6px">∿ estimada con el libro de horas · sin marca = factura registrada</div>` : `<div class="empty">Aún no hay ciclos. Importa un CSV de la distribuidora o registra una factura.</div>`}`, { c: C.amber });
+    // precios que cobra cada factura
+    const facs = at("historial_precios").facturas || [];
+    const PCOLS = [["precio_potencia_punta", "Pot. punta"], ["precio_potencia_valle", "Pot. valle"], ["precio_punta", "Punta"], ["precio_llano", "Llano"], ["precio_valle", "Valle"], ["precio_excedentes", "Excedentes"]];
+    const priceRows = facs.slice(-12).reverse().map((fa) => {
+      const ch = Object.fromEntries((fa.cambios || []).map((c) => [c.campo, c]));
+      const cells = PCOLS.map(([key]) => {
+        const v = (fa.precios || {})[key];
+        if (!isNum(v)) return `<td class="r muted">—</td>`;
+        const c = ch[key];
+        if (!c) return `<td class="r">${fmt(v, 6)}</td>`;
+        return `<td class="r" style="color:${c.despues > c.antes ? C.red : C.green}" title="Antes ${fmt(c.antes, 6)} ${esc(c.unidad)}"><b>${c.despues > c.antes ? "▲" : "▼"} ${fmt(v, 6)}</b></td>`;
+      }).join("");
+      const extra = (fa.cambios || []).filter((c) => !PCOLS.some(([key]) => key === c.campo)).map((c) => `${esc(c.nombre)}: ${fmt(c.antes, 4)} → ${fmt(c.despues, 4)} ${esc(c.unidad)}`);
+      return `<tr><td>${fmtDate(fa.inicio)}${fa.fin ? ` – ${fmtDate(fa.fin)}` : ""}${extra.length ? `<div class="small" style="color:${C.red}">${extra.join(" · ")}</div>` : ""}</td>${cells}</tr>`;
+    }).join("");
+    const priceCard = this.card("fpr", `<h3>${icon("mdi:chart-timeline-variant")}Precios en las facturas</h3>${priceRows ? `<div class="small muted" style="margin-bottom:6px">€/kW día en potencia y €/kWh en energía. ▲ sube · ▼ baja respecto a la factura anterior (pasa el ratón por encima para ver el precio anterior).</div><table><tr><th>Periodo</th>${PCOLS.map(([, l]) => `<th class="r">${l}</th>`).join("")}</tr>${priceRows}</table>` : `<div class="empty">Aún no hay precios guardados. Importa el PDF de cada factura (también las anteriores) para empezar el histórico.</div>`}`, { c: C.amber, click: f.historial_precios });
     // calibración
     const dImp = N("desfase_importacion"), dExp = N("desfase_exportacion");
     const ult = this.s(f.ultimo_dato_oficial);
@@ -1746,7 +1768,7 @@ class CentroControlPanel extends HTMLElement {
       <button class="btn full" style="--c:${C.amber}" data-luz="bill">${icon("mdi:content-save-check")}Registrar factura</button>`, { c: C.amber });
     const o = this._luzOut;
     const outCard = this.card("fo", o ? `<h3>${icon(o.ok ? "mdi:check-circle" : "mdi:alert-circle")}${esc(o.title)}</h3>${o.html}` : `<div class="empty">${icon("mdi:information-outline")} Aquí verás el resultado de cada acción.</div>`, { c: o ? (o.ok ? C.green : C.red) : C.muted });
-    return [{ cards }, { cls: "w2", cards: [billCard, histCard] }, { cls: "w2", cards: [calState, pdfCard, csvCard, calCard, billForm, outCard] }];
+    return [{ cards }, { cls: "w2", cards: [billCard, histCard, priceCard] }, { cls: "w2", cards: [calState, pdfCard, csvCard, calCard, billForm, outCard] }];
   }
   async _luzCall(service, data = {}) {
     const r = await this._hass.callWS({ type: "call_service", domain: "factusol", service, service_data: data, return_response: true });
@@ -1821,6 +1843,7 @@ class CentroControlPanel extends HTMLElement {
             if (isNum(r.desviacion_total_bruto)) extra.push(`la estimación difería ${eur(Math.abs(r.desviacion_total_bruto))}`);
             if (r.aviso) extra.push(esc(r.aviso));
             for (const w of r.avisos || []) extra.push(esc(w));
+            for (const c of r.cambios_precio || []) extra.push(`<b style="color:${C.red}">⚠ ${esc(c.nombre)}: ${fmt(c.antes, 6)} → ${fmt(c.despues, 6)} ${esc(c.unidad)}${isNum(c.variacion_pct) ? ` (${c.variacion_pct > 0 ? "+" : ""}${fmt(c.variacion_pct, 2)} %)` : ""}</b>`);
             if (r.tarifa_actualizada) extra.push(`tarifa actualizada (${Object.keys(r.tarifa_actualizada).map((kk) => esc(kk.replace(/_/g, " "))).join(", ")})`);
             lines.push(`<tr><td>${esc(file.name.length > 28 ? file.name.slice(0, 25) + "…" : file.name)}</td><td>${fmtDate(p.inicio)} – ${fmtDate(p.fin)} · ${p.dias ?? "—"} días · bruto <b>${eur(p.total_bruto)}</b> · hucha aplicada ${eur(p.hucha_aplicada)} · ingreso ${eur(p.hucha_ingreso)} · saldo ${eur(p.saldo_hucha_final)}${extra.length ? `<div class="small muted">${extra.join(" · ")}</div>` : ""}</td></tr>`);
           } catch (err) {

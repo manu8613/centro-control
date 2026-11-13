@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 import json
 import re
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -287,3 +288,11 @@ def test_luz_tab_only_with_factusol():
     env = FakeHA().env()
     for template in _templates(panel, []):
         assert "Undefined" not in env.from_string(template).render()
+
+
+def test_luz_detects_price_sensors():
+    from custom_components.centro_control.manager import FACTUSOL_KEYS
+
+    assert {"alerta_precios", "historial_precios"} <= set(FACTUSOL_KEYS)
+    js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
+    assert 'at("alerta_precios")' in js and 'at("historial_precios")' in js

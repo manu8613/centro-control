@@ -52,7 +52,7 @@ flechas); cada dispositivo guarda su propio diseño.
 | **Luz** | Datos de [Factusol](https://github.com/manu8613/Factusol) (detección automática): factura del ciclo y su desglose, hucha, historial de facturas, aviso e histórico de cambios de precio entre facturas (Factusol 0.3.0+) y calibración de la pinza; permite importar las facturas en PDF y los CSV de la distribuidora, calibrar y registrar facturas. |
 | **Luces** | Encendidas, interior y exterior, sin conexión, control de cada luz y «Apagar todas». Se leen en directo: una luz nueva aparece sola. |
 | **Temperaturas** (final) | Mapa de nubes y lluvia en tiempo real (requiere *Weather Radar Card* de HACS) y mapa de rayos (requiere la integración *Blitzortung*). |
-| **Videoportero** (ventana emergente) | Al llamar al timbre aparece sobre cualquier pestaña la imagen en directo y un botón «Abrir puerta» (solo si lo configuras, con doble toque). Configurar → Videoportero o pestaña Configuración del panel. |
+| **Videoportero** (ventana emergente) | Al llamar al timbre aparece sobre cualquier pestaña la imagen en directo con los botones «Activar audio», «Abrir puerta» (solo si lo configuras, con doble toque) y «Colgar». Configurar → Videoportero o pestaña Configuración del panel. |
 | **Enchufes** | Enchufes e interruptores con su estado y consumo (si miden), por estancia. Los nuevos aparecen solos; se pueden excluir en Configurar → Luces y enchufes. |
 | **Temperaturas** | Media, máxima y mínima, mapa de calor, termostatos y gráficas de temperatura y humedad. |
 | **Riego** | Cada zona con su tiempo, «Regar», humedad del suelo, lluvia, «Omitir si llueve» y «Parar todo». |

@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.13.0] - 2026-11-15
+
+### Añadido
+- Videoportero: la ventana de llamada tiene ahora un botón **Activar audio** (quita el silencio del vídeo en directo; solo escucha) y un botón **Colgar**, que cierra la ventana y, si eliges una entidad en Configuración → Videoportero → «Colgar la llamada», corta también la llamada en el videoportero. Los botones son más grandes para usarlos con el dedo.
+
 ## [2.12.0] - 2026-11-13
 
 ### Añadido

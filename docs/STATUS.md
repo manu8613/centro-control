@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.11.0 (v2.12.0 en PR) · Commit de referencia: `f46e247` · Actualizado: 2026-11-13
+Versión publicada: v2.12.0 (v2.13.0 en PR) · Commit de referencia: `471d69c` · Actualizado: 2026-11-15
 
 ## Funciona (comprobado)
+- v2.13.0 (PR): ventana del videoportero con botones «Activar audio» y «Colgar» además de «Abrir puerta». Probada con llamada simulada en Chrome sin pantalla; falta en el videoportero real (que el flujo de la cámara traiga sonido y qué entidad cuelga la llamada).
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
 - Detecta Gas TUR si está instalado.
 - v2.6.0: botón Rotar + pestaña Configuración (rotación de pestañas por dispositivo). Falta probarla en la tablet real.
@@ -41,8 +42,8 @@ Versión publicada: v2.11.0 (v2.12.0 en PR) · Commit de referencia: `f46e247` �
 - Pendientes: probar con una factura real tras actualizar Factusol a 0.2.0.
 
 ## Último cierre
-**Centro de Control · feat/arrastrar-tarjetas · v2.12.0**
-- Objetivo: poder desanclar las tarjetas y moverlas con el ratón a otra sección (diseño 100 % personalizable).
-- Cambios: en modo Diseño las tarjetas y gráficas se arrastran dentro de su sección o a otra; el movimiento se guarda por pestaña y dispositivo (`move` en `centro_control_diseno`); secciones vacías ocultas fuera del modo edición.
-- Pruebas: pytest en verde, pruebas de Node (reubicar, orden, vaciar/ocultar sección, volver a la original, no-op) y arrastre simulado en Chrome headless.
-- Pendientes: probar con ratón real en el PC; en táctil siguen las flechas.
+**Centro de Control · feat/videoportero-audio-colgar · v2.13.0**
+- Objetivo: que la ventana de llamada del videoportero tenga vídeo, botón de audio y botones de abrir y colgar, sobre cualquier pestaña.
+- Cambios: botones «Activar audio» (quita el silencio del vídeo) y «Colgar» (cierra y, opcional, llama a la entidad `timbre_colgar` elegida en Configuración del panel); botones táctiles más grandes.
+- Pruebas: pytest en verde; Chrome sin pantalla con llamada simulada en Resumen, Solar y Configuración (aparece, audio, doble toque de abrir, colgar, no reaparece).
+- Pendientes: probar en el videoportero real; `timbre_colgar` solo se configura por dispositivo (no en las opciones de la integración); la ventana solo sale con el panel Centro de Control abierto; el audio es solo de escucha.

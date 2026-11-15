@@ -74,9 +74,12 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 .ordl{display:flex;flex-direction:column;gap:4px;margin-top:8px}.ordr{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:8px;background:#071426;border:1px solid #12304d}.ordr span{flex:1;font-size:13px}.ordr.dis{opacity:.4}.ordb{all:unset;cursor:pointer;width:30px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:8px;border:1px solid #12304d;color:${C.cyan};font-size:13px}.ordb:hover{background:#0b1a30}.ordb[disabled]{opacity:.25;cursor:default}
 .chip.dis{opacity:.35;text-decoration:line-through;cursor:default}
 .bellin{width:100%;box-sizing:border-box;background:#0b1220;color:inherit;border:1px solid #334155;border-radius:8px;padding:6px 8px;font-size:13px}
-.bellf{display:flex;justify-content:flex-end}
-.bellopen{background:#1e293b;color:inherit;border:1px solid #475569;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:13px;display:flex;gap:6px;align-items:center}
+.bellf{display:flex;gap:8px;flex-wrap:wrap}
+.bellb{flex:1 1 120px;min-height:46px;background:#1e293b;color:inherit;border:1px solid #475569;border-radius:10px;padding:6px 12px;cursor:pointer;font-size:14px;display:flex;gap:6px;align-items:center;justify-content:center}
 .bellopen.armed{background:#b45309;border-color:#f59e0b}
+.bellaudio.on{background:#155e75;border-color:#22d3ee}
+.bellhang{background:#7f1d1d;border-color:#ef4444}
+.bellnote{min-height:16px;text-align:center}
 
 :host{display:block;min-height:100vh;color:${C.text};font-family:var(--paper-font-body1_-_font-family, "Segoe UI", Roboto, sans-serif);
  background:radial-gradient(1200px 600px at 8% -10%, rgba(0,229,255,.16), transparent 60%),radial-gradient(900px 500px at 110% 0%, rgba(255,79,216,.10), transparent 60%),
@@ -311,7 +314,10 @@ class CentroControlPanel extends HTMLElement {
   set hass(h) {
     this._hass = h;
     if (this._menu) this._menu.hass = h;
-    if (this._bellEl && this._bellCard) this._bellCard.hass = h;
+    if (this._bellEl && this._bellCard) {
+      this._bellCard.hass = h;
+      if (this._bellAudio) this._bellVideos().forEach((v) => (v.muted = false));
+    }
     this._bellCheck();
     this._schedule();
   }
@@ -890,6 +896,8 @@ class CentroControlPanel extends HTMLElement {
     if (bell) {
       e.stopPropagation();
       if (bell.dataset.bell === "close") this._bellClose();
+      else if (bell.dataset.bell === "audio") this._bellToggleAudio();
+      else if (bell.dataset.bell === "hang") this._bellHang();
       else this._bellOpenDoor();
       return;
     }
@@ -2044,7 +2052,11 @@ class CentroControlPanel extends HTMLElement {
     }
   }
   _bellDoor() {
-    const d = this._bellSet("timbre_abrir");
+    return this._bellAction("timbre_abrir");
+  }
+  /** Entity + service to call for a videoportero action (open door, hang up), or null if not configured. */
+  _bellAction(key) {
+    const d = this._bellSet(key);
     if (!d) return null;
     const dom = String(d).split(".")[0];
     const svc = { switch: ["switch", "turn_on"], button: ["button", "press"], input_button: ["input_button", "press"], lock: ["lock", "unlock"], script: ["script", "turn_on"], input_boolean: ["input_boolean", "turn_on"] }[dom];
@@ -2058,7 +2070,10 @@ class CentroControlPanel extends HTMLElement {
     const door = this._bellDoor();
     this._bellEl.innerHTML = `<div class="bellbox"><div class="bellh">${icon("mdi:doorbell-video")}<b>Llaman a la puerta</b><span class="muted small">${esc(this.name(r.entity))}</span><button class="bellx" data-bell="close" title="Cerrar">${icon("mdi:close")}</button></div>
       <div class="bellv">${cam ? '<span class="muted small">Conectando con la cámara…</span>' : '<span class="muted small">Sin cámara configurada (Configurar → Videoportero).</span>'}</div>
-      ${door ? `<div class="bellf"><button class="bellopen" data-bell="open">${icon("mdi:door-open")}<span>Abrir puerta</span></button></div>` : ""}</div>`;
+      <div class="bellf"><button class="bellb bellaudio" data-bell="audio">${icon("mdi:volume-off")}<span>Activar audio</span></button>
+      ${door ? `<button class="bellb bellopen" data-bell="open">${icon("mdi:door-open")}<span>Abrir puerta</span></button>` : ""}
+      <button class="bellb bellhang" data-bell="hang">${icon("mdi:phone-hangup")}<span>Colgar</span></button></div>
+      <div class="bellnote muted small"></div></div>`;
     this.shadowRoot.appendChild(this._bellEl);
     if (!cam) return;
     try {
@@ -2082,6 +2097,51 @@ class CentroControlPanel extends HTMLElement {
       this._bellEl.remove(); // removing the card element stops the video stream
     }
     this._bellEl = this._bellCard = null;
+    this._bellAudio = false;
+  }
+  /** <video> elements of the live card (they live inside nested shadow roots). */
+  _bellVideos() {
+    const out = [];
+    const walk = (n) => {
+      if (!n) return;
+      if (n.tagName === "VIDEO") out.push(n);
+      if (n.shadowRoot) walk(n.shadowRoot);
+      for (const c of n.children || []) walk(c);
+    };
+    walk(this._bellCard);
+    return out;
+  }
+  /** Unmutes / mutes the live video. The browser only lets sound start from a tap, hence the button. */
+  _bellToggleAudio() {
+    const b = this._bellEl && this._bellEl.querySelector(".bellaudio");
+    if (!b) return false;
+    const note = this._bellEl.querySelector(".bellnote");
+    const vids = this._bellVideos();
+    if (!vids.length) {
+      if (note) note.textContent = this._bellCard ? "Esta cámara no envía vídeo con sonido (imagen fija o MJPEG)." : "La imagen aún no está lista; prueba en un momento.";
+      return false;
+    }
+    this._bellAudio = !this._bellAudio;
+    vids.forEach((v) => {
+      v.muted = !this._bellAudio;
+      if (this._bellAudio) {
+        v.volume = 1;
+        const p = v.play && v.play();
+        if (p && p.catch) p.catch(() => {});
+      }
+    });
+    b.classList.toggle("on", this._bellAudio);
+    b.querySelector("ha-icon").setAttribute("icon", this._bellAudio ? "mdi:volume-high" : "mdi:volume-off");
+    b.querySelector("span").textContent = this._bellAudio ? "Silenciar" : "Activar audio";
+    if (note) note.textContent = this._bellAudio ? "Audio activado. Si no se oye nada, la cámara no manda sonido en este flujo." : "";
+    return this._bellAudio;
+  }
+  /** Hangs up: calls the configured entity (if any) and closes the window. */
+  _bellHang() {
+    const a = this._bellAction("timbre_colgar");
+    if (a) this._hass.callService(a.domain, a.service, { entity_id: a.entity });
+    this._bellClose();
+    return !!a;
   }
   /** Two taps within 4 s: the first arms the button, the second opens the door. */
   _bellOpenDoor() {
@@ -2402,7 +2462,8 @@ class CentroControlPanel extends HTMLElement {
       ${field("timbre_llamadas", "Sensor de llamada (varios, separados por coma)", opts(/^(sensor|binary_sensor|event)\..*(call|ring|timbre|bell|llam)/i), this._list(pr.timbre_llamadas).join(", "), this._list(this.set_("timbre_llamadas")).join(", ") || "automático (*_call_state)")}
       ${field("timbre_camara", "Cámara", opts(/^camera\./), pr.timbre_camara || "", this.set_("timbre_camara") || "automático (por nombre)")}
       ${field("timbre_abrir", "Abrir puerta (interruptor, botón, cerradura o script)", opts(/^(switch|button|input_button|lock|script|input_boolean)\./), pr.timbre_abrir || "", this.set_("timbre_abrir") || "sin botón de abrir")}
-      <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar.</div>`,
+      ${field("timbre_colgar", "Colgar la llamada (botón, interruptor o script; opcional)", opts(/^(switch|button|input_button|script|input_boolean)\..*(hang|reject|colg|rechaz|cancel)/i), pr.timbre_colgar || "", "solo cerrar la ventana")}
+      <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar. «Activar audio» quita el silencio del vídeo (solo escucha). «Colgar» cierra la ventana y, si eliges una entidad, corta también la llamada en el videoportero.</div>`,
       { c: C.amber }
     );
     return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, visCard, ordCard, tabsCard, bellCard] }];

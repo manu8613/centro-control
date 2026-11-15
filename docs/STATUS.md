@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.13.0 (v2.14.0 en PR) · Commit de referencia: `74b9dd8` · Actualizado: 2026-11-15
+Versión publicada: v2.13.0 (v2.14.0 y v2.15.0 en PR) · Commit de referencia: `74b9dd8` · Actualizado: 2026-11-15
 
 ## Funciona (comprobado)
+- v2.15.0 (PR, sobre la rama de la v2.14.0): modo Diseño con arrastre con el dedo (asa ✥), ocultar tarjetas y títulos, y «Añadir» indicadores y gráficas de cualquier entidad en cualquier pestaña. Probado con toques simulados en Chrome sin pantalla; falta en la tablet real.
 - v2.14.0 (PR): botón «Probar ventana de llamada» en Configuración, con lista en vivo (sensor, vídeo, audio, abrir, colgar). Probado con cámara simulada; falta en el videoportero real.
 - v2.13.0: ventana del videoportero con botones «Activar audio» y «Colgar» además de «Abrir puerta». Probada con llamada simulada en Chrome sin pantalla; falta en el videoportero real (que el flujo de la cámara traiga sonido y qué entidad cuelga la llamada).
 - Integración HACS con panel propio en JS, CI (pytest, hassfest, HACS) y release automática con ZIP.
@@ -20,21 +21,13 @@ Versión publicada: v2.13.0 (v2.14.0 en PR) · Commit de referencia: `74b9dd8` �
 - v2.7.1: «Aplicar» actúa sobre los programas de madrugada (1 y 2 antes de las 08:00).
 
 ## En curso
-- Poder mover las gráficas del panel (en modo tablet algunas quedan raras).
+- Nada.
 
 ## Pendiente / por verificar
 - Dependabot añadido en este cambio: revisar los primeros PR que abra.
 
 ## Últimos cierres
 <!-- Pegar aquí el bloque CIERRE de cada tarea (ver CLAUDE.md). Conservar solo los 5 últimos. -->
-
-**Centro de Control · feat/pestana-luz-factusol · v2.8.0**
-- Objetivo: pestaña Luz junto a Gas con todos los datos de Factusol y su importación/calibración.
-- Cambios: `manager.luz_entities()` (registro, plataforma `factusol`), `ctx.luz`, `v_luz` en el JS, vista Luz condicional en el panel YAML, estilos de formulario; README y CHANGELOG.
-- Pruebas: pytest 74 OK (nuevo test de la vista Luz); humo del JS con estados simulados (node).
-- Verificado: no se tocó la detección de Gas TUR; sin Factusol la pestaña muestra un aviso.
-- Pendientes: probar en la casa real (CSV real y registro de factura); Factusol ≥ 0.1.1 necesario.
-- Próximo paso: fusionar con CI en verde y actualizar desde HACS.
 
 **Centro de Control · feat/luz-factura-pdf · v2.9.0**
 - Objetivo: importar facturas de luz en PDF desde la pestaña Luz sin teclear datos.
@@ -48,9 +41,15 @@ Versión publicada: v2.13.0 (v2.14.0 en PR) · Commit de referencia: `74b9dd8` �
 - Pruebas: pytest en verde; Chrome sin pantalla con llamada simulada en Resumen, Solar y Configuración (aparece, audio, doble toque de abrir, colgar, no reaparece).
 - Pendientes: probar en el videoportero real; `timbre_colgar` solo se configura por dispositivo (no en las opciones de la integración); la ventana solo sale con el panel Centro de Control abierto; el audio es solo de escucha.
 
-## Último cierre
 **Centro de Control · feat/videoportero-prueba · v2.14.0**
 - Objetivo: botón en Configuración para comprobar la ventana del videoportero (apertura, vídeo, audio y colgar) sin esperar a una llamada.
 - Cambios: `_bellTest` y lista de comprobación en vivo (`_bellTestRows`), detección de sonido en el flujo (`_bellHasSound`), la ventana de prueba no se cierra sola y «Colgar» avisa de lo que ha hecho antes de cerrar.
 - Pruebas: pytest en verde; Chrome sin pantalla con cámara simulada, con y sin entidades y con y sin sonido.
 - Pendientes: probar en el videoportero real; el aviso de «sin sonido» depende de lo que informe el navegador de la tablet.
+
+## Último cierre
+**Centro de Control · feat/diseno-personalizable · v2.15.0**
+- Objetivo: diseño totalmente personalizable: mover tarjetas, gráficas y títulos donde se quiera (también con el dedo) y añadir indicadores y gráficas propios a la pantalla principal.
+- Cambios: asa ✥ con eventos de puntero (`_grabStart/_grabMove/_grabEnd`), `_dropAt` común a ratón y dedo, `hide` y `custom` en `centro_control_diseno`, diálogo «Añadir» (`_addOpen/_addOk`), `_customCards`; títulos movibles; corregido el resaltado del botón Diseño.
+- Pruebas: pytest en verde; Chrome sin pantalla con toques simulados (arrastrar tarjeta y título, ocultar, añadir indicador y gráfica, recargar, restablecer, eliminar).
+- Pendientes: probar en la tablet real; los botones de dentro de una tarjeta se mueven con su tarjeta, no sueltos; lo añadido se guarda por dispositivo (no se comparte entre tablet y PC).

@@ -122,6 +122,11 @@ main.edit .sec{outline:1px dashed ${C.amber}55;outline-offset:4px;border-radius:
 .card .lay{top:6px;right:6px}.card .lay button{padding:3px 7px;background:#060d20ee}
 main.edit .card[draggable]{cursor:grab}main.edit .card.dragging{opacity:.35}.card.dropb{box-shadow:-5px 0 0 #22d3ee,0 0 18px #22d3ee66}.card.dropa{box-shadow:5px 0 0 #22d3ee,0 0 18px #22d3ee66}.sec.dropsec{outline:2px solid #22d3ee!important;background:#22d3ee0d}.sec.emptysec{min-height:90px}main.edit .sec.emptysec::after{content:"Sección vacía: suelta aquí una tarjeta";color:#64748b;font-size:12px;align-self:center;grid-column:1/-1;text-align:center}
 main.edit .card,main.edit .title{cursor:default}main.edit .card{padding-top:34px}
+main.edit .title{position:relative;padding-top:34px}.title .lay{top:2px;right:2px}.title .lay button{padding:3px 7px;background:#060d20ee}
+.lay button.grab{touch-action:none;cursor:grab;font-size:14px;padding:3px 9px}
+main.edit [data-k].dragging{opacity:.35}[data-k].dropb{box-shadow:-5px 0 0 #22d3ee,0 0 18px #22d3ee66}[data-k].dropa{box-shadow:5px 0 0 #22d3ee,0 0 18px #22d3ee66}
+main.edit [data-k].hid{opacity:.3;filter:grayscale(1)}main.edit [data-k].hid .lay{opacity:1}
+.addf{display:flex;flex-direction:column;gap:4px}.addf label{font-size:12px;color:${C.muted};margin-top:8px}.addf select{width:100%;box-sizing:border-box;background:#0b1220;color:inherit;border:1px solid #334155;border-radius:8px;padding:6px 8px;font-size:13px}.adderr{color:${C.red};font-size:12px;min-height:16px}
 .card{--c:${C.cyan};position:relative;grid-column:span 12;background:linear-gradient(150deg,rgba(10,20,44,.92),rgba(3,8,20,.94));border:1px solid color-mix(in srgb,var(--c) 34%,transparent);
  border-radius:16px;padding:12px 14px;font-size:13px;overflow:hidden;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--c) 8%,transparent),0 0 22px color-mix(in srgb,var(--c) 14%,transparent),0 8px 24px rgba(0,0,0,.45)}
 .card::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,transparent,var(--c),transparent)}
@@ -357,6 +362,10 @@ class CentroControlPanel extends HTMLElement {
     root.addEventListener("dragleave", (e) => this._dragMark(null));
     root.addEventListener("drop", (e) => this._drop(e));
     root.addEventListener("dragend", () => this._dragEnd());
+    root.addEventListener("pointerdown", (e) => this._grabStart(e));
+    root.addEventListener("pointermove", (e) => this._grabMove(e));
+    root.addEventListener("pointerup", (e) => this._grabEnd(e, true));
+    root.addEventListener("pointercancel", (e) => this._grabEnd(e, false));
     root.addEventListener("input", (e) => {
       this._busy = Date.now() + 2500;
       const t = e.target;
@@ -645,9 +654,11 @@ class CentroControlPanel extends HTMLElement {
       console.error("Centro de Control", err);
       sections = [{ cards: [this.empty("err", `Error al dibujar esta pestaña: ${err.message}`)] }];
     }
+    const own = this._customCards();
+    if (own.length) sections.push({ id: "propios", cards: own });
     sections = this._applyLayout(sections);
     if (this._edit)
-      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: arrastra las tarjetas y gráficas con el ratón a otro sitio o a otra sección (en pantallas táctiles, usa las flechas) y cambia su ancho con ⤢. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
+      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: arrastra tarjetas, títulos y gráficas a otro sitio o a otra sección (con el ratón desde cualquier punto; con el dedo, desde el asa ✥), cambia su ancho con ⤢ y ocúltalas con ✕. Con «Añadir» pones indicadores y gráficas de cualquier entidad. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="add">${icon("mdi:plus-circle-outline")}Añadir</button><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
     sections.push({ cls: "wall", cards: [{ k: "foot", html: "", cls: "foot", attrs: "", c: C.muted, foot: true }] });
     const layout = (this._edit ? "E" : "") + this._tab + "|" + sections.map((s) => (s.cls || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
     if (layout !== this._layoutKey) {
@@ -709,7 +720,26 @@ class CentroControlPanel extends HTMLElement {
     const all = this._layLoad();
     const L = (all[this._tab] = all[this._tab] || { order: [], w: {}, cards: {}, cw: {} });
     if (!L.move) L.move = {};
+    if (!L.hide) L.hide = {};
+    if (!Array.isArray(L.custom)) L.custom = [];
     return L;
+  }
+  /** Cards the user added in Diseño (any entity as an indicator, or a history chart). Stored per tab and device. */
+  _customCards() {
+    return this._layTab().custom.map((u) => {
+      const k = "u_" + u.id, ents = (u.entities || []).filter(Boolean);
+      if (u.type === "chart") {
+        const unit = this.unit(ents.find((e) => this.unit(e))) || "";
+        const card = this.chartCard(k, u.title || ents.map((e) => this.name(e)).join(" · "), C.cyan, { kind: "history", hours: u.hours || 24, unit, height: 240, series: ents.map((e) => ({ name: this.name(e), entity: e })) }, 6);
+        card.own = true;
+        return card;
+      }
+      const e = ents[0], st = this.st(e), raw = st ? st.state : null, num = raw !== null && raw !== "" && isFinite(Number(raw));
+      const val = !st ? "—" : num ? `${fmt(Number(raw), Math.abs(Number(raw)) >= 100 ? 0 : Number.isInteger(Number(raw)) ? 0 : 1)} ${esc(this.unit(e))}` : esc(raw);
+      const card = this.kpi(k, e, val, esc(u.title || this.name(e)) + (st ? "" : " · entidad no encontrada"), this.a(e, "icon") || "mdi:gauge", st ? C.cyan : C.red, 6);
+      card.own = true;
+      return card;
+    });
   }
   _applyLayout(sections) {
     const L = this._layTab();
@@ -728,6 +758,7 @@ class CentroControlPanel extends HTMLElement {
       src.cards = src.cards.filter((x) => x !== c);
       dst.cards.push(c);
     }
+    if (!this._edit) sections.forEach((s) => (s.cards = s.cards.filter((c) => !L.hide[c.k])));
     if (!this._edit) sections = sections.filter((x) => x.cards.length);
     sections.forEach((s) => {
       if (s.cards.length && s.cards.every((c) => c.chart) && s.cls !== "wall") s.cls = "charts";
@@ -748,8 +779,10 @@ class CentroControlPanel extends HTMLElement {
       for (const c of s.cards) {
         const w = L.cw[c.k];
         if (w) c.cls = c.cls.replace(/\bu\d+\b/g, "") + " u" + w;
-        if (this._edit && !c.foot && c.cls.split(" ").includes("card")) {
-          const tools = `<div class="lay"><button data-lay="card-prev" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Antes">◀</button><button data-lay="card-next" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Después">▶</button><button data-lay="card-w" data-id="${esc(c.k)}" title="Ancho">⤢</button></div>`;
+        if (this._edit && !c.foot && (c.cls.split(" ").includes("card") || c.cls.split(" ").includes("title"))) {
+          const hid = !!L.hide[c.k];
+          if (hid) c.cls += " hid";
+          const tools = `<div class="lay"><button class="grab" data-grab="${esc(c.k)}" title="Arrastrar (con el dedo o el ratón)">✥</button><button data-lay="card-prev" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Antes">◀</button><button data-lay="card-next" data-sec="${esc(s.id)}" data-id="${esc(c.k)}" title="Después">▶</button><button data-lay="card-w" data-id="${esc(c.k)}" title="Ancho">⤢</button><button data-lay="card-hide" data-id="${esc(c.k)}" title="${hid ? "Volver a mostrar" : "Ocultar"}">${hid ? "Mostrar" : "✕"}</button>${c.own ? `<button data-lay="card-del" data-id="${esc(c.k)}" title="Eliminar">🗑</button>` : ""}</div>`;
           c.html += tools;
           c.drag = true;
         }
@@ -800,8 +833,11 @@ class CentroControlPanel extends HTMLElement {
   _drop(e) {
     if (!this._dragging) return;
     e.preventDefault();
-    const k = this._dragging;
     const { card, sec } = this._dragTarget(e);
+    this._dropAt(e, card, sec);
+  }
+  _dropAt(e, card, sec) {
+    const k = this._dragging;
     if (sec) {
       const to = sec.dataset.sec;
       const keys = [...sec.children].filter((n) => n.hasAttribute("data-k") && n.dataset.k !== k && n.dataset.k !== "foot").map((n) => n.dataset.k);
@@ -821,6 +857,84 @@ class CentroControlPanel extends HTMLElement {
     this._layoutKey = "";
     this._schedule(true);
   }
+  // ---- Diseño: arrastrar con el dedo o el lápiz desde el asa ✥ (el arrastre de HTML no funciona en táctil)
+  _grabTarget(x, y) {
+    let n = this.shadowRoot.elementFromPoint(x, y);
+    const els = [];
+    for (; n && n !== this.shadowRoot; n = n.parentNode || n.host) if (n.nodeType === 1) els.push(n);
+    const isSec = (m) => m.classList && m.classList.contains("sec") && m.hasAttribute("data-sec");
+    return { card: els.find((m) => m.hasAttribute("data-k") && m.parentElement && isSec(m.parentElement)), sec: els.find(isSec) };
+  }
+  _grabStart(e) {
+    const h = e.target && e.target.closest && e.target.closest("[data-grab]");
+    if (!this._edit || !h || e.pointerType === "mouse") return;
+    const el = h.closest("[data-k]");
+    if (!el) return;
+    e.preventDefault();
+    this._grab = e.pointerId;
+    this._dragging = el.dataset.k;
+    el.classList.add("dragging");
+    try {
+      h.setPointerCapture(e.pointerId);
+    } catch (_e) {
+      /* older browsers: the move events still reach the root */
+    }
+  }
+  _grabMove(e) {
+    if (this._grab === undefined || this._grab === null || e.pointerId !== this._grab) return;
+    e.preventDefault();
+    const { card, sec } = this._grabTarget(e.clientX, e.clientY);
+    this._dragMark(card && card.dataset.k !== this._dragging ? card : null, card ? this._dragAfter(e, card) : false, sec);
+    const h = window.innerHeight || 0, step = e.clientY < 70 ? -18 : e.clientY > h - 70 ? 18 : 0;
+    if (step) {
+      const m = this.shadowRoot.querySelector("main");
+      (m && m.scrollHeight > m.clientHeight + 2 ? m : document.scrollingElement || document.documentElement).scrollBy(0, step);
+    }
+  }
+  _grabEnd(e, drop) {
+    if (this._grab === undefined || this._grab === null || e.pointerId !== this._grab) return;
+    this._grab = null;
+    if (drop) {
+      const { card, sec } = this._grabTarget(e.clientX, e.clientY);
+      this._dropAt(e, card, sec);
+    } else this._dragEnd();
+  }
+  // ---- Diseño: añadir un indicador o una gráfica propios
+  _addOpen() {
+    if (this._addEl) return;
+    const ids = Object.keys(this._hass?.states || {}).sort();
+    this._addEl = document.createElement("div");
+    this._addEl.className = "bell";
+    this._addEl.innerHTML = `<div class="bellbox" style="width:min(460px,100%)"><div class="bellh">${icon("mdi:plus-circle-outline")}<b>Añadir a esta pestaña</b><span class="muted small"></span><button class="bellx" data-lay="add-cancel" title="Cerrar">${icon("mdi:close")}</button></div>
+      <div class="addf"><label>Qué quieres añadir</label><select class="addtype"><option value="kpi">Indicador (valor actual de una entidad)</option><option value="chart">Gráfica (historial de una o varias entidades)</option></select>
+      <label>Entidad (en gráficas, varias separadas por coma)</label><input class="bellin addent" list="dl_addent" placeholder="sensor.temperatura_salon" autocomplete="off" spellcheck="false"><datalist id="dl_addent">${ids.map((e) => `<option value="${esc(e)}">${esc(this.name(e))}</option>`).join("")}</datalist>
+      <label>Título (opcional)</label><input class="bellin addtitle" placeholder="El nombre de la entidad" autocomplete="off">
+      <label>Periodo de la gráfica</label><select class="addhours"><option value="6">6 horas</option><option value="24" selected>24 horas</option><option value="48">2 días</option><option value="168">7 días</option></select>
+      <div class="adderr"></div></div>
+      <div class="bellf"><button class="bellb" data-lay="add-cancel">Cancelar</button><button class="bellb bellaudio on" data-lay="add-ok">Añadir</button></div></div>`;
+    this.shadowRoot.appendChild(this._addEl);
+  }
+  _addClose() {
+    if (this._addEl) this._addEl.remove();
+    this._addEl = null;
+  }
+  /** Validates the form and stores the new card. Returns the error text, or "" when it was added. */
+  _addOk() {
+    const q = (c) => this._addEl.querySelector(c);
+    const type = q(".addtype").value === "chart" ? "chart" : "kpi";
+    const ents = String(q(".addent").value || "").split(",").map((x) => x.trim()).filter(Boolean);
+    const bad = ents.filter((e) => !this.st(e));
+    const err = !ents.length ? "Escribe o elige una entidad." : bad.length ? `No existe: ${bad.join(", ")}` : type === "kpi" && ents.length > 1 ? "Un indicador muestra una sola entidad; para varias, elige Gráfica." : "";
+    if (err) {
+      q(".adderr").textContent = err;
+      return err;
+    }
+    const L = this._layTab();
+    const id = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+    L.custom.push({ id, type, entities: ents, title: String(q(".addtitle").value || "").trim().slice(0, 60), hours: Number(q(".addhours").value) || 24 });
+    this._addClose();
+    return "";
+  }
   _dragEnd() {
     this._dragging = null;
     this._dragMark(null);
@@ -837,9 +951,24 @@ class CentroControlPanel extends HTMLElement {
     if (d.lay === "toggle") {
       this._edit = !this._edit;
       this.shadowRoot.querySelector("main").classList.toggle("edit", this._edit);
-      this.shadowRoot.querySelector(".laybtn").classList.toggle("on", this._edit);
+      this.shadowRoot.querySelector(".laybtn[data-lay]").classList.toggle("on", this._edit);
     } else if (d.lay === "reset") {
+      const keep = L.custom; // the cards the user added are removed one by one with 🗑, not by resetting the layout
       delete this._layLoad()[this._tab];
+      if (keep.length) this._layTab().custom = keep;
+    } else if (d.lay === "add") {
+      return this._addOpen();
+    } else if (d.lay === "add-cancel") {
+      return this._addClose();
+    } else if (d.lay === "add-ok") {
+      if (this._addOk()) return;
+    } else if (d.lay === "card-hide") {
+      if (L.hide[d.id]) delete L.hide[d.id];
+      else L.hide[d.id] = true;
+    } else if (d.lay === "card-del") {
+      const id = String(d.id).replace(/^u_/, "");
+      L.custom = L.custom.filter((u) => u.id !== id);
+      for (const m of [L.move, L.hide, L.cw]) delete m[d.id];
     } else if (d.lay === "sec-prev" || d.lay === "sec-next") {
       const list = move([...this._secIds], d.id, d.lay === "sec-prev" ? -1 : 1);
       if (list) L.order = list;

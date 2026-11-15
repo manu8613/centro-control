@@ -80,6 +80,7 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 .bellaudio.on{background:#155e75;border-color:#22d3ee}
 .bellhang{background:#7f1d1d;border-color:#ef4444}
 .bellnote{min-height:16px;text-align:center}
+.bellchk{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12px;background:#071426;border:1px solid #12304d;border-radius:10px;padding:8px 10px}.bellchk b{font-weight:600}.bellchk i{font-style:normal}
 
 :host{display:block;min-height:100vh;color:${C.text};font-family:var(--paper-font-body1_-_font-family, "Segoe UI", Roboto, sans-serif);
  background:radial-gradient(1200px 600px at 8% -10%, rgba(0,229,255,.16), transparent 60%),radial-gradient(900px 500px at 110% 0%, rgba(255,79,216,.10), transparent 60%),
@@ -896,6 +897,7 @@ class CentroControlPanel extends HTMLElement {
     if (bell) {
       e.stopPropagation();
       if (bell.dataset.bell === "close") this._bellClose();
+      else if (bell.dataset.bell === "test") this._bellTest();
       else if (bell.dataset.bell === "audio") this._bellToggleAudio();
       else if (bell.dataset.bell === "hang") this._bellHang();
       else this._bellOpenDoor();
@@ -2047,7 +2049,7 @@ class CentroControlPanel extends HTMLElement {
       clearTimeout(this._bellTimer);
       this._bellTimer = null;
       if (!this._bellEl && r.key !== this._bellDismissed) this._bellOpen(r);
-    } else if (this._bellEl && !this._bellTimer) {
+    } else if (this._bellEl && !this._bellTimer && !this._bellTesting) {
       this._bellTimer = setTimeout(() => this._bellClose(), 30000);
     }
   }
@@ -2066,15 +2068,21 @@ class CentroControlPanel extends HTMLElement {
     this._bellEl = document.createElement("div");
     this._bellEl.className = "bell";
     this._bellKey = r.key;
+    this._bellTesting = !!r.test;
+    this._bellSent = {};
     const cam = this._bellCamera();
     const door = this._bellDoor();
-    this._bellEl.innerHTML = `<div class="bellbox"><div class="bellh">${icon("mdi:doorbell-video")}<b>Llaman a la puerta</b><span class="muted small">${esc(this.name(r.entity))}</span><button class="bellx" data-bell="close" title="Cerrar">${icon("mdi:close")}</button></div>
+    this._bellEl.innerHTML = `<div class="bellbox"><div class="bellh">${icon("mdi:doorbell-video")}<b>${r.test ? "Prueba del videoportero" : "Llaman a la puerta"}</b><span class="muted small">${r.test ? "No hay ninguna llamada: es una comprobación" : esc(this.name(r.entity))}</span><button class="bellx" data-bell="close" title="Cerrar">${icon("mdi:close")}</button></div>
       <div class="bellv">${cam ? '<span class="muted small">Conectando con la cámara…</span>' : '<span class="muted small">Sin cámara configurada (Configurar → Videoportero).</span>'}</div>
       <div class="bellf"><button class="bellb bellaudio" data-bell="audio">${icon("mdi:volume-off")}<span>Activar audio</span></button>
       ${door ? `<button class="bellb bellopen" data-bell="open">${icon("mdi:door-open")}<span>Abrir puerta</span></button>` : ""}
       <button class="bellb bellhang" data-bell="hang">${icon("mdi:phone-hangup")}<span>Colgar</span></button></div>
-      <div class="bellnote muted small"></div></div>`;
+      <div class="bellnote muted small">${r.test ? "Los botones actúan de verdad: «Abrir puerta» abre (con doble toque) y «Colgar» acciona su entidad." : ""}</div>${r.test ? '<div class="bellchk"></div>' : ""}</div>`;
     this.shadowRoot.appendChild(this._bellEl);
+    if (r.test) {
+      this._bellTestDraw();
+      this._bellTestInt = setInterval(() => this._bellTestDraw(), 1000);
+    }
     if (!cam) return;
     try {
       const helpers = await window.loadCardHelpers();
@@ -2091,25 +2099,71 @@ class CentroControlPanel extends HTMLElement {
   _bellClose() {
     clearTimeout(this._bellTimer);
     clearTimeout(this._bellArm);
-    this._bellTimer = this._bellArm = null;
+    clearInterval(this._bellTestInt);
+    this._bellTimer = this._bellArm = this._bellTestInt = null;
     if (this._bellEl) {
-      this._bellDismissed = this._bellKey;
+      if (!this._bellTesting) this._bellDismissed = this._bellKey;
       this._bellEl.remove(); // removing the card element stops the video stream
     }
     this._bellEl = this._bellCard = null;
-    this._bellAudio = false;
+    this._bellAudio = this._bellTesting = false;
   }
-  /** <video> elements of the live card (they live inside nested shadow roots). */
-  _bellVideos() {
+  /** Opens the call window without a call (Configuración → Videoportero → Probar), with a live checklist. */
+  _bellTest() {
+    if (this._bellEl) return false;
+    this._bellOpen({ key: "test@" + Date.now(), entity: null, test: true });
+    return true;
+  }
+  /** Elements with the given tag inside the live card (nested shadow roots included). */
+  _bellMedia(tag) {
     const out = [];
     const walk = (n) => {
       if (!n) return;
-      if (n.tagName === "VIDEO") out.push(n);
+      if (n.tagName === tag) out.push(n);
       if (n.shadowRoot) walk(n.shadowRoot);
       for (const c of n.children || []) walk(c);
     };
     walk(this._bellCard);
     return out;
+  }
+  /** true = the stream carries sound, false = it does not, null = cannot tell yet. */
+  _bellHasSound(v) {
+    if (v.srcObject && v.srcObject.getAudioTracks) return v.srcObject.getAudioTracks().length > 0;
+    if (typeof v.mozHasAudio === "boolean") return v.mozHasAudio;
+    if (v.audioTracks && v.audioTracks.length) return true;
+    if (typeof v.webkitAudioDecodedByteCount === "number") return v.webkitAudioDecodedByteCount > 0 ? true : v.currentTime > 3 ? false : null;
+    return null;
+  }
+  /** What the test found: one row per thing to check. state: ok | warn | bad. */
+  _bellTestRows() {
+    const has = (e) => !!this.st(e);
+    const ent = (e) => `${esc(this.name(e))}${has(e) ? "" : " (no existe)"}`;
+    const rows = [];
+    const sens = this._bellSensors();
+    rows.push(["Sensor de llamada", !sens.length ? "bad" : sens.every(has) ? "ok" : "bad", sens.length ? sens.map((e) => `${ent(e)}: ${esc(this.s(e) ?? "—")}`).join(" · ") : "No se ha encontrado ninguno: la ventana no saldrá sola al llamar"]);
+    const cam = this._bellCamera();
+    const vids = this._bellMedia("VIDEO"), imgs = this._bellMedia("IMG");
+    const playing = vids.some((v) => v.videoWidth > 0 || v.readyState >= 2), still = imgs.some((i) => i.naturalWidth > 0);
+    rows.push(["Vídeo", !cam || !has(cam) ? "bad" : playing ? "ok" : "warn", !cam ? "Sin cámara configurada" : !has(cam) ? ent(cam) : playing ? `${ent(cam)}: recibiendo vídeo en directo` : still ? `${ent(cam)}: solo imagen fija (sin directo)` : `${ent(cam)}: esperando la imagen…`]);
+    const snd = vids.map((v) => this._bellHasSound(v));
+    const sound = snd.includes(true) ? true : snd.length && snd.every((x) => x === false) ? false : null;
+    rows.push(["Audio", !vids.length ? "warn" : sound === true ? (this._bellAudio ? "ok" : "warn") : sound === false ? "bad" : "warn",
+      !vids.length ? "Sin vídeo en directo no hay audio" : sound === true ? (this._bellAudio ? "La cámara envía sonido y está activado" : "La cámara envía sonido: pulsa «Activar audio» para oírlo") : sound === false ? "El vídeo llega sin sonido: la cámara o el flujo no lo envían" : this._bellAudio ? "Activado; comprobando si llega sonido…" : "Pulsa «Activar audio» para comprobarlo"]);
+    const door = this._bellDoor(), dSent = this._bellSent.open;
+    rows.push(["Abrir puerta", !door || !has(door.entity) || dSent === "err" ? "bad" : dSent ? "ok" : "warn", !door ? "Sin entidad: la ventana no muestra el botón" : `${ent(door.entity)}${dSent === "err" ? ": la orden ha fallado" : dSent ? ": orden enviada, comprueba que ha abierto" : ": pulsa «Abrir puerta» dos veces para probarla"}`]);
+    const hang = this._bellAction("timbre_colgar");
+    rows.push(["Colgar", hang && !has(hang.entity) ? "bad" : hang ? "ok" : "warn", hang ? `${ent(hang.entity)}: se acciona al pulsar «Colgar»` : "Sin entidad: «Colgar» solo cierra la ventana, no corta la llamada"]);
+    return rows;
+  }
+  _bellTestDraw() {
+    const box = this._bellEl && this._bellEl.querySelector(".bellchk");
+    if (!box) return;
+    const col = { ok: C.green, warn: C.amber, bad: C.red }, mark = { ok: "✓", warn: "•", bad: "✗" };
+    const html = this._bellTestRows().map(([l, st, t]) => `<b style="color:${col[st]}">${mark[st]} ${l}</b><i>${t}</i>`).join("");
+    if (html !== this._bellTestHtml) box.innerHTML = this._bellTestHtml = html;
+  }
+  _bellVideos() {
+    return this._bellMedia("VIDEO");
   }
   /** Unmutes / mutes the live video. The browser only lets sound start from a tap, hence the button. */
   _bellToggleAudio() {
@@ -2139,8 +2193,17 @@ class CentroControlPanel extends HTMLElement {
   /** Hangs up: calls the configured entity (if any) and closes the window. */
   _bellHang() {
     const a = this._bellAction("timbre_colgar");
-    if (a) this._hass.callService(a.domain, a.service, { entity_id: a.entity });
-    this._bellClose();
+    const sent = a ? this._hass.callService(a.domain, a.service, { entity_id: a.entity }) : null;
+    if (!this._bellTesting) {
+      this._bellClose();
+      return !!a;
+    }
+    const note = this._bellEl && this._bellEl.querySelector(".bellnote");
+    const say = (t, c) => note && ((note.textContent = t), (note.style.color = c));
+    say(a ? `Orden de colgar enviada a ${this.name(a.entity)}. Cerrando…` : "Sin entidad de colgar: solo se cierra la ventana. Cerrando…", a ? C.green : C.amber);
+    if (sent && sent.catch) sent.catch((e) => say(`La orden de colgar ha fallado: ${(e && e.message) || e}`, C.red));
+    clearTimeout(this._bellTimer);
+    this._bellTimer = setTimeout(() => this._bellClose(), 2500);
     return !!a;
   }
   /** Two taps within 4 s: the first arms the button, the second opens the door. */
@@ -2160,7 +2223,9 @@ class CentroControlPanel extends HTMLElement {
     }
     clearTimeout(this._bellArm);
     this._bellArm = null;
-    this._hass.callService(d.domain, d.service, { entity_id: d.entity });
+    const sent = this._hass.callService(d.domain, d.service, { entity_id: d.entity });
+    if (this._bellSent) this._bellSent.open = true;
+    if (sent && sent.catch) sent.catch(() => this._bellSent && (this._bellSent.open = "err"));
     b.classList.remove("armed");
     b.querySelector("span").textContent = "Puerta abierta";
     return true;
@@ -2463,6 +2528,8 @@ class CentroControlPanel extends HTMLElement {
       ${field("timbre_camara", "Cámara", opts(/^camera\./), pr.timbre_camara || "", this.set_("timbre_camara") || "automático (por nombre)")}
       ${field("timbre_abrir", "Abrir puerta (interruptor, botón, cerradura o script)", opts(/^(switch|button|input_button|lock|script|input_boolean)\./), pr.timbre_abrir || "", this.set_("timbre_abrir") || "sin botón de abrir")}
       ${field("timbre_colgar", "Colgar la llamada (botón, interruptor o script; opcional)", opts(/^(switch|button|input_button|script|input_boolean)\..*(hang|reject|colg|rechaz|cancel)/i), pr.timbre_colgar || "", "solo cerrar la ventana")}
+      <button class="btn full" style="--c:${C.amber};margin-top:12px" data-bell="test">${icon("mdi:doorbell-video")}Probar ventana de llamada</button>
+      <div class="small muted" style="margin-top:6px">Abre la ventana sin que llame nadie y marca qué funciona: sensor de llamada, vídeo, audio, abrir y colgar. Los botones actúan de verdad.</div>
       <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar. «Activar audio» quita el silencio del vídeo (solo escucha). «Colgar» cierra la ventana y, si eliges una entidad, corta también la llamada en el videoportero.</div>`,
       { c: C.amber }
     );

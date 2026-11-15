@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.14.0] - 2026-11-15
+
+### Añadido
+- Configuración → Videoportero: botón **Probar ventana de llamada**. Abre la ventana sin que llame nadie y muestra una lista en vivo de qué funciona: sensor de llamada, vídeo en directo, audio (detecta si el flujo de la cámara trae sonido), abrir puerta y colgar. Los botones actúan de verdad (abrir sigue pidiendo doble toque) y la ventana de prueba no se cierra sola.
+
 ## [2.13.0] - 2026-11-15
 
 ### Añadido

@@ -8,6 +8,25 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.15.0] - 2026-11-15
+
+### Añadido
+- Modo Diseño, **arrastrar con el dedo**: cada tarjeta, título y gráfica tiene un asa ✥ para moverla con el dedo o el lápiz en tablets y móviles, dentro de su sección o a otra (la pantalla se desplaza sola al acercarte al borde). Con el ratón se sigue arrastrando desde cualquier punto.
+- Modo Diseño, **Añadir**: en cualquier pestaña (también en la principal) puedes añadir indicadores con el valor de cualquier entidad y gráficas con el historial de una o varias entidades (6 h, 24 h, 2 días o 7 días). Se mueven, se redimensionan y se eliminan (🗑) como las demás.
+- Modo Diseño, **ocultar**: el botón ✕ oculta una tarjeta o un título en este dispositivo; en modo diseño se ve atenuada con «Mostrar» para recuperarla.
+- Los títulos de sección también se pueden mover y ocultar.
+
+### Cambiado
+- «Restablecer pestaña» devuelve el orden, los anchos y las tarjetas ocultas a su estado original, pero conserva los indicadores y gráficas que hayas añadido.
+
+### Corregido
+- El botón «Diseño» no se iluminaba al activarlo (se iluminaba «Rotar»).
+
+## [2.14.0] - 2026-11-15
+
+### Añadido
+- Configuración → Videoportero: botón **Probar ventana de llamada**. Abre la ventana sin que llame nadie y muestra una lista en vivo de qué funciona: sensor de llamada, vídeo en directo, audio (detecta si el flujo de la cámara trae sonido), abrir puerta y colgar. Los botones actúan de verdad (abrir sigue pidiendo doble toque) y la ventana de prueba no se cierra sola.
+
 ## [2.13.0] - 2026-11-15
 
 ### Añadido

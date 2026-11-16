@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.13.0 (v2.14.0 y v2.15.0 en PR) · Commit de referencia: `74b9dd8` · Actualizado: 2026-11-15
+Versión publicada: v2.15.0 (v2.16.0 en PR) · Commit de referencia: `05b350f` · Actualizado: 2026-11-16
 
 ## Funciona (comprobado)
+- v2.16.0 (PR): pestaña Caldera con las entidades de ebusd (detección automática en el registro, plataforma MQTT, circuito «bai»): indicadores de aguja, estado S.xx, ciclo de quemado de 24 h con avisos y peligro, contadores y gráficas. Probada en Chrome sin pantalla con valores reales de una caldera e historial simulado; falta verla en la casa real.
 - v2.15.0 (PR, sobre la rama de la v2.14.0): modo Diseño con arrastre con el dedo (asa ✥), ocultar tarjetas y títulos, y «Añadir» indicadores y gráficas de cualquier entidad en cualquier pestaña. Probado con toques simulados en Chrome sin pantalla; falta en la tablet real.
 - v2.14.0 (PR): botón «Probar ventana de llamada» en Configuración, con lista en vivo (sensor, vídeo, audio, abrir, colgar). Probado con cámara simulada; falta en el videoportero real.
 - v2.13.0: ventana del videoportero con botones «Activar audio» y «Colgar» además de «Abrir puerta». Probada con llamada simulada en Chrome sin pantalla; falta en el videoportero real (que el flujo de la cámara traiga sonido y qué entidad cuelga la llamada).
@@ -47,9 +48,15 @@ Versión publicada: v2.13.0 (v2.14.0 y v2.15.0 en PR) · Commit de referencia: `
 - Pruebas: pytest en verde; Chrome sin pantalla con cámara simulada, con y sin entidades y con y sin sonido.
 - Pendientes: probar en el videoportero real; el aviso de «sin sonido» depende de lo que informe el navegador de la tablet.
 
-## Último cierre
 **Centro de Control · feat/diseno-personalizable · v2.15.0**
 - Objetivo: diseño totalmente personalizable: mover tarjetas, gráficas y títulos donde se quiera (también con el dedo) y añadir indicadores y gráficas propios a la pantalla principal.
 - Cambios: asa ✥ con eventos de puntero (`_grabStart/_grabMove/_grabEnd`), `_dropAt` común a ratón y dedo, `hide` y `custom` en `centro_control_diseno`, diálogo «Añadir» (`_addOpen/_addOk`), `_customCards`; títulos movibles; corregido el resaltado del botón Diseño.
 - Pruebas: pytest en verde; Chrome sin pantalla con toques simulados (arrastrar tarjeta y título, ocultar, añadir indicador y gráfica, recargar, restablecer, eliminar).
 - Pendientes: probar en la tablet real; los botones de dentro de una tarjeta se mueven con su tarjeta, no sueltos; lo añadido se guarda por dispositivo (no se comparte entre tablet y PC).
+
+## Último cierre
+**Centro de Control · feat/pestana-caldera · v2.16.0**
+- Objetivo: pestaña Caldera con los datos de ebusd: indicadores de aguja, gráficas, marcadores y comprobación del ciclo de quemado con aviso y alerta de peligro.
+- Cambios: `ebusd_key`/`EBUSD_KEYS` y `caldera_entities()` en `manager.py`; `caldera` en el contexto y en la configuración del panel; `v_caldera`, `_boilerChecks`, `_boilerCycles`, `_boilerLoad` y series `onoff` en el JS; insignia en la barra; vista Caldera en el panel clásico; README y CHANGELOG.
+- Pruebas: pytest 77 OK; Chrome sin pantalla (escritorio y móvil) con un caso correcto y otro con avería, presión alta, bloqueo y encendidos fallidos.
+- Pendientes: probar en la casa real; los avisos solo se ven con el panel abierto (no llegan a la pestaña Problemas ni como notificación); la llama se lee por sondeo, así que los ciclos más cortos que el intervalo de sondeo no se ven; los límites (presión, temperatura, ciclos cortos) son fijos, no configurables.

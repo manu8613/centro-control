@@ -8,6 +8,17 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.16.0] - 2026-11-16
+
+### Añadido
+- Pestaña **Caldera**: si lees tu caldera por eBUS con [ebusd](https://github.com/john30/ebusd) (complemento eBUSd + MQTT), la pestaña se rellena sola con las entidades del circuito «bai», sin configurar nada.
+  - **Indicadores de aguja**: ida (con su consigna), retorno (con el salto ida–retorno), presión del circuito, modulación del quemador, ventilador y agua caliente; caudal de agua caliente y señal de ionización.
+  - **Ahora**: código de estado S.xx con su descripción, llama, válvula de gas, bomba, válvula de tres vías, demanda del regulador y potencia máxima en calefacción.
+  - **Ciclo de quemado** (últimas 24 h): encendidos, tiempo con llama, duración media y quemado más corto, máximo de encendidos en una hora, media histórica por arranque, tiempo medio de encendido, encendidos fallidos y bloqueos.
+  - **Comprobación con aviso y peligro**: avería activa, presión fuera de rango, temperatura de ida excesiva, salto ida–retorno alto con el quemador encendido, bloqueos y encendidos fallidos en 24 h, ciclos cortos y pérdida de señal del bus. La pestaña muestra una insignia ámbar o roja en la barra cuando algo no va bien.
+  - **Gráficas**: temperaturas 24 h, quemador (llama y modulación) 24 h, presión 7 días y ventilador 24 h. **Contadores** de horas y arranques.
+- El panel clásico (Lovelace) también añade la vista Caldera cuando hay entidades de ebusd.
+
 ## [2.15.0] - 2026-11-15
 
 ### Añadido

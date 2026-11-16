@@ -26,12 +26,31 @@ const TABS = [
   ["co2", "CO₂", "mdi:leaf-circle"],
   ["gas", "Gas", "mdi:fire"],
   ["luz", "Luz", "mdi:flash"],
+  ["caldera", "Caldera", "mdi:water-boiler"],
   ["luces", "Luces", "mdi:lightbulb-group"],
   ["enchufes", "Enchufes", "mdi:power-socket-eu"],
   ["clima", "Temperaturas", "mdi:thermometer"],
   ["riego", "Riego", "mdi:sprinkler-variant"],
   ["config", "Configuración", "mdi:cog"],
 ];
+// Caldera (ebusd): límites de las comprobaciones y textos de los códigos de estado S.xx.
+const BOILER_LIMITS = { pMin: 0.6, pLow: 1.0, pHigh: 2.5, pMax: 2.9, tHigh: 85, tMax: 95, dtHigh: 30, burnMin: 3, startsHour: 6 };
+const BOILER_STATES = {
+  0: "Calefacción: sin demanda de calor", 1: "Calefacción: arranque del ventilador", 2: "Calefacción: prefuncionamiento de la bomba", 3: "Calefacción: encendido",
+  4: "Calefacción: quemador encendido", 5: "Calefacción: posfuncionamiento de bomba y ventilador", 6: "Calefacción: posfuncionamiento del ventilador",
+  7: "Calefacción: posfuncionamiento de la bomba", 8: "Calefacción: tiempo de bloqueo del quemador",
+  10: "Agua caliente: demanda", 11: "Agua caliente: arranque del ventilador", 13: "Agua caliente: encendido", 14: "Agua caliente: quemador encendido",
+  15: "Agua caliente: posfuncionamiento de bomba y ventilador", 16: "Agua caliente: posfuncionamiento del ventilador", 17: "Agua caliente: posfuncionamiento de la bomba",
+  20: "Acumulador: demanda", 21: "Acumulador: arranque del ventilador", 23: "Acumulador: encendido", 24: "Acumulador: quemador encendido",
+  25: "Acumulador: posfuncionamiento de bomba y ventilador", 26: "Acumulador: posfuncionamiento del ventilador", 27: "Acumulador: posfuncionamiento de la bomba", 28: "Acumulador: bloqueo del quemador",
+  30: "Sin demanda: el termostato bloquea la calefacción", 31: "Modo verano o sin demanda del regulador", 32: "Espera: desviación de la velocidad del ventilador",
+  34: "Protección antihielo", 36: "Consigna del regulador por debajo de 20 °C", 39: "Termostato de contacto disparado", 40: "Modo de emergencia (confort limitado)",
+  41: "Presión del agua demasiado alta", 42: "Compuerta de humos o bomba de condensados bloquea el quemador", 46: "Modo de emergencia: llama perdida a carga mínima",
+  53: "Espera por falta de agua (salto ida–retorno alto)", 54: "Espera por falta de agua (subida rápida de temperatura)",
+  96: "Autocomprobación: sonda de retorno", 97: "Autocomprobación: sensor de presión", 98: "Autocomprobación: sondas de ida y retorno",
+};
+const BOILER_STATE_WARN = { 32: "espera por desviación de la velocidad del ventilador", 39: "termostato de contacto disparado", 40: "modo de emergencia", 41: "presión del agua demasiado alta", 42: "compuerta de humos o bomba de condensados", 46: "llama perdida a carga mínima", 53: "falta de agua o poca circulación", 54: "falta de agua o poca circulación" };
+const fmtMin = (m) => (m === null || m === undefined || isNaN(m) ? "—" : m < 1 ? `${Math.round(m * 60)} s` : m < 60 ? `${Math.round(m)} min` : `${Math.floor(m / 60)} h ${Math.round(m % 60)} min`);
 // Rotación automática de pestañas (por dispositivo). «config» nunca rota.
 const ROT_KEY = "centro_control_ajustes";
 const BELL_KEY = "centro_control_timbre";
@@ -631,12 +650,14 @@ class CentroControlPanel extends HTMLElement {
       history.replaceState(null, "", "#config");
       this._layoutKey = "";
     }
+    const boil = Object.keys(this.cfg.caldera || {}).length ? this._boilerChecks(this.cfg.caldera).filter((c) => c.lvl) : [];
     const navEl = root.querySelector("nav");
     const keepScroll = navEl.scrollLeft;
     const tabChanged = this._navTab !== this._tab;
     this._navTab = this._tab;
     navEl.innerHTML = this._orderedTabs().filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
-      const badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
+      let badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
+      if (k === "caldera" && boil.length) badge = `<span class="badge ${boil.some((c) => c.lvl === 2) ? "" : "warn"}">${boil.length}</span>`;
       return `<button class="${k === this._tab ? "on" : ""}" data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
     }).join("");
     navEl.style.scrollBehavior = "auto";
@@ -1156,6 +1177,14 @@ class CentroControlPanel extends HTMLElement {
     if (out.length) out.push([Date.now(), out[out.length - 1][1]]);
     return out;
   }
+  /** on/off entity as 0 / `high` (e.g. the flame of the boiler). */
+  _onoff(hist, entity, high) {
+    const pts = (hist?.[entity] || [])
+      .filter((r) => !["unknown", "unavailable", ""].includes(String(r.s ?? "")))
+      .map((r) => [(r.lu ?? r.lc ?? 0) * 1000, ["on", "1", "true", "yes"].includes(String(r.s).toLowerCase()) ? high : 0]);
+    if (pts.length) pts.push([Date.now(), pts[pts.length - 1][1]]);
+    return pts;
+  }
   /** max − min of several entities over time (e.g. the SOC gap between batteries). */
   _spread(hist, ents, bucketMin) {
     const lines = ents.map((e) => this._points(hist, e, { bucketMin }));
@@ -1186,7 +1215,7 @@ class CentroControlPanel extends HTMLElement {
           color: s.color || PALETTE[i % PALETTE.length],
           type: s.type || "line",
           step: s.step,
-          points: s.spread ? this._spread(hist, s.spread, spec.bucket || 5) : this._points(hist, s.entity, { scale: s.scale || 1, transform: s.abs ? Math.abs : s.pos ? (v) => Math.max(v, 0) : s.neg ? (v) => Math.max(-v, 0) : null, bucketMin: spec.bucket || 5 }),
+          points: s.onoff ? this._onoff(hist, s.entity, s.onoff) : s.spread ? this._spread(hist, s.spread, spec.bucket || 5) : this._points(hist, s.entity, { scale: s.scale || 1, transform: s.abs ? Math.abs : s.pos ? (v) => Math.max(v, 0) : s.neg ? (v) => Math.max(-v, 0) : null, bucketMin: spec.bucket || 5 }),
         }));
         const end = Date.now();
         opt = { start: end - (spec.hours || 24) * 3600000, end, unit: spec.unit, height: spec.height, min: spec.min, max: spec.max };
@@ -1908,6 +1937,251 @@ class CentroControlPanel extends HTMLElement {
     charts.push(this.chartCard("g30", "Gas 30 días (m³)", C.violet, { kind: "days", unit: "m³", series: [{ name: "Gas", field: "gas_m3", color: C.violet }] }));
     charts.push(this.chartCard("g12", "Gas por meses (m³)", C.violet, { kind: "months", unit: "m³", count: 12, series: [{ name: "Gas", field: "gas_m3", color: C.violet }] }));
     return [{ cards }, { cls: "w2", cards: charts }];
+  }
+
+  // ---------------------------------------------------------------- 9c caldera (ebusd)
+  _boilerKnown(e) {
+    const s = this.s(e);
+    return s !== undefined && s !== null && !["unknown", "unavailable", "", "-"].includes(String(s));
+  }
+  _boilerOn(e) {
+    return ["on", "1", "true", "yes"].includes(String(this.s(e) ?? "").toLowerCase());
+  }
+  /** History the burn-cycle checks need (flame and fault counters, 24 h), refreshed every 2 min. */
+  _boilerLoad(b) {
+    const now = Date.now();
+    if (this._boilerBusy || (this._boiler && now - this._boiler.t < 120000)) return;
+    const ids = [b.flame || b.gasvalve, b.counterstartattempts1, b.counterstartattempts2, b.deactivationsifc, b.deactivationstemplimiter].filter(Boolean);
+    if (!ids.length) return;
+    this._boilerBusy = true;
+    this._history(ids, 24)
+      .then((hist) => (this._boiler = { t: Date.now(), hist: hist || {} }))
+      .catch(() => (this._boiler = { t: Date.now(), hist: {} }))
+      .finally(() => {
+        this._boilerBusy = false;
+        this._schedule(true);
+      });
+  }
+  /** Burns of the last 24 h from the on/off history of the flame. */
+  _boilerCycles(rows) {
+    const now = Date.now(), from = now - 24 * 3600000;
+    const ev = (rows || [])
+      .filter((r) => !["unknown", "unavailable", ""].includes(String(r.s ?? "")))
+      .map((r) => [Math.max(from, (r.lu ?? r.lc ?? 0) * 1000), ["on", "1", "true", "yes"].includes(String(r.s).toLowerCase())]);
+    if (!ev.length) return null;
+    const burns = [];
+    let start = null, prev = null;
+    for (const [t, on] of ev) {
+      if (on && !prev) start = t;
+      else if (!on && prev) burns.push([start, t, start > from]);
+      prev = on;
+    }
+    if (prev) burns.push([start, now, false]);
+    const mins = (x) => (x[1] - x[0]) / 60000;
+    const done = burns.filter((x) => x[2]).map(mins).sort((x, y) => x - y);
+    const starts = burns.filter((x) => x[0] > from).map((x) => x[0]);
+    let perHour = 0;
+    starts.forEach((t, i) => {
+      let n = 0;
+      for (let j = i; j < starts.length && starts[j] - t < 3600000; j++) n++;
+      perHour = Math.max(perHour, n);
+    });
+    return {
+      n: starts.length,
+      done: done.length,
+      onMin: burns.reduce((a, x) => a + mins(x), 0),
+      avg: done.length ? done.reduce((a, x) => a + x, 0) / done.length : null,
+      med: done.length ? done[Math.floor(done.length / 2)] : null,
+      min: done.length ? done[0] : null,
+      perHour,
+    };
+  }
+  /** How much a counter has grown in the loaded history (null when it cannot be known). */
+  _boilerDelta(entity) {
+    const rows = this._boiler?.hist?.[entity];
+    const first = (rows || []).map((r) => toNum(r.s)).find((v) => v !== null);
+    const cur = this.n(entity);
+    return first === undefined || cur === null ? null : Math.max(0, cur - first);
+  }
+  /** Safety and burn-cycle checks: [{name, lvl (0 ok, 1 warning, 2 danger), text, e}]. */
+  _boilerChecks(b) {
+    const out = [];
+    const add = (name, lvl, text, e) => out.push({ name, lvl, text, e });
+    const n = (k) => this.n(b[k]);
+    // active faults
+    const faults = ["currenterrorerror", "currenterrorerror1", "currenterrorerror2", "currenterrorerror3", "currenterrorerror4"]
+      .filter((k) => b[k] && this._boilerKnown(b[k]) && !["0", "0.0", "no error", "none", "ok"].includes(String(this.s(b[k])).toLowerCase()));
+    if (faults.length) add("Averías", 2, `Avería activa en la caldera: ${faults.map((k) => "F." + this.s(b[k])).join(", ")}. Mira el manual de tu caldera y, si no se quita al rearmar, avisa al servicio técnico.`, b[faults[0]]);
+    else if (b.currenterrorerror) add("Averías", 0, "Sin averías activas", b.currenterrorerror);
+    // water pressure
+    const pk = b.waterpressurepress || b.waterpressure, p = this.n(pk);
+    if (p !== null) {
+      const L = BOILER_LIMITS;
+      if (p < L.pMin) add("Presión", 2, `Presión del circuito muy baja (${fmt(p, 2)} bar): la caldera puede bloquearse. Rellena el circuito hasta 1–1,5 bar en frío.`, pk);
+      else if (p >= L.pMax) add("Presión", 2, `Presión del circuito muy alta (${fmt(p, 2)} bar): está cerca del disparo de la válvula de seguridad (3 bar). Purga un radiador y revisa el vaso de expansión y la llave de llenado.`, pk);
+      else if (p < L.pLow) add("Presión", 1, `Presión del circuito baja (${fmt(p, 2)} bar). Lo normal en frío es 1–1,5 bar.`, pk);
+      else if (p >= L.pHigh) add("Presión", 1, `Presión del circuito alta (${fmt(p, 2)} bar). Si sube sola, revisa la llave de llenado y el vaso de expansión.`, pk);
+      else add("Presión", 0, `${fmt(p, 2)} bar`, pk);
+    }
+    // flow temperature
+    const flow = n("status01temp"), ret = n("status01temp1");
+    if (flow !== null) {
+      if (flow >= BOILER_LIMITS.tMax) add("Temperatura de ida", 2, `Temperatura de ida de ${fmt(flow, 1)} °C: riesgo de sobrecalentamiento. Comprueba la bomba y que haya radiadores abiertos.`, b.status01temp);
+      else if (flow >= BOILER_LIMITS.tHigh) add("Temperatura de ida", 1, `Temperatura de ida alta (${fmt(flow, 1)} °C).`, b.status01temp);
+      else add("Temperatura de ida", 0, `${fmt(flow, 1)} °C`, b.status01temp);
+    }
+    const burning = b.flame ? this._boilerOn(b.flame) : null;
+    if (burning && flow !== null && ret !== null) {
+      const dt = flow - ret;
+      if (dt >= BOILER_LIMITS.dtHigh) add("Salto ida–retorno", 1, `Con el quemador encendido la ida está ${fmt(dt, 1)} °C por encima del retorno: circula poca agua (bomba, filtro, aire o válvulas cerradas).`, b.status01temp1);
+      else add("Salto ida–retorno", 0, `${fmt(dt, 1)} °C`, b.status01temp1);
+    }
+    // state reported by the boiler
+    const st = n("statenumber");
+    if (st !== null && BOILER_STATE_WARN[st]) add("Estado", 1, `La caldera indica S.${st}: ${BOILER_STATE_WARN[st]}.`, b.statenumber);
+    // lock-outs and failed ignitions in the last 24 h
+    const grew = (k) => (b[k] ? this._boilerDelta(b[k]) : null);
+    const locks = (grew("deactivationsifc") || 0) + (grew("deactivationstemplimiter") || 0);
+    if (locks > 0) add("Bloqueos", 2, `La caldera se ha bloqueado ${locks} ${locks === 1 ? "vez" : "veces"} en las últimas 24 h (${grew("deactivationstemplimiter") ? "limitador de temperatura" : "control de llama"}). Que la revise el servicio técnico.`, b.deactivationsifc || b.deactivationstemplimiter);
+    else if (grew("deactivationsifc") !== null || grew("deactivationstemplimiter") !== null) add("Bloqueos", 0, "Ninguno en 24 h", b.deactivationsifc || b.deactivationstemplimiter);
+    const f1 = grew("counterstartattempts1"), f2 = grew("counterstartattempts2");
+    if (f2 > 0) add("Encendido", 2, `El quemador ha fallado ${f2} ${f2 === 1 ? "vez" : "veces"} también al segundo intento de encendido en las últimas 24 h: el siguiente paso es el bloqueo. Revisa el gas y que revisen electrodos y sifón.`, b.counterstartattempts2);
+    else if (f1 > 0) add("Encendido", 1, `${f1} ${f1 === 1 ? "encendido fallido" : "encendidos fallidos"} al primer intento en las últimas 24 h. Si se repite, conviene revisar electrodos y presión de gas.`, b.counterstartattempts1);
+    else if (f1 !== null || f2 !== null) add("Encendido", 0, "Sin fallos en 24 h", b.counterstartattempts1 || b.counterstartattempts2);
+    // short cycling
+    const cyc = this._boiler ? this._boilerCycles(this._boiler.hist[b.flame || b.gasvalve]) : null;
+    if (cyc) {
+      if (cyc.done >= 4 && cyc.med < BOILER_LIMITS.burnMin) add("Ciclo de quemado", 1, `Ciclos cortos: ${cyc.n} encendidos en 24 h con quemados de ${fmtMin(cyc.med)} de mediana. La caldera enciende y apaga demasiado: baja la potencia máxima de calefacción o la temperatura de ida.`, b.flame || b.gasvalve);
+      else if (cyc.perHour > BOILER_LIMITS.startsHour) add("Ciclo de quemado", 1, `Hasta ${cyc.perHour} encendidos en una hora: la caldera cicla demasiado.`, b.flame || b.gasvalve);
+      else add("Ciclo de quemado", 0, cyc.n ? `${cyc.n} encendidos en 24 h` : "Sin encendidos en 24 h", b.flame || b.gasvalve);
+    }
+    const hh = n("hchours"), hs = n("hcstarts");
+    if (hh > 0 && hs > 0 && (hh * 60) / hs < BOILER_LIMITS.burnMin) add("Media histórica", 1, `De media, cada arranque en calefacción dura solo ${fmtMin((hh * 60) / hs)}: la caldera ha trabajado a ciclos cortos.`, b.hcstarts);
+    // link with the boiler
+    if (b.globalsignal && this._boilerKnown(b.globalsignal)) {
+      if (this._boilerOn(b.globalsignal)) add("Conexión eBUS", 0, "Con señal", b.globalsignal);
+      else add("Conexión eBUS", 1, "ebusd no recibe señal del bus: los datos de esta pestaña están congelados.", b.globalsignal);
+    }
+    return out;
+  }
+  v_caldera() {
+    const b = this.cfg.caldera || {};
+    const col = C.orange;
+    const head = this.title("t", "Caldera", "eBUS en directo · ciclo de quemado y seguridad", "mdi:water-boiler", col);
+    if (!Object.keys(b).length)
+      return [{ cards: [head, this.empty("e", "Conecta la caldera por eBUS con ebusd (complemento eBUSd y la integración MQTT) y esta pestaña se rellena sola con las entidades del circuito «bai»: temperaturas, presión, llama, modulación, contadores y la comprobación del ciclo de quemado.")] }];
+    this._boilerLoad(b);
+    const n = (k) => this.n(b[k]);
+    const has = (k) => b[k] && this._boilerKnown(b[k]);
+    const on = (k) => this._boilerOn(b[k]);
+    const cards = [head];
+
+    // --- verdict
+    const checks = this._boilerChecks(b);
+    const bad = checks.filter((c) => c.lvl).sort((x, y) => y.lvl - x.lvl);
+    const lvl = bad.length ? bad[0].lvl : 0;
+    const vc = [C.green, C.amber, C.red][lvl];
+    const vt = ["Funcionamiento correcto", bad.length === 1 ? "1 aviso" : `${bad.length} avisos`, "PELIGRO · revisa la caldera"][lvl];
+    const okList = checks.filter((c) => !c.lvl).map((c) => `<span style="white-space:nowrap;margin-right:10px"><span style="color:${C.green}">✓</span> ${esc(c.name)} <span class="muted">${esc(c.text)}</span></span>`).join(" ");
+    cards.push(this.card("v", `<h3 style="color:${vc}"${lvl === 2 ? ' class="pulse"' : ""}>${icon(lvl === 2 ? "mdi:alert-octagon" : lvl ? "mdi:alert" : "mdi:shield-check")}${vt}</h3>
+      ${bad.map((c) => `<div class="alert" style="--a:${c.lvl === 2 ? C.red : C.amber}"${c.e ? ` data-more="${esc(c.e)}"` : ""}><b>${c.lvl === 2 ? "Peligro" : "Aviso"} · ${esc(c.name)}</b><br>${esc(c.text)}</div>`).join("")}
+      <div class="small" style="line-height:1.9;margin-top:4px">${okList}</div>
+      ${this._boiler ? "" : `<div class="small muted">Leyendo el historial de la llama…</div>`}`, { c: vc }));
+
+    // --- now
+    const st = n("statenumber");
+    const burning = b.flame ? on("flame") : null;
+    const dot = (state, text, c = C.green) => `<span class="dot" style="--a:${state ? c : "#33455f"}"></span>${text}`;
+    const rows = [];
+    if (st !== null) rows.push(["Estado", `<b>S.${st}</b> · ${esc(BOILER_STATES[st] || "estado sin descripción")}${[4, 14, 24].includes(st) && burning === false ? ` <span class="muted small">(pendiente de refrescar)</span>` : ""}`, b.statenumber]);
+    if (has("flame")) rows.push(["Llama", dot(burning, burning ? "Encendida" : "Apagada", C.orange), b.flame]);
+    if (has("gasvalve")) rows.push(["Válvula de gas", dot(on("gasvalve"), on("gasvalve") ? "Abierta" : "Cerrada", C.amber), b.gasvalve]);
+    const pumpKey = has("status01pumpstate") ? "status01pumpstate" : has("cirpump") ? "cirpump" : null;
+    if (pumpKey) rows.push(["Bomba", dot(on(pumpKey), (on(pumpKey) ? "En marcha" : "Parada") + (n("wppwmpower") !== null ? ` · ${fmt(n("wppwmpower"), 0)} %` : ""), C.cyan), b[pumpKey]]);
+    if (n("positionvalveset") !== null) {
+      const v = n("positionvalveset");
+      rows.push(["Válvula de tres vías", v <= 5 ? "Calefacción" : v >= 95 ? "Agua caliente" : `${fmt(v, 0)} %`, b.positionvalveset]);
+    }
+    if (has("setmodedisablehc")) {
+      const off = n("setmodedisablehc") === 1;
+      rows.push(["Demanda de calefacción", off ? `<span class="muted">Sin demanda del regulador</span>` : `Pide ${fmt(n("setmodeflowtempdesired"), 0)} °C de ida`, b.setmodedisablehc]);
+    }
+    if (n("setmodehwctempdesired") !== null) rows.push(["Agua caliente", `${has("setmodedisablehwctapping") && n("setmodedisablehwctapping") === 1 ? "Bloqueada" : "Disponible"} · consigna ${fmt(n("setmodehwctempdesired"), 0)} °C`, b.setmodehwctempdesired]);
+    if (n("partloadhckw") !== null) rows.push(["Potencia máxima en calefacción", `${fmt(n("partloadhckw"), 0)} kW`, b.partloadhckw]);
+    if (rows.length) cards.push(this.card("now", `<h3>${icon("mdi:fire-circle")}Ahora</h3><table>${rows.map(([l, v, e]) => `<tr data-more="${esc(e)}" style="cursor:pointer"><td class="muted">${esc(l)}</td><td class="r" style="white-space:normal">${v}</td></tr>`).join("")}</table>`, { c: burning ? C.orange : col }));
+
+    // --- gauges
+    const g = (k, key, value, min, max, c, label, unit) => cards.push(this.card(k, gauge(value, min, max, c, label, unit, 140), { c, w: 6, click: b[key] }));
+    const L = BOILER_LIMITS;
+    const flow = n("status01temp"), ret = n("status01temp1"), set = n("flowtempdesired") ?? n("setmodeflowtempdesired");
+    if (flow !== null) g("gi", "status01temp", flow, 0, 90, flow >= L.tMax ? C.red : flow >= L.tHigh ? C.amber : C.orange, set ? `Ida · consigna ${fmt(set, 0)} °C` : "Ida", "°C");
+    if (ret !== null) g("gr", "status01temp1", ret, 0, 90, C.amber, flow !== null ? `Retorno · salto ${fmt(flow - ret, 1)} °C` : "Retorno", "°C");
+    const pk = b.waterpressurepress ? "waterpressurepress" : "waterpressure", p = n(pk);
+    if (p !== null) g("gp", pk, p, 0, 4, p < L.pMin || p >= L.pMax ? C.red : p < L.pLow || p >= L.pHigh ? C.amber : C.cyan, `Presión · ${fmt(p, 2)} bar`, "bar");
+    if (n("modulationdesired") !== null) g("gm", "modulationdesired", burning === false ? 0 : n("modulationdesired"), 0, 100, C.pink, burning === false ? "Modulación · apagado" : "Modulación", "%");
+    if (n("fanspeed") !== null) g("gf", "fanspeed", n("fanspeed"), 0, Math.max(6000, n("targetfanspeed") || 0), C.blue, n("fanspeed") > 0 && n("targetfanspeed") ? `Ventilador · objetivo ${fmt(n("targetfanspeed"), 0)}` : "Ventilador", "rpm");
+    if (n("status01temp3") !== null) g("ga", "status01temp3", n("status01temp3"), 0, 70, C.violet, n("setmodehwctempdesired") !== null ? `ACS · consigna ${fmt(n("setmodehwctempdesired"), 0)} °C` : "Agua caliente", "°C");
+    if (n("hwcwaterflow") !== null) cards.push(this.kpi("kq", b.hwcwaterflow, `${fmt(n("hwcwaterflow"), 1)} l/min`, n("hwcwaterflow") > 0 ? "Caudal de agua caliente · grifo abierto" : "Caudal de agua caliente", "mdi:water-pump", C.violet, 6));
+    if (n("ionisationvoltagelevel") !== null) cards.push(this.kpi("ki", b.ionisationvoltagelevel, fmt(n("ionisationvoltagelevel"), 1), "Señal de ionización (llama)", "mdi:flash-triangle", C.orange, 6));
+
+    // --- burn cycle
+    const cyc = this._boiler ? this._boilerCycles(this._boiler.hist[b.flame || b.gasvalve]) : null;
+    const burn = [this.title("tc", "Ciclo de quemado", "Últimas 24 h según la llama que lee ebusd", "mdi:fire", C.orange)];
+    const k = (key, ent, value, label, ic, c = C.orange, w = 6) => burn.push(this.kpi(key, ent || null, value, label, ic, c, w));
+    const flameE = b.flame || b.gasvalve;
+    if (cyc) {
+      k("c1", flameE, String(cyc.n), "Encendidos en 24 h", "mdi:fire");
+      k("c2", flameE, fmtMin(cyc.onMin), "Tiempo con llama en 24 h", "mdi:timer-outline");
+      k("c3", flameE, cyc.avg === null ? "—" : fmtMin(cyc.avg), cyc.min === null ? "Duración media de cada quemado" : `Duración media · el más corto ${fmtMin(cyc.min)}`, "mdi:timer-sand", cyc.done >= 4 && cyc.med < L.burnMin ? C.amber : C.orange);
+      k("c4", flameE, String(cyc.perHour), "Máximo de encendidos en una hora", "mdi:repeat", cyc.perHour > L.startsHour ? C.amber : C.orange);
+    } else if (flameE) burn.push(this.empty("c0", this._boiler ? "Todavía no hay historial de la llama." : "Leyendo el historial de la llama…"));
+    const hh = n("hchours"), hs = n("hcstarts");
+    if (hh > 0 && hs > 0) k("c5", b.hcstarts, fmtMin((hh * 60) / hs), "Media histórica por arranque en calefacción", "mdi:chart-timeline", (hh * 60) / hs < L.burnMin ? C.amber : C.green);
+    if (n("averageignitiontime") !== null) k("c6", b.averageignitiontime, `${fmt(n("averageignitiontime"), 1)} s`, "Tiempo medio de encendido", "mdi:flash");
+    if (n("counterstartattempts1") !== null || n("counterstartattempts2") !== null) {
+      const d = (this._boilerDelta(b.counterstartattempts1) || 0) + (this._boilerDelta(b.counterstartattempts2) || 0);
+      k("c7", b.counterstartattempts1 || b.counterstartattempts2, `${fmt(n("counterstartattempts1"), 0)} · ${fmt(n("counterstartattempts2"), 0)}`, `Encendidos fallidos al 1.er y al 2.º intento${d ? ` · +${d} en 24 h` : ""}`, "mdi:fire-off", d ? C.amber : C.green);
+    }
+    if (n("deactivationsifc") !== null || n("deactivationstemplimiter") !== null) {
+      const tot = (n("deactivationsifc") || 0) + (n("deactivationstemplimiter") || 0);
+      k("c8", b.deactivationsifc || b.deactivationstemplimiter, `${fmt(n("deactivationsifc"), 0)} · ${fmt(n("deactivationstemplimiter"), 0)}`, "Bloqueos del control de llama y del limitador de temperatura", "mdi:lock-alert", tot ? C.amber : C.green);
+    }
+
+    // --- counters
+    const cnt = [this.title("tn", "Contadores", "Horas y arranques desde que se instaló", "mdi:counter", C.gold)];
+    const c = (key, ek, value, label, ic) => n(ek) !== null && cnt.push(this.kpi(key, b[ek], value, label, ic, C.gold, 6));
+    c("n1", "hchours", `${fmt(n("hchours"), 0)} h`, "Quemador en calefacción", "mdi:radiator");
+    c("n2", "hwchours", `${fmt(n("hwchours"), 0)} h`, "Quemador en agua caliente", "mdi:water-boiler");
+    c("n3", "hcstarts", fmt(n("hcstarts"), 0), "Arranques en calefacción", "mdi:fire");
+    c("n4", "hwcstarts", fmt(n("hwcstarts"), 0), "Arranques en agua caliente", "mdi:fire");
+    c("n5", "pumphours", `${fmt(n("pumphours"), 0)} h`, "Horas de bomba", "mdi:pump");
+    c("n6", "hcpumpstarts", fmt(n("hcpumpstarts"), 0), "Arranques de la bomba", "mdi:pump");
+    c("n7", "fanhours", `${fmt(n("fanhours"), 0)} h`, "Horas de ventilador", "mdi:fan");
+    c("n8", "prenergycounthc1", fmt(n("prenergycounthc1"), 0), "Contador interno de energía en calefacción", "mdi:lightning-bolt");
+    c("n9", "prenergycounthwc1", fmt(n("prenergycounthwc1"), 0), "Contador interno de energía en agua caliente", "mdi:lightning-bolt");
+
+    // --- charts
+    const charts = [];
+    const temps = [
+      b.status01temp && { name: "Ida", entity: b.status01temp, color: C.orange },
+      b.status01temp1 && { name: "Retorno", entity: b.status01temp1, color: C.amber },
+      b.status01temp3 && { name: "Agua caliente", entity: b.status01temp3, color: C.violet },
+      (b.flowtempdesired || b.setmodeflowtempdesired) && { name: "Consigna de ida", entity: b.flowtempdesired || b.setmodeflowtempdesired, color: C.cyan, step: true },
+    ].filter(Boolean);
+    if (temps.length) charts.push(this.chartCard("ht", "Temperaturas 24 h (°C)", C.orange, { kind: "history", hours: 24, unit: "°C", bucket: 2, series: temps }));
+    const fire = [
+      flameE && { name: "Llama", entity: flameE, color: C.orange, type: "area", step: true, onoff: 100 },
+      b.modulationdesired && { name: "Modulación", entity: b.modulationdesired, color: C.pink, step: true },
+    ].filter(Boolean);
+    if (fire.length) charts.push(this.chartCard("hf", "Quemador 24 h (%)", C.orange, { kind: "history", hours: 24, unit: "%", bucket: 1, min: 0, max: 100, series: fire }));
+    if (b[pk]) charts.push(this.chartCard("hp", "Presión del circuito 7 días (bar)", C.cyan, { kind: "history", hours: 168, unit: "bar", bucket: 30, series: [{ name: "Presión", entity: b[pk], color: C.cyan }] }));
+    if (b.fanspeed) charts.push(this.chartCard("hv", "Ventilador 24 h (rpm)", C.blue, { kind: "history", hours: 24, unit: "rpm", bucket: 2, series: [{ name: "Ventilador", entity: b.fanspeed, color: C.blue, step: true }] }));
+
+    const sections = [{ cards }];
+    if (burn.length > 1) sections.push({ cards: burn });
+    if (cnt.length > 1) sections.push({ cards: cnt });
+    if (charts.length) sections.push({ cls: "w2", cards: charts });
+    return sections;
   }
 
   // ---------------------------------------------------------------- 9b luz (Factusol)

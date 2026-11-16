@@ -296,3 +296,39 @@ def test_luz_detects_price_sensors():
     assert {"alerta_precios", "historial_precios"} <= set(FACTUSOL_KEYS)
     js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
     assert 'at("alerta_precios")' in js and 'at("historial_precios")' in js
+
+
+def test_caldera_tab_only_with_ebusd():
+    assert "caldera" not in [v["path"] for v in build_panel(context())["views"]]
+    caldera = {
+        "status01temp": "sensor.ebusd_bai_status01_temp",
+        "status01temp1": "sensor.ebusd_bai_status01_temp_1",
+        "waterpressurepress": "sensor.ebusd_bai_waterpressure_press",
+        "flame": "sensor.ebusd_bai_flame",
+    }
+    panel = build_panel(context(caldera=caldera))
+    view = next(v for v in panel["views"] if v["path"] == "caldera")
+    cards = [c for s in view["sections"] for c in s["cards"]]
+    assert [c["entity"] for c in cards if c.get("type") == "gauge"] == [
+        "sensor.ebusd_bai_status01_temp",
+        "sensor.ebusd_bai_status01_temp_1",
+        "sensor.ebusd_bai_waterpressure_press",
+    ]
+    assert "sensor.ebusd_bai_flame" in [c.get("entity") for c in cards]
+
+
+def test_ebusd_key():
+    from custom_components.centro_control.manager import EBUSD_KEYS, ebusd_key
+
+    assert ebusd_key("sensor.ebusd_bai_status01_temp") == "status01temp"
+    assert ebusd_key("sensor.casa_ebusd_bai_status01_temp_1") == "status01temp1"
+    assert ebusd_key("sensor.ebusd_bai_waterpressure_press") == "waterpressurepress"
+    assert ebusd_key("ebusd_bai_Flame") == "flame"
+    assert ebusd_key("ebusd/bai/CurrentError/error_2") == "currenterrorerror2"
+    assert ebusd_key("binary_sensor.ebusd_global_signal") == "globalsignal"
+    assert ebusd_key("sensor.ebusd_bai_displaymode") == ""
+    assert ebusd_key("sensor.temperatura_salon") == ""
+    assert ebusd_key(None) == ""
+    js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
+    used = set(re.findall(r"\bb\.([a-z0-9]+)\b", js.split("9c caldera (ebusd)")[1].split("9b luz (Factusol)")[0]))
+    assert used and used <= set(EBUSD_KEYS)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import logging
+import re
 import time
 from typing import Any
 
@@ -117,6 +118,79 @@ GAS_TUR_KEYS = (
     "precio_m3",
     "factor_conversion",
 )
+# Boiler read over eBUS with ebusd (MQTT discovery). Keys are the ebusd message and field
+# names of the "bai" circuit in lower case without separators ("Status01 temp 1" ->
+# "status01temp1"); the ones of the ebusd daemon itself are prefixed with "global".
+EBUSD_PLATFORM = "mqtt"
+EBUSD_RE = re.compile(r"ebusd[_/ .-]*(bai|global)[_/ .-]+(.+)$", re.IGNORECASE)
+EBUSD_KEYS = (
+    "status01temp",
+    "status01temp1",
+    "status01temp3",
+    "status01temp4",
+    "status01pumpstate",
+    "status02hwcmode",
+    "status02temp",
+    "status02temp1",
+    "setmodehcmode",
+    "setmodeflowtempdesired",
+    "setmodehwctempdesired",
+    "setmodedisablehc",
+    "setmodedisablehwctapping",
+    "setmodedisablehwcload",
+    "flame",
+    "gasvalve",
+    "fanspeed",
+    "targetfanspeed",
+    "modulationdesired",
+    "flowtempdesired",
+    "waterpressurepress",
+    "waterpressure",
+    "ionisationvoltagelevel",
+    "statenumber",
+    "cirpump",
+    "statuscirpump",
+    "wppwmpower",
+    "hwcwaterflow",
+    "positionvalveset",
+    "partloadhckw",
+    "hchours",
+    "hwchours",
+    "pumphours",
+    "fanhours",
+    "hcstarts",
+    "hwcstarts",
+    "hcpumpstarts",
+    "averageignitiontime",
+    "counterstartattempts1",
+    "counterstartattempts2",
+    "deactivationsifc",
+    "deactivationstemplimiter",
+    "prenergycounthc1",
+    "prenergycounthwc1",
+    "prenergysumhwc1",
+    "currenterrorerror",
+    "currenterrorerror1",
+    "currenterrorerror2",
+    "currenterrorerror3",
+    "currenterrorerror4",
+    "globalsignal",
+    "globalrunning",
+    "globaluptime",
+)
+
+
+def ebusd_key(text: str | None) -> str:
+    """Key of an ebusd entity from its entity id or unique id ("" when it is not one)."""
+    match = EBUSD_RE.search((text or "").split(".", 1)[-1])
+    if not match:
+        return ""
+    key = re.sub(r"[^a-z0-9]", "", match.group(2).lower())
+    if match.group(1).lower() == "global":
+        key = "global" + key
+    return key if key in EBUSD_KEYS else ""
+
+
 FACTUSOL_PLATFORM = "factusol"
 FACTUSOL_KEYS = (
     "periodo_actual",
@@ -338,6 +412,23 @@ class CentroManager(DataUpdateCoordinator[None]):
             key = entry.unique_id.split("_", 1)[1] if "_" in entry.unique_id else ""
             if key in FACTUSOL_KEYS and key not in found:
                 found[key] = entry.entity_id
+        return found
+
+    def caldera_entities(self) -> dict[str, str]:
+        """Entities of a boiler read with ebusd (MQTT discovery), if there is one.
+
+        They are found by name in the registry on every call, like Factusol: the entity id
+        is tried first and the unique id second, so renamed entities are still found.
+        """
+        found: dict[str, str] = {}
+        entries = [
+            e for e in er.async_get(self.hass).entities.values() if e.platform == EBUSD_PLATFORM and not e.disabled_by
+        ]
+        for attr in ("entity_id", "unique_id"):
+            for entry in entries:
+                key = ebusd_key(getattr(entry, attr))
+                if key and key not in found and entry.entity_id not in found.values():
+                    found[key] = entry.entity_id
         return found
 
     @callback

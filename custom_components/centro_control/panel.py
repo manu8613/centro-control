@@ -103,6 +103,7 @@ class PanelContext:
     humidities: list[str] = field(default_factory=list)
     gas: dict[str, str] = field(default_factory=dict)  # Gas TUR / manual gas entities
     luz: dict[str, str] = field(default_factory=dict)  # Factusol (electricity bill) entities
+    caldera: dict[str, str] = field(default_factory=dict)  # ebusd (boiler over eBUS) entities
 
     def s(self, key: str) -> Any:
         value = self.settings.get(key)
@@ -342,6 +343,7 @@ def build_panel(ctx: PanelContext, base_path: str = "centro-control") -> dict[st
         _co2(ctx, t),
         gas_view,
         *([_luz(ctx)] if ctx.luz else []),
+        *([_caldera(ctx)] if ctx.caldera else []),
         _lights(ctx, t),
         _climate(ctx, t),
         _irrigation(ctx, t),
@@ -1384,6 +1386,39 @@ def _luz(ctx: PanelContext) -> dict[str, Any]:
             tpl(e, "{{ states('" + e + "') | capitalize }}", "Periodo tarifario ahora", "mdi:clock-time-four", VIOLET)
         )
     return view("Luz", "luz", "mdi:flash", [section(cards)])
+
+
+# ---------------------------------------------------------------------- 9c. caldera (ebusd)
+
+
+def _caldera(ctx: PanelContext) -> dict[str, Any]:
+    """Boiler read over eBUS with ebusd (only built when its entities exist)."""
+    b = ctx.caldera
+    cards: list[dict[str, Any]] = [title("Caldera", "eBUS en directo (ebusd)", "mdi:water-boiler", ORANGE)]
+    pressure = {"red": 0, "yellow": 0.6, "green": 1}
+    gauges = (
+        ("status01temp", "Ida", 0, 90, ORANGE, {"green": 0, "yellow": 85, "red": 95}, "°C"),
+        ("status01temp1", "Retorno", 0, 90, AMBER, None, "°C"),
+        ("waterpressurepress", "Presión", 0, 4, CYAN, pressure, "bar"),
+        ("waterpressure", "Presión", 0, 4, CYAN, pressure, "bar"),
+        ("modulationdesired", "Modulación", 0, 100, PINK, None, "%"),
+    )
+    for key, label, lo, hi, color, severity, unit in gauges:
+        if e := b.get(key):
+            cards.append(gauge(e, label, lo, hi, color, severity, unit=unit))
+    tiles = (
+        ("flame", "Llama", "mdi:fire", ORANGE),
+        ("gasvalve", "Válvula de gas", "mdi:valve", AMBER),
+        ("status01pumpstate", "Bomba", "mdi:pump", CYAN),
+        ("statenumber", "Código de estado", "mdi:numeric", VIOLET),
+        ("status01temp3", "Agua caliente", "mdi:water-thermometer", PINK),
+        ("hchours", "Horas de calefacción", "mdi:radiator", GOLD),
+        ("hwchours", "Horas de agua caliente", "mdi:water-boiler", GOLD),
+    )
+    for key, label, icon, color in tiles:
+        if e := b.get(key):
+            cards.append(tile(e, label, color, icon))
+    return view("Caldera", "caldera", "mdi:water-boiler", [section(cards)])
 
 
 # ---------------------------------------------------------------------- 10. luces

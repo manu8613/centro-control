@@ -50,6 +50,10 @@ const BOILER_STATES = {
   96: "Autocomprobación: sonda de retorno", 97: "Autocomprobación: sensor de presión", 98: "Autocomprobación: sondas de ida y retorno",
 };
 const BOILER_STATE_WARN = { 32: "espera por desviación de la velocidad del ventilador", 39: "termostato de contacto disparado", 40: "modo de emergencia", 41: "presión del agua demasiado alta", 42: "compuerta de humos o bomba de condensados", 46: "llama perdida a carga mínima", 53: "falta de agua o poca circulación", 54: "falta de agua o poca circulación" };
+// Una lectura que se pierde un momento (ebusd reiniciando, corte del bus) se conserva este tiempo para que no vayan y vengan las tarjetas.
+const BOILER_GRACE = 15 * 60000;
+// Un corte de señal del bus solo se avisa si dura más que esto (las colisiones del bus son de segundos).
+const BOILER_SIGNAL_GRACE = 5 * 60000;
 const fmtMin = (m) => (m === null || m === undefined || isNaN(m) ? "—" : m < 1 ? `${Math.round(m * 60)} s` : m < 60 ? `${Math.round(m)} min` : `${Math.floor(m / 60)} h ${Math.round(m % 60)} min`);
 // Rotación automática de pestañas (por dispositivo). «config» nunca rota.
 const ROT_KEY = "centro_control_ajustes";
@@ -1940,12 +1944,36 @@ class CentroControlPanel extends HTMLElement {
   }
 
   // ---------------------------------------------------------------- 9c caldera (ebusd)
+  /** Estado de una entidad de la caldera: si la lectura se pierde, conserva la última buena BOILER_GRACE. */
+  _bs(e) {
+    if (!e) return undefined;
+    const raw = this.s(e);
+    const cache = (this._bcache = this._bcache || {});
+    if (raw !== undefined && raw !== null && !["unknown", "unavailable", ""].includes(String(raw))) {
+      cache[e] = { v: raw, t: Date.now() };
+      return raw;
+    }
+    const old = cache[e];
+    return old && Date.now() - old.t < BOILER_GRACE ? old.v : raw;
+  }
+  _bn(e, d = null) {
+    return toNum(this._bs(e), d);
+  }
+  /** Antigüedad (ms) de la lectura conservada más vieja; 0 si todas están en directo. */
+  _boilerStale(b) {
+    let age = 0;
+    for (const e of Object.values(b)) {
+      const c = this._bcache?.[e], raw = this.s(e);
+      if (c && (raw === undefined || raw === null || ["unknown", "unavailable", ""].includes(String(raw))) && Date.now() - c.t < BOILER_GRACE) age = Math.max(age, Date.now() - c.t);
+    }
+    return age;
+  }
   _boilerKnown(e) {
-    const s = this.s(e);
+    const s = this._bs(e);
     return s !== undefined && s !== null && !["unknown", "unavailable", "", "-"].includes(String(s));
   }
   _boilerOn(e) {
-    return ["on", "1", "true", "yes"].includes(String(this.s(e) ?? "").toLowerCase());
+    return ["on", "1", "true", "yes"].includes(String(this._bs(e) ?? "").toLowerCase());
   }
   /** History the burn-cycle checks need (flame and fault counters, 24 h), refreshed every 2 min. */
   _boilerLoad(b) {
@@ -1956,7 +1984,7 @@ class CentroControlPanel extends HTMLElement {
     this._boilerBusy = true;
     this._history(ids, 24)
       .then((hist) => (this._boiler = { t: Date.now(), hist: hist || {} }))
-      .catch(() => (this._boiler = { t: Date.now(), hist: {} }))
+      .catch(() => (this._boiler = { t: Date.now() - 90000, hist: this._boiler?.hist || {} })) // conserva el último historial bueno y reintenta en 30 s
       .finally(() => {
         this._boilerBusy = false;
         this._schedule(true);
@@ -2000,21 +2028,21 @@ class CentroControlPanel extends HTMLElement {
   _boilerDelta(entity) {
     const rows = this._boiler?.hist?.[entity];
     const first = (rows || []).map((r) => toNum(r.s)).find((v) => v !== null);
-    const cur = this.n(entity);
+    const cur = this._bn(entity);
     return first === undefined || cur === null ? null : Math.max(0, cur - first);
   }
   /** Safety and burn-cycle checks: [{name, lvl (0 ok, 1 warning, 2 danger), text, e}]. */
   _boilerChecks(b) {
     const out = [];
     const add = (name, lvl, text, e) => out.push({ name, lvl, text, e });
-    const n = (k) => this.n(b[k]);
+    const n = (k) => this._bn(b[k]);
     // active faults
     const faults = ["currenterrorerror", "currenterrorerror1", "currenterrorerror2", "currenterrorerror3", "currenterrorerror4"]
-      .filter((k) => b[k] && this._boilerKnown(b[k]) && !["0", "0.0", "no error", "none", "ok"].includes(String(this.s(b[k])).toLowerCase()));
-    if (faults.length) add("Averías", 2, `Avería activa en la caldera: ${faults.map((k) => "F." + this.s(b[k])).join(", ")}. Mira el manual de tu caldera y, si no se quita al rearmar, avisa al servicio técnico.`, b[faults[0]]);
+      .filter((k) => b[k] && this._boilerKnown(b[k]) && !["0", "0.0", "no error", "none", "ok"].includes(String(this._bs(b[k])).toLowerCase()));
+    if (faults.length) add("Averías", 2, `Avería activa en la caldera: ${faults.map((k) => "F." + this._bs(b[k])).join(", ")}. Mira el manual de tu caldera y, si no se quita al rearmar, avisa al servicio técnico.`, b[faults[0]]);
     else if (b.currenterrorerror) add("Averías", 0, "Sin averías activas", b.currenterrorerror);
     // water pressure
-    const pk = b.waterpressurepress || b.waterpressure, p = this.n(pk);
+    const pk = b.waterpressurepress || b.waterpressure, p = this._bn(pk);
     if (p !== null) {
       const L = BOILER_LIMITS;
       if (p < L.pMin) add("Presión", 2, `Presión del circuito muy baja (${fmt(p, 2)} bar): la caldera puede bloquearse. Rellena el circuito hasta 1–1,5 bar en frío.`, pk);
@@ -2058,9 +2086,13 @@ class CentroControlPanel extends HTMLElement {
     const hh = n("hchours"), hs = n("hcstarts");
     if (hh > 0 && hs > 0 && (hh * 60) / hs < BOILER_LIMITS.burnMin) add("Media histórica", 1, `De media, cada arranque en calefacción dura solo ${fmtMin((hh * 60) / hs)}: la caldera ha trabajado a ciclos cortos.`, b.hcstarts);
     // link with the boiler
-    if (b.globalsignal && this._boilerKnown(b.globalsignal)) {
-      if (this._boilerOn(b.globalsignal)) add("Conexión eBUS", 0, "Con señal", b.globalsignal);
-      else add("Conexión eBUS", 1, "ebusd no recibe señal del bus: los datos de esta pestaña están congelados.", b.globalsignal);
+    if (b.globalsignal) {
+      const sg = this.st(b.globalsignal), ss = String(sg?.state ?? "");
+      const lc = Date.parse(sg?.last_changed);
+      const since = Number.isFinite(lc) ? Date.now() - lc : 0;
+      if (ss === "on") add("Conexión eBUS", 0, "Con señal", b.globalsignal);
+      else if ((ss === "off" || ss === "unavailable") && since > BOILER_SIGNAL_GRACE) add("Conexión eBUS", 1, `Sin señal del bus desde hace ${fmtMin(since / 60000)}: ebusd no lee la caldera y los datos de esta pestaña pueden estar congelados.`, b.globalsignal);
+      else if (ss === "off" || ss === "unavailable") add("Conexión eBUS", 0, "Corte breve", b.globalsignal);
     }
     return out;
   }
@@ -2071,13 +2103,14 @@ class CentroControlPanel extends HTMLElement {
     if (!Object.keys(b).length)
       return [{ cards: [head, this.empty("e", "Conecta la caldera por eBUS con ebusd (complemento eBUSd y la integración MQTT) y esta pestaña se rellena sola con las entidades del circuito «bai»: temperaturas, presión, llama, modulación, contadores y la comprobación del ciclo de quemado.")] }];
     this._boilerLoad(b);
-    const n = (k) => this.n(b[k]);
+    const n = (k) => this._bn(b[k]);
     const has = (k) => b[k] && this._boilerKnown(b[k]);
     const on = (k) => this._boilerOn(b[k]);
     const cards = [head];
 
     // --- verdict
     const checks = this._boilerChecks(b);
+    const stale = this._boilerStale(b);
     const bad = checks.filter((c) => c.lvl).sort((x, y) => y.lvl - x.lvl);
     const lvl = bad.length ? bad[0].lvl : 0;
     const vc = [C.green, C.amber, C.red][lvl];
@@ -2086,7 +2119,8 @@ class CentroControlPanel extends HTMLElement {
     cards.push(this.card("v", `<h3 style="color:${vc}"${lvl === 2 ? ' class="pulse"' : ""}>${icon(lvl === 2 ? "mdi:alert-octagon" : lvl ? "mdi:alert" : "mdi:shield-check")}${vt}</h3>
       ${bad.map((c) => `<div class="alert" style="--a:${c.lvl === 2 ? C.red : C.amber}"${c.e ? ` data-more="${esc(c.e)}"` : ""}><b>${c.lvl === 2 ? "Peligro" : "Aviso"} · ${esc(c.name)}</b><br>${esc(c.text)}</div>`).join("")}
       <div class="small" style="line-height:1.9;margin-top:4px">${okList}</div>
-      ${this._boiler ? "" : `<div class="small muted">Leyendo el historial de la llama…</div>`}`, { c: vc }));
+      ${this._boiler ? "" : `<div class="small muted">Leyendo el historial de la llama…</div>`}
+      ${stale > 120000 ? `<div class="small muted">Sin lectura nueva de algunos datos desde hace ${fmtMin(stale / 60000)}: se muestran los últimos valores.</div>` : ""}`, { c: vc }));
 
     // --- now
     const st = n("statenumber");

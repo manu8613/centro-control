@@ -8,6 +8,14 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.16.1] - 2026-11-16
+
+### Corregido
+- Pestaña Caldera: ya no «salta» entre con datos y sin datos.
+  - Si una lectura se pierde un momento (ebusd reiniciando, un corte del bus, un sondeo lento), se conserva el último valor hasta 15 minutos: las agujas y tarjetas no desaparecen ni se redibuja la pestaña entera. Pasados 2 minutos sin lectura nueva avisa de que muestra el último valor; pasados 15, la da por perdida.
+  - El aviso «Sin señal del bus» solo sale si el corte dura más de 5 minutos (las colisiones normales del bus duran segundos) y dice cuánto lleva.
+  - Si falla una lectura del historial de la llama, se conserva el último historial bueno y se reintenta a los 30 s en lugar de quitar las comprobaciones del ciclo de quemado durante 2 minutos.
+
 ## [2.16.0] - 2026-11-16
 
 ### Añadido

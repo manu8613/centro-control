@@ -1,9 +1,10 @@
 # Estado
 
-Versión publicada: v2.15.0 (v2.16.0 en PR) · Commit de referencia: `05b350f` · Actualizado: 2026-11-16
+Versión publicada: v2.16.0 (v2.16.1 en PR) · Commit de referencia: `8d90495` · Actualizado: 2026-11-16
 
 ## Funciona (comprobado)
-- v2.16.0 (PR): pestaña Caldera con las entidades de ebusd (detección automática en el registro, plataforma MQTT, circuito «bai»): indicadores de aguja, estado S.xx, ciclo de quemado de 24 h con avisos y peligro, contadores y gráficas. Probada en Chrome sin pantalla con valores reales de una caldera e historial simulado; falta verla en la casa real.
+- v2.16.1 (PR): la pestaña Caldera aguanta lecturas que se pierden un momento (conserva el último valor 15 min), avisa de falta de señal del bus solo si dura más de 5 min y conserva el historial de la llama si falla una lectura. Probado en Chrome sin pantalla con lecturas no disponibles, cortes de señal y fallos del historial; falta verlo en la casa real.
+- v2.16.0: pestaña Caldera con las entidades de ebusd (detección automática en el registro, plataforma MQTT, circuito «bai»): indicadores de aguja, estado S.xx, ciclo de quemado de 24 h con avisos y peligro, contadores y gráficas. Probada en Chrome sin pantalla con valores reales de una caldera e historial simulado; falta verla en la casa real.
 - v2.15.0 (PR, sobre la rama de la v2.14.0): modo Diseño con arrastre con el dedo (asa ✥), ocultar tarjetas y títulos, y «Añadir» indicadores y gráficas de cualquier entidad en cualquier pestaña. Probado con toques simulados en Chrome sin pantalla; falta en la tablet real.
 - v2.14.0 (PR): botón «Probar ventana de llamada» en Configuración, con lista en vivo (sensor, vídeo, audio, abrir, colgar). Probado con cámara simulada; falta en el videoportero real.
 - v2.13.0: ventana del videoportero con botones «Activar audio» y «Colgar» además de «Abrir puerta». Probada con llamada simulada en Chrome sin pantalla; falta en el videoportero real (que el flujo de la cámara traiga sonido y qué entidad cuelga la llamada).
@@ -30,12 +31,6 @@ Versión publicada: v2.15.0 (v2.16.0 en PR) · Commit de referencia: `05b350f` �
 ## Últimos cierres
 <!-- Pegar aquí el bloque CIERRE de cada tarea (ver CLAUDE.md). Conservar solo los 5 últimos. -->
 
-**Centro de Control · feat/luz-factura-pdf · v2.9.0**
-- Objetivo: importar facturas de luz en PDF desde la pestaña Luz sin teclear datos.
-- Cambios: tarjeta «Importar factura en PDF» (lee el fichero en el navegador, lo envía en base64 a `factusol.importar_factura_pdf` y lo quita del selector), campo «primer día» en el formulario manual; CHANGELOG.
-- Pruebas: pytest 74 OK; prueba de la acción con Node y un servicio simulado.
-- Pendientes: probar con una factura real tras actualizar Factusol a 0.2.0.
-
 **Centro de Control · feat/videoportero-audio-colgar · v2.13.0**
 - Objetivo: que la ventana de llamada del videoportero tenga vídeo, botón de audio y botones de abrir y colgar, sobre cualquier pestaña.
 - Cambios: botones «Activar audio» (quita el silencio del vídeo) y «Colgar» (cierra y, opcional, llama a la entidad `timbre_colgar` elegida en Configuración del panel); botones táctiles más grandes.
@@ -54,9 +49,15 @@ Versión publicada: v2.15.0 (v2.16.0 en PR) · Commit de referencia: `05b350f` �
 - Pruebas: pytest en verde; Chrome sin pantalla con toques simulados (arrastrar tarjeta y título, ocultar, añadir indicador y gráfica, recargar, restablecer, eliminar).
 - Pendientes: probar en la tablet real; los botones de dentro de una tarjeta se mueven con su tarjeta, no sueltos; lo añadido se guarda por dispositivo (no se comparte entre tablet y PC).
 
-## Último cierre
 **Centro de Control · feat/pestana-caldera · v2.16.0**
 - Objetivo: pestaña Caldera con los datos de ebusd: indicadores de aguja, gráficas, marcadores y comprobación del ciclo de quemado con aviso y alerta de peligro.
 - Cambios: `ebusd_key`/`EBUSD_KEYS` y `caldera_entities()` en `manager.py`; `caldera` en el contexto y en la configuración del panel; `v_caldera`, `_boilerChecks`, `_boilerCycles`, `_boilerLoad` y series `onoff` en el JS; insignia en la barra; vista Caldera en el panel clásico; README y CHANGELOG.
 - Pruebas: pytest 77 OK; Chrome sin pantalla (escritorio y móvil) con un caso correcto y otro con avería, presión alta, bloqueo y encendidos fallidos.
 - Pendientes: probar en la casa real; los avisos solo se ven con el panel abierto (no llegan a la pestaña Problemas ni como notificación); la llama se lee por sondeo, así que los ciclos más cortos que el intervalo de sondeo no se ven; los límites (presión, temperatura, ciclos cortos) son fijos, no configurables.
+
+## Último cierre
+**Centro de Control · fix/caldera-cortes-breves · v2.16.1**
+- Objetivo: que la pestaña Caldera no vaya y venga entre «con datos» y «sin datos».
+- Cambios: `_bs`/`_bn` (conservan la última lectura buena `BOILER_GRACE` = 15 min) y `_boilerStale` en el JS; aviso de falta de señal solo tras `BOILER_SIGNAL_GRACE` = 5 min según `last_changed`; si falla la lectura del historial se conserva el anterior y se reintenta a los 30 s; prueba que impide volver a leer estados sin pasar por `_bs`.
+- Pruebas: pytest en verde; Chrome sin pantalla, antes y después, con presión e ida no disponibles (1, 3 y 17 min), señal del bus en off 8 s y 10 min, y fallo del historial.
+- Pendientes: verlo en la casa real; si siguen los cortes de señal de verdad, el fondo está en el bus (colisiones por el sondeo de ebusd), no en el panel.

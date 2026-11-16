@@ -332,3 +332,13 @@ def test_ebusd_key():
     js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
     used = set(re.findall(r"\bb\.([a-z0-9]+)\b", js.split("9c caldera (ebusd)")[1].split("9b luz (Factusol)")[0]))
     assert used and used <= set(EBUSD_KEYS)
+
+
+def test_caldera_js_keeps_last_reading():
+    js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
+    block = js.split("9c caldera (ebusd)")[1].split("9b luz (Factusol)")[0]
+    # Toda lectura de la caldera pasa por _bs/_bn (que conservan la última buena): si se pierde un momento
+    # no deben ir y venir las tarjetas. Solo esos ayudantes, que están antes de _boilerKnown, leen el estado directo.
+    rest = block.split("_bs(e) {")[0] + block.split("_boilerKnown(e) {")[1]
+    assert "this.n(" not in rest and "this.s(" not in rest
+    assert "BOILER_GRACE" in js and "BOILER_SIGNAL_GRACE" in js

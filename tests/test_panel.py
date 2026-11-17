@@ -342,3 +342,15 @@ def test_caldera_js_keeps_last_reading():
     rest = block.split("_bs(e) {")[0] + block.split("_boilerKnown(e) {")[1]
     assert "this.n(" not in rest and "this.s(" not in rest
     assert "BOILER_GRACE" in js and "BOILER_SIGNAL_GRACE" in js
+
+
+def test_caldera_alerts_are_selectable():
+    js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
+    # Por defecto solo salta lo que la caldera da como avería; el resto se elige en Configuración.
+    assert 'BOILER_ALERTS_DEFAULT = ["averias"]' in js
+    assert all(f'data-calav="{a}"' in js for a in ("toggle", "only", "all", "none"))
+    # Nada enseña las comprobaciones sin pasar por el filtro de los avisos elegidos.
+    assert js.count("this._boilerChecks(") == 1
+    ids = re.findall(r'^  \["([a-z]+)", "[^"]+", "[^"]+"\],$', js.split("const BOILER_ALERTS = [")[1].split("];")[0], re.M)
+    names = re.findall(r'add\("([^"]+)", [012]', js.split("_boilerChecks(b) {")[1].split("  v_caldera() {")[0])
+    assert len(ids) == 10 and set(names) == {n for _, n in re.findall(r'^  \["([a-z]+)", "([^"]+)", "[^"]+"\],$', js.split("const BOILER_ALERTS = [")[1].split("];")[0], re.M)}

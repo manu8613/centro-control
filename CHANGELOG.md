@@ -8,6 +8,14 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.17.0] - 2026-11-17
+
+### Cambiado
+- Pestaña Caldera: **solo avisa de lo que elijas**. Por defecto, únicamente las averías que da la propia caldera (códigos F.xx); si no hay ninguna, no se enseña ninguna tarjeta de estado ni de comprobaciones. Los colores ámbar y rojo de las agujas y contadores también dependen de lo elegido.
+- Nuevo apartado **Avisos de la caldera** en Configuración para activar cada aviso por separado: presión, temperatura de ida, salto ida–retorno, estado S.xx, bloqueos, encendidos fallidos, ciclos de quemado cortos, media histórica y conexión eBUS. La elección se guarda en el dispositivo (la tablet y el PC pueden tener la suya).
+- La insignia de la pestaña Caldera en la barra cuenta solo los avisos elegidos.
+- Si la caldera da una avería ya con letra (por ejemplo «F.28»), no se le antepone otra «F.».
+
 ## [2.16.1] - 2026-11-16
 
 ### Corregido

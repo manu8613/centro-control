@@ -1,9 +1,10 @@
 # Estado
 
-Versión publicada: v2.16.0 (v2.16.1 en PR) · Commit de referencia: `8d90495` · Actualizado: 2026-11-16
+Versión publicada: v2.16.1 (v2.17.0 en PR) · Commit de referencia: `f631454` · Actualizado: 2026-11-17
 
 ## Funciona (comprobado)
-- v2.16.1 (PR): la pestaña Caldera aguanta lecturas que se pierden un momento (conserva el último valor 15 min), avisa de falta de señal del bus solo si dura más de 5 min y conserva el historial de la llama si falla una lectura. Probado en Chrome sin pantalla con lecturas no disponibles, cortes de señal y fallos del historial; falta verlo en la casa real.
+- v2.17.0 (PR): la pestaña Caldera solo avisa de lo que se elija en Configuración (por dispositivo; por defecto, solo las averías de la caldera) y no enseña nada si no salta ninguno. Probado en Chrome sin pantalla con presión alta, estado S.41, falta de señal y avería, con selección, recarga y «Ninguno»; falta verlo en la casa real.
+- v2.16.1: la pestaña Caldera aguanta lecturas que se pierden un momento (conserva el último valor 15 min), avisa de falta de señal del bus solo si dura más de 5 min y conserva el historial de la llama si falla una lectura. Probado en Chrome sin pantalla con lecturas no disponibles, cortes de señal y fallos del historial; falta verlo en la casa real.
 - v2.16.0: pestaña Caldera con las entidades de ebusd (detección automática en el registro, plataforma MQTT, circuito «bai»): indicadores de aguja, estado S.xx, ciclo de quemado de 24 h con avisos y peligro, contadores y gráficas. Probada en Chrome sin pantalla con valores reales de una caldera e historial simulado; falta verla en la casa real.
 - v2.15.0 (PR, sobre la rama de la v2.14.0): modo Diseño con arrastre con el dedo (asa ✥), ocultar tarjetas y títulos, y «Añadir» indicadores y gráficas de cualquier entidad en cualquier pestaña. Probado con toques simulados en Chrome sin pantalla; falta en la tablet real.
 - v2.14.0 (PR): botón «Probar ventana de llamada» en Configuración, con lista en vivo (sensor, vídeo, audio, abrir, colgar). Probado con cámara simulada; falta en el videoportero real.
@@ -31,12 +32,6 @@ Versión publicada: v2.16.0 (v2.16.1 en PR) · Commit de referencia: `8d90495` �
 ## Últimos cierres
 <!-- Pegar aquí el bloque CIERRE de cada tarea (ver CLAUDE.md). Conservar solo los 5 últimos. -->
 
-**Centro de Control · feat/videoportero-audio-colgar · v2.13.0**
-- Objetivo: que la ventana de llamada del videoportero tenga vídeo, botón de audio y botones de abrir y colgar, sobre cualquier pestaña.
-- Cambios: botones «Activar audio» (quita el silencio del vídeo) y «Colgar» (cierra y, opcional, llama a la entidad `timbre_colgar` elegida en Configuración del panel); botones táctiles más grandes.
-- Pruebas: pytest en verde; Chrome sin pantalla con llamada simulada en Resumen, Solar y Configuración (aparece, audio, doble toque de abrir, colgar, no reaparece).
-- Pendientes: probar en el videoportero real; `timbre_colgar` solo se configura por dispositivo (no en las opciones de la integración); la ventana solo sale con el panel Centro de Control abierto; el audio es solo de escucha.
-
 **Centro de Control · feat/videoportero-prueba · v2.14.0**
 - Objetivo: botón en Configuración para comprobar la ventana del videoportero (apertura, vídeo, audio y colgar) sin esperar a una llamada.
 - Cambios: `_bellTest` y lista de comprobación en vivo (`_bellTestRows`), detección de sonido en el flujo (`_bellHasSound`), la ventana de prueba no se cierra sola y «Colgar» avisa de lo que ha hecho antes de cerrar.
@@ -55,9 +50,15 @@ Versión publicada: v2.16.0 (v2.16.1 en PR) · Commit de referencia: `8d90495` �
 - Pruebas: pytest 77 OK; Chrome sin pantalla (escritorio y móvil) con un caso correcto y otro con avería, presión alta, bloqueo y encendidos fallidos.
 - Pendientes: probar en la casa real; los avisos solo se ven con el panel abierto (no llegan a la pestaña Problemas ni como notificación); la llama se lee por sondeo, así que los ciclos más cortos que el intervalo de sondeo no se ven; los límites (presión, temperatura, ciclos cortos) son fijos, no configurables.
 
-## Último cierre
 **Centro de Control · fix/caldera-cortes-breves · v2.16.1**
 - Objetivo: que la pestaña Caldera no vaya y venga entre «con datos» y «sin datos».
 - Cambios: `_bs`/`_bn` (conservan la última lectura buena `BOILER_GRACE` = 15 min) y `_boilerStale` en el JS; aviso de falta de señal solo tras `BOILER_SIGNAL_GRACE` = 5 min según `last_changed`; si falla la lectura del historial se conserva el anterior y se reintenta a los 30 s; prueba que impide volver a leer estados sin pasar por `_bs`.
 - Pruebas: pytest en verde; Chrome sin pantalla, antes y después, con presión e ida no disponibles (1, 3 y 17 min), señal del bus en off 8 s y 10 min, y fallo del historial.
 - Pendientes: verlo en la casa real; si siguen los cortes de señal de verdad, el fondo está en el bus (colisiones por el sondeo de ebusd), no en el panel.
+
+## Último cierre
+**Centro de Control · feat/caldera-avisos-seleccionables · v2.17.0**
+- Objetivo: quitar los avisos de la pestaña Caldera y poder elegir cuáles salen; por defecto, solo si la caldera da una avería.
+- Cambios: `BOILER_ALERTS` (10 avisos), `_calAvLoad/_calAvAction` (elección en `localStorage`), `_boilerAlerts` (único camino a las comprobaciones), tarjeta de avisos solo si salta alguno elegido, colores de alerta de agujas y contadores según lo elegido, insignia de la barra solo con lo elegido, apartado «Avisos de la caldera» en Configuración; las averías se leen en directo (`_bsLive`), sin la conservación de 15 min.
+- Pruebas: pytest en verde (1 nueva); Chrome sin pantalla con presión 2,95 bar, S.41 y sin señal 15 min (sin aviso por defecto), avería F.28 (solo la avería), selección en Configuración, recarga y «Ninguno»/«Solo averías»; la avería que desaparece quita el aviso al instante.
+- Pendientes: verlo en la casa real; la elección es por dispositivo (tablet y PC por separado); códigos de avería reales de la caldera aún sin ver (solo «unknown»).

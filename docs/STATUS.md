@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.16.1 (v2.17.0 en PR) · Commit de referencia: `f631454` · Actualizado: 2026-11-17
+Versión publicada: v2.17.0 (v2.17.1 en PR) · Commit de referencia: `94b1c43` · Actualizado: 2026-11-17
 
 ## Funciona (comprobado)
+- v2.17.1 (PR): la barra de pestañas se desliza con el dedo sin cortarse y deja llegar a Configuración (ya no se reconstruye en cada refresco ni mientras se toca). Probado en Chrome sin pantalla antes y después; falta en la tablet real.
 - v2.17.0 (PR): la pestaña Caldera solo avisa de lo que se elija en Configuración (por dispositivo; por defecto, solo las averías de la caldera) y no enseña nada si no salta ninguno. Probado en Chrome sin pantalla con presión alta, estado S.41, falta de señal y avería, con selección, recarga y «Ninguno»; falta verlo en la casa real.
 - v2.16.1: la pestaña Caldera aguanta lecturas que se pierden un momento (conserva el último valor 15 min), avisa de falta de señal del bus solo si dura más de 5 min y conserva el historial de la llama si falla una lectura. Probado en Chrome sin pantalla con lecturas no disponibles, cortes de señal y fallos del historial; falta verlo en la casa real.
 - v2.16.0: pestaña Caldera con las entidades de ebusd (detección automática en el registro, plataforma MQTT, circuito «bai»): indicadores de aguja, estado S.xx, ciclo de quemado de 24 h con avisos y peligro, contadores y gráficas. Probada en Chrome sin pantalla con valores reales de una caldera e historial simulado; falta verla en la casa real.
@@ -57,8 +58,8 @@ Versión publicada: v2.16.1 (v2.17.0 en PR) · Commit de referencia: `f631454` �
 - Pendientes: verlo en la casa real; si siguen los cortes de señal de verdad, el fondo está en el bus (colisiones por el sondeo de ebusd), no en el panel.
 
 ## Último cierre
-**Centro de Control · feat/caldera-avisos-seleccionables · v2.17.0**
-- Objetivo: quitar los avisos de la pestaña Caldera y poder elegir cuáles salen; por defecto, solo si la caldera da una avería.
-- Cambios: `BOILER_ALERTS` (10 avisos), `_calAvLoad/_calAvAction` (elección en `localStorage`), `_boilerAlerts` (único camino a las comprobaciones), tarjeta de avisos solo si salta alguno elegido, colores de alerta de agujas y contadores según lo elegido, insignia de la barra solo con lo elegido, apartado «Avisos de la caldera» en Configuración; las averías se leen en directo (`_bsLive`), sin la conservación de 15 min.
-- Pruebas: pytest en verde (1 nueva); Chrome sin pantalla con presión 2,95 bar, S.41 y sin señal 15 min (sin aviso por defecto), avería F.28 (solo la avería), selección en Configuración, recarga y «Ninguno»/«Solo averías»; la avería que desaparece quita el aviso al instante.
-- Pendientes: verlo en la casa real; la elección es por dispositivo (tablet y PC por separado); códigos de avería reales de la caldera aún sin ver (solo «unknown»).
+**Centro de Control · fix/pestanas-deslizar · v2.17.1**
+- Objetivo: que el deslizable de pestañas no se quede fijo ni vuelva a la pestaña activa y deje llegar a Configuración.
+- Cambios: en `_render` la barra solo se reconstruye si cambia su contenido (`_navHtml`) y nunca mientras se toca o se desliza (`_navTouch`, `_navScrollAt`); la pestaña activa se marca con la clase sin reconstruir; el centrado solo ocurre al cambiar de pestaña; `touch-action:pan-x` en `nav`.
+- Pruebas: pytest 79 OK; Chrome sin pantalla (420 px) deslizando mientras llegan actualizaciones: antes se recreaban los botones, ahora no; llega al final y abre Configuración.
+- Pendientes: probar en la tablet real.

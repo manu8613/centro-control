@@ -15,7 +15,7 @@ def test_cuts_are_counted_with_their_duration():
     flap(mon, T0, 30)
     flap(mon, T0 + 600, 10)
     hour = mon.window(T0 + 900, HOUR)
-    assert hour == {"cortes": 2, "sin_senal_s": 40, "reinicios": 0}
+    assert hour == {"cortes": 2, "sin_senal_s": 40, "reinicios": 0, "tado_cortes": 0, "tado_coinciden": 0}
     assert mon.level(T0 + 900) == "aviso"
 
 
@@ -140,3 +140,48 @@ def test_report_has_what_the_panel_needs():
     rep = mon.report(T0 + 60)
     assert set(rep) >= {"nivel", "hora", "dia", "corte_actual_s", "ultimo_corte", "prueba", "pruebas", "eventos"}
     assert rep["ultimo_corte"] == T0 and rep["nivel"] == "aviso"
+
+
+def test_tado_bridge_drop_alone_is_only_a_warning_and_not_notified_by_default():
+    mon = BusMonitor()
+    mon.tado("off", T0)
+    mon.tado("on", T0 + 90)
+    win = mon.window(T0 + 100, HOUR)
+    assert (win["tado_cortes"], win["tado_coinciden"]) == (1, 0)
+    problems = mon.problems(T0 + 100)
+    assert [(p.id, p.level) for p in problems] == [("ebus_tado_cae", "aviso")]
+    assert mon.level(T0 + 100) == "ok"
+
+
+def test_tado_drop_next_to_an_ebusd_cut_is_a_confirmed_collision():
+    mon = BusMonitor()
+    flap(mon, T0, 20)
+    mon.tado("off", T0 + 120)  # ebusd cortó hace 100 s
+    assert mon.window(T0 + 130, HOUR)["tado_coinciden"] == 1
+    assert mon.level(T0 + 130) == "critico"
+    assert any(p.id == "ebus_tado_cae" and p.level == "critico" for p in mon.problems(T0 + 130))
+    mon2 = BusMonitor()
+    mon2.signal("off", T0)  # corte de ebusd aún abierto
+    mon2.tado("off", T0 + 30)
+    assert mon2.window(T0 + 40, HOUR)["tado_coinciden"] == 1
+    far = BusMonitor()
+    flap(far, T0, 20)
+    far.tado("off", T0 + 5000)
+    assert far.window(T0 + 5001, 10_000)["tado_coinciden"] == 0
+
+
+def test_a_tado_drop_during_a_trial_means_they_do_not_coexist():
+    mon = BusMonitor()
+    mon.start_trial("pollinterval 30", T0)
+    mon.tado("off", T0 + 600)
+    mon.tado("on", T0 + 700)
+    done = mon.stop_trial(T0 + 6 * HOUR)
+    assert done["tado_cortes"] == 1 and done["tado_s"] == 100 and done["veredicto"] == "no_convive"
+    assert verdict(6, 0, 0, 0, 0, tado_cuts=1) == "no_convive"
+
+
+def test_tado_state_is_saved():
+    mon = BusMonitor()
+    mon.tado("off", T0)
+    back = BusMonitor.from_dict(mon.as_dict())
+    assert back.tado_since == T0 and back.events == mon.events

@@ -12,6 +12,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_call_later,
@@ -296,6 +297,7 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.notified: set[str] = set()
         self.ebus = BusMonitor()
         self._ebus_watch: tuple[str, ...] = ()
+        self._ebus_tado: str | None = None
         self._ebus_unsub: CALLBACK_TYPE | None = None
         self.zone_runs: dict[str, dict[str, float]] = {}  # zone id -> {start, end}
         self.zone_last: dict[str, dict[str, Any]] = {}
@@ -916,6 +918,10 @@ class CentroManager(DataUpdateCoordinator[None]):
         """Escucha la señal y el tiempo de actividad de ebusd (aparecen por descubrimiento MQTT, a veces tarde)."""
         found = self.caldera_entities()
         watch = tuple(found[k] for k in ("globalsignal", "globaluptime") if k in found)
+        self._ebus_tado = self.tado_bridge_entity()
+        if self._ebus_tado:
+            watch += (self._ebus_tado,)
+        self.ebus.tado_watched = bool(self._ebus_tado)
         if watch == self._ebus_watch:
             return
         if self._ebus_unsub:
@@ -930,8 +936,24 @@ class CentroManager(DataUpdateCoordinator[None]):
             if st := self.hass.states.get(entity):
                 self._ebus_feed(entity, st.state, now)
 
+    def tado_bridge_entity(self) -> str | None:
+        """Sensor de conexión del bridge de Tado (se busca por el dispositivo, no por un id fijo)."""
+        devices = dr.async_get(self.hass)
+        for entry in er.async_get(self.hass).entities.values():
+            if entry.platform != "tado" or entry.domain != "binary_sensor" or entry.disabled_by or not entry.device_id:
+                continue
+            if (entry.device_class or entry.original_device_class) != "connectivity":
+                continue
+            device = devices.async_get(entry.device_id)
+            text = f"{device.model or ''} {device.name_by_user or device.name or ''}" if device else ""
+            if re.search(r"bridge|\bbr\d", text, re.IGNORECASE):
+                return entry.entity_id
+        return None
+
     def _ebus_feed(self, entity: str, state: str, ts: float) -> None:
-        if entity == self.caldera_entities().get("globalsignal"):
+        if entity == self._ebus_tado:
+            self.ebus.tado(state, ts)
+        elif entity == self.caldera_entities().get("globalsignal"):
             self.ebus.signal(state, ts)
         else:
             try:

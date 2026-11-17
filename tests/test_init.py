@@ -418,3 +418,37 @@ async def test_ebus_trial_needs_ebusd(hass: HomeAssistant) -> None:
     assert hass.states.get(eid(hass, entry, "convivencia_ebus")).state == "unknown"
     with pytest.raises(ServiceValidationError):
         await hass.services.async_call(DOMAIN, "prueba_convivencia_iniciar", {"nombre": "x"}, blocking=True)
+
+
+async def test_ebus_listens_to_the_tado_bridge_found_by_its_device(hass: HomeAssistant) -> None:
+    """El bridge se encuentra por su dispositivo, sin ningún id fijo."""
+    from homeassistant.helpers import device_registry as dr
+
+    entry = make_entry()
+    entry.add_to_hass(hass)
+    device = dr.async_get(hass).async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={("tado", "BR0000000001")}, name="BR0000000001", model="Internet Bridge"
+    )
+    er.async_get(hass).async_get_or_create(
+        "binary_sensor", "tado", "u_bridge", suggested_object_id="casa_bridge_conexion", device_id=device.id, original_device_class="connectivity"
+    )
+    er.async_get(hass).async_get_or_create("binary_sensor", "tado", "u_otro", suggested_object_id="casa_valvula_conexion", original_device_class="connectivity")
+    registry = er.async_get(hass)
+    registry.async_get_or_create("binary_sensor", "mqtt", "u_signal", suggested_object_id="ebusd_global_signal")
+    hass.states.async_set("binary_sensor.ebusd_global_signal", "on")
+    hass.states.async_set("binary_sensor.casa_bridge_conexion", "on")
+    hass.states.async_set("binary_sensor.casa_valvula_conexion", "on")
+    await setup(hass, entry)
+    manager = entry.runtime_data
+    assert manager.tado_bridge_entity() == "binary_sensor.casa_bridge_conexion"
+    assert manager.ebus.tado_watched
+
+    hass.states.async_set("binary_sensor.casa_valvula_conexion", "off")  # una válvula no cuenta
+    await hass.async_block_till_done()
+    assert manager.ebus.tado_since is None
+    hass.states.async_set("binary_sensor.ebusd_global_signal", "off")
+    await hass.async_block_till_done()
+    hass.states.async_set("binary_sensor.casa_bridge_conexion", "off")
+    await hass.async_block_till_done()
+    assert manager.ebus.tado_since is not None
+    assert any(p["id"] == "ebus_tado_cae" and p["nivel"] == "critico" for p in manager.problems)

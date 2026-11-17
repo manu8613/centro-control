@@ -2133,22 +2133,24 @@ class CentroControlPanel extends HTMLElement {
     if (!this.id(key) || !b.globalsignal || this.a(this.id(key), "disponible") !== true) return [];
     const A = (attr) => this.a(this.id(key), attr);
     const hour = A("hora") || {}, day = A("dia") || {}, live = A("prueba"), done = A("pruebas") || [];
-    const lvl = A("nivel") || "ok", cut = Number(A("corte_actual_s")) || 0;
+    const lvl = A("nivel") || "ok", cut = Number(A("corte_actual_s")) || 0, tadoNow = Number(A("tado_actual_s")) || 0;
     const col = lvl === "critico" ? C.red : lvl === "aviso" ? C.amber : C.green;
     const when = (t) => new Date(t * 1000).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
     const sec = (v) => (v >= 60 ? fmtMin(v / 60) : `${Math.round(v)} s`);
     const out = [this.title("tv", "Convivencia con el Tado", "Cortes del bus eBUS que ve ebusd: señal perdida y reinicios", "mdi:swap-horizontal-bold", col)];
-    const msg = cut > 0 ? `Sin señal desde hace ${sec(cut)}` : lvl === "ok" ? "Sin colisiones en la última hora" : `${hour.cortes} corte${hour.cortes === 1 ? "" : "s"} en la última hora`;
+    const msg = tadoNow > 0 ? "El Tado ha perdido su bridge" : cut > 0 ? `Sin señal desde hace ${sec(cut)}` : lvl === "ok" ? "Sin colisiones en la última hora" : `${hour.cortes} corte${hour.cortes === 1 ? "" : "s"} en la última hora`;
     out.push(this.card("vs", `<h3 style="color:${col}">${icon(lvl === "ok" ? "mdi:check-circle" : "mdi:alert")}${esc(msg)}</h3>
       <table>
         <tr><td class="muted">Cortes · última hora</td><td><b>${hour.cortes ?? 0}</b> · ${sec(hour.sin_senal_s || 0)} sin señal</td></tr>
         <tr><td class="muted">Cortes · 24 h</td><td><b>${day.cortes ?? 0}</b> · ${sec(day.sin_senal_s || 0)} sin señal</td></tr>
         <tr><td class="muted">Reinicios de ebusd · 24 h</td><td><b>${day.reinicios ?? 0}</b></td></tr>
         <tr><td class="muted">Último corte</td><td>${A("ultimo_corte") ? when(A("ultimo_corte")) : "ninguno"}</td></tr>
+        ${A("tado_vigilado") ? `<tr><td class="muted">Bridge del Tado · última hora</td><td>${tadoNow > 0 ? `<b style="color:${C.red}">sin conexión desde hace ${sec(tadoNow)}</b>` : hour.tado_cortes ? `<b style="color:${hour.tado_coinciden ? C.red : C.amber}">${hour.tado_cortes} caída${hour.tado_cortes === 1 ? "" : "s"}${hour.tado_coinciden ? " · coincide con ebusd" : ""}</b>` : "sin caídas"}</td></tr>
+        <tr><td class="muted">Bridge del Tado · 24 h</td><td><b>${day.tado_cortes ?? 0}</b> caída${day.tado_cortes === 1 ? "" : "s"}${day.tado_coinciden ? ` · ${day.tado_coinciden} con ebusd` : ""}</td></tr>` : ""}
       </table>
-      <div class="small muted" style="margin-top:8px">Es un indicador indirecto: Home Assistant no ve los choques en sí, pero cuando dos aparatos se pisan en el bus ebusd pierde la señal. Los avisos usan el servicio de notificación de las opciones.</div>`, { c: col }));
+      <div class="small muted" style="margin-top:8px">Es un indicador indirecto: Home Assistant no ve los choques en sí, pero cuando dos aparatos se pisan en el bus ebusd pierde la señal. Si hay Tado, su bridge lo confirma: una caída del bridge junto a un corte de ebusd es una colisión. Los avisos usan el servicio de notificación de las opciones.</div>`, { c: col }));
     const vd = (t) => EBUS_VERDICTS[t.veredicto] || EBUS_VERDICTS.insuficiente;
-    const stats = (t) => `${fmt(t.horas, 1)} h · ${t.cortes} corte${t.cortes === 1 ? "" : "s"} · ${sec(t.sin_senal_s)} sin señal · peor ${sec(t.peor_s)} · ${t.reinicios} reinicio${t.reinicios === 1 ? "" : "s"}`;
+    const stats = (t) => `${fmt(t.horas, 1)} h · ${t.cortes} corte${t.cortes === 1 ? "" : "s"} · ${sec(t.sin_senal_s)} sin señal · peor ${sec(t.peor_s)} · ${t.reinicios} reinicio${t.reinicios === 1 ? "" : "s"}${t.tado_cortes ? ` · el Tado se cayó ${t.tado_cortes} vez${t.tado_cortes === 1 ? "" : "es"}${t.tado_coinciden ? " (con ebusd)" : ""}` : ""}`;
     let body;
     if (live) {
       const [vt, vc, vh] = vd(live);

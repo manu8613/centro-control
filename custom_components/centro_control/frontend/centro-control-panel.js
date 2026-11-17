@@ -54,6 +54,21 @@ const BOILER_STATE_WARN = { 32: "espera por desviación de la velocidad del vent
 const BOILER_GRACE = 15 * 60000;
 // Un corte de señal del bus solo se avisa si dura más que esto (las colisiones del bus son de segundos).
 const BOILER_SIGNAL_GRACE = 5 * 60000;
+// Avisos de la caldera que se eligen en Configuración (por dispositivo). Por defecto, solo las averías que da la propia caldera.
+const BOILER_ALERTS = [
+  ["averias", "Averías", "código de avería (F.xx) que da la caldera"],
+  ["presion", "Presión", "presión del circuito baja o alta"],
+  ["ida", "Temperatura de ida", "temperatura de ida demasiado alta"],
+  ["salto", "Salto ida–retorno", "poca circulación con el quemador encendido"],
+  ["estado", "Estado", "códigos de estado S.xx que indican un problema"],
+  ["bloqueos", "Bloqueos", "bloqueos de la caldera en 24 h"],
+  ["encendido", "Encendido", "encendidos fallidos en 24 h"],
+  ["ciclo", "Ciclo de quemado", "ciclos cortos o demasiados encendidos"],
+  ["media", "Media histórica", "arranques de media muy cortos"],
+  ["conexion", "Conexión eBUS", "sin señal del bus o lecturas sin refrescar"],
+];
+const BOILER_ALERTS_KEY = "centro_control_caldera_avisos";
+const BOILER_ALERTS_DEFAULT = ["averias"];
 const fmtMin = (m) => (m === null || m === undefined || isNaN(m) ? "—" : m < 1 ? `${Math.round(m * 60)} s` : m < 60 ? `${Math.round(m)} min` : `${Math.floor(m / 60)} h ${Math.round(m % 60)} min`);
 // Rotación automática de pestañas (por dispositivo). «config» nunca rota.
 const ROT_KEY = "centro_control_ajustes";
@@ -654,7 +669,7 @@ class CentroControlPanel extends HTMLElement {
       history.replaceState(null, "", "#config");
       this._layoutKey = "";
     }
-    const boil = Object.keys(this.cfg.caldera || {}).length ? this._boilerChecks(this.cfg.caldera).filter((c) => c.lvl) : [];
+    const boil = Object.keys(this.cfg.caldera || {}).length ? this._boilerAlerts(this.cfg.caldera) : [];
     const navEl = root.querySelector("nav");
     const keepScroll = navEl.scrollLeft;
     const tabChanged = this._navTab !== this._tab;
@@ -1061,6 +1076,11 @@ class CentroControlPanel extends HTMLElement {
     if (lay) {
       e.stopPropagation();
       return this._layAction(lay.dataset);
+    }
+    const cav = e.target.closest("[data-calav]");
+    if (cav) {
+      e.stopPropagation();
+      return this._calAvAction(cav.dataset);
     }
     const rot = e.target.closest("[data-rot]");
     if (rot) {
@@ -1968,6 +1988,11 @@ class CentroControlPanel extends HTMLElement {
     }
     return age;
   }
+  /** Lectura en directo, sin conservar la última (para las averías: «unknown» significa que no hay avería). */
+  _bsLive(e) {
+    const raw = e ? this.s(e) : undefined;
+    return raw === undefined || raw === null || ["unknown", "unavailable", ""].includes(String(raw)) ? undefined : raw;
+  }
   _boilerKnown(e) {
     const s = this._bs(e);
     return s !== undefined && s !== null && !["unknown", "unavailable", "", "-"].includes(String(s));
@@ -2032,14 +2057,45 @@ class CentroControlPanel extends HTMLElement {
     return first === undefined || cur === null ? null : Math.max(0, cur - first);
   }
   /** Safety and burn-cycle checks: [{name, lvl (0 ok, 1 warning, 2 danger), text, e}]. */
+  _calAvLoad() {
+    if (this._calav) return this._calav;
+    let r = null;
+    try {
+      r = JSON.parse(localStorage.getItem(BOILER_ALERTS_KEY) || "null");
+    } catch (e) {
+      r = null;
+    }
+    this._calav = Array.isArray(r) ? r.filter((k, i) => BOILER_ALERTS.some((a) => a[0] === k) && r.indexOf(k) === i) : [...BOILER_ALERTS_DEFAULT];
+    return this._calav;
+  }
+  _calAvAction(d) {
+    let r = this._calAvLoad();
+    if (d.calav === "toggle" && BOILER_ALERTS.some((a) => a[0] === d.v)) r = r.includes(d.v) ? r.filter((k) => k !== d.v) : [...r, d.v];
+    else if (d.calav === "only") r = [...BOILER_ALERTS_DEFAULT];
+    else if (d.calav === "all") r = BOILER_ALERTS.map((a) => a[0]);
+    else if (d.calav === "none") r = [];
+    this._calav = r;
+    try {
+      localStorage.setItem(BOILER_ALERTS_KEY, JSON.stringify(r));
+    } catch (e) {
+      /* modo privado: la elección dura hasta recargar la página */
+    }
+    this._schedule(true);
+  }
+  /** Avisos que saltan ahora y que se han elegido en Configuración (el resto no se enseñan). */
+  _boilerAlerts(b) {
+    const on = this._calAvLoad();
+    return this._boilerChecks(b).filter((c) => c.lvl && on.includes(BOILER_ALERTS.find((a) => a[1] === c.name)?.[0]));
+  }
   _boilerChecks(b) {
     const out = [];
     const add = (name, lvl, text, e) => out.push({ name, lvl, text, e });
     const n = (k) => this._bn(b[k]);
+    const fc = (v) => (/^\d+$/.test(String(v).trim()) ? "F." + String(v).trim() : String(v));
     // active faults
     const faults = ["currenterrorerror", "currenterrorerror1", "currenterrorerror2", "currenterrorerror3", "currenterrorerror4"]
-      .filter((k) => b[k] && this._boilerKnown(b[k]) && !["0", "0.0", "no error", "none", "ok"].includes(String(this._bs(b[k])).toLowerCase()));
-    if (faults.length) add("Averías", 2, `Avería activa en la caldera: ${faults.map((k) => "F." + this._bs(b[k])).join(", ")}. Mira el manual de tu caldera y, si no se quita al rearmar, avisa al servicio técnico.`, b[faults[0]]);
+      .filter((k) => this._bsLive(b[k]) !== undefined && !["0", "0.0", "-", "no error", "none", "ok"].includes(String(this._bsLive(b[k])).toLowerCase()));
+    if (faults.length) add("Averías", 2, `Avería activa en la caldera: ${faults.map((k) => fc(this._bsLive(b[k]))).join(", ")}. Mira el manual de tu caldera y, si no se quita al rearmar, avisa al servicio técnico.`, b[faults[0]]);
     else if (b.currenterrorerror) add("Averías", 0, "Sin averías activas", b.currenterrorerror);
     // water pressure
     const pk = b.waterpressurepress || b.waterpressure, p = this._bn(pk);
@@ -2108,19 +2164,20 @@ class CentroControlPanel extends HTMLElement {
     const on = (k) => this._boilerOn(b[k]);
     const cards = [head];
 
-    // --- verdict
-    const checks = this._boilerChecks(b);
+    // --- avisos: solo los elegidos en Configuración; si no salta ninguno, no se enseña nada
+    const en = this._calAvLoad();
+    const A = (id) => en.includes(id);
+    const alerts = this._boilerAlerts(b).sort((x, y) => y.lvl - x.lvl);
     const stale = this._boilerStale(b);
-    const bad = checks.filter((c) => c.lvl).sort((x, y) => y.lvl - x.lvl);
-    const lvl = bad.length ? bad[0].lvl : 0;
-    const vc = [C.green, C.amber, C.red][lvl];
-    const vt = ["Funcionamiento correcto", bad.length === 1 ? "1 aviso" : `${bad.length} avisos`, "PELIGRO · revisa la caldera"][lvl];
-    const okList = checks.filter((c) => !c.lvl).map((c) => `<span style="white-space:nowrap;margin-right:10px"><span style="color:${C.green}">✓</span> ${esc(c.name)} <span class="muted">${esc(c.text)}</span></span>`).join(" ");
-    cards.push(this.card("v", `<h3 style="color:${vc}"${lvl === 2 ? ' class="pulse"' : ""}>${icon(lvl === 2 ? "mdi:alert-octagon" : lvl ? "mdi:alert" : "mdi:shield-check")}${vt}</h3>
-      ${bad.map((c) => `<div class="alert" style="--a:${c.lvl === 2 ? C.red : C.amber}"${c.e ? ` data-more="${esc(c.e)}"` : ""}><b>${c.lvl === 2 ? "Peligro" : "Aviso"} · ${esc(c.name)}</b><br>${esc(c.text)}</div>`).join("")}
-      <div class="small" style="line-height:1.9;margin-top:4px">${okList}</div>
-      ${this._boiler ? "" : `<div class="small muted">Leyendo el historial de la llama…</div>`}
-      ${stale > 120000 ? `<div class="small muted">Sin lectura nueva de algunos datos desde hace ${fmtMin(stale / 60000)}: se muestran los últimos valores.</div>` : ""}`, { c: vc }));
+    const showStale = A("conexion") && stale > 120000;
+    if (alerts.length || showStale) {
+      const worst = alerts.some((c) => c.lvl === 2) ? 2 : 1;
+      const vc = worst === 2 ? C.red : C.amber;
+      const vt = worst === 2 ? "PELIGRO · revisa la caldera" : alerts.length === 1 ? "1 aviso" : alerts.length ? `${alerts.length} avisos` : "Lecturas sin refrescar";
+      cards.push(this.card("v", `<h3 style="color:${vc}"${worst === 2 ? ' class="pulse"' : ""}>${icon(worst === 2 ? "mdi:alert-octagon" : "mdi:alert")}${vt}</h3>
+      ${alerts.map((c) => `<div class="alert" style="--a:${c.lvl === 2 ? C.red : C.amber}"${c.e ? ` data-more="${esc(c.e)}"` : ""}><b>${c.lvl === 2 ? "Peligro" : "Aviso"} · ${esc(c.name)}</b><br>${esc(c.text)}</div>`).join("")}
+      ${showStale ? `<div class="small muted">Sin lectura nueva de algunos datos desde hace ${fmtMin(stale / 60000)}: se muestran los últimos valores.</div>` : ""}`, { c: vc }));
+    }
 
     // --- now
     const st = n("statenumber");
@@ -2148,10 +2205,10 @@ class CentroControlPanel extends HTMLElement {
     const g = (k, key, value, min, max, c, label, unit) => cards.push(this.card(k, gauge(value, min, max, c, label, unit, 140), { c, w: 6, click: b[key] }));
     const L = BOILER_LIMITS;
     const flow = n("status01temp"), ret = n("status01temp1"), set = n("flowtempdesired") ?? n("setmodeflowtempdesired");
-    if (flow !== null) g("gi", "status01temp", flow, 0, 90, flow >= L.tMax ? C.red : flow >= L.tHigh ? C.amber : C.orange, set ? `Ida · consigna ${fmt(set, 0)} °C` : "Ida", "°C");
+    if (flow !== null) g("gi", "status01temp", flow, 0, 90, A("ida") && flow >= L.tMax ? C.red : A("ida") && flow >= L.tHigh ? C.amber : C.orange, set ? `Ida · consigna ${fmt(set, 0)} °C` : "Ida", "°C");
     if (ret !== null) g("gr", "status01temp1", ret, 0, 90, C.amber, flow !== null ? `Retorno · salto ${fmt(flow - ret, 1)} °C` : "Retorno", "°C");
     const pk = b.waterpressurepress ? "waterpressurepress" : "waterpressure", p = n(pk);
-    if (p !== null) g("gp", pk, p, 0, 4, p < L.pMin || p >= L.pMax ? C.red : p < L.pLow || p >= L.pHigh ? C.amber : C.cyan, `Presión · ${fmt(p, 2)} bar`, "bar");
+    if (p !== null) g("gp", pk, p, 0, 4, A("presion") && (p < L.pMin || p >= L.pMax) ? C.red : A("presion") && (p < L.pLow || p >= L.pHigh) ? C.amber : C.cyan, `Presión · ${fmt(p, 2)} bar`, "bar");
     if (n("modulationdesired") !== null) g("gm", "modulationdesired", burning === false ? 0 : n("modulationdesired"), 0, 100, C.pink, burning === false ? "Modulación · apagado" : "Modulación", "%");
     if (n("fanspeed") !== null) g("gf", "fanspeed", n("fanspeed"), 0, Math.max(6000, n("targetfanspeed") || 0), C.blue, n("fanspeed") > 0 && n("targetfanspeed") ? `Ventilador · objetivo ${fmt(n("targetfanspeed"), 0)}` : "Ventilador", "rpm");
     if (n("status01temp3") !== null) g("ga", "status01temp3", n("status01temp3"), 0, 70, C.violet, n("setmodehwctempdesired") !== null ? `ACS · consigna ${fmt(n("setmodehwctempdesired"), 0)} °C` : "Agua caliente", "°C");
@@ -2166,19 +2223,19 @@ class CentroControlPanel extends HTMLElement {
     if (cyc) {
       k("c1", flameE, String(cyc.n), "Encendidos en 24 h", "mdi:fire");
       k("c2", flameE, fmtMin(cyc.onMin), "Tiempo con llama en 24 h", "mdi:timer-outline");
-      k("c3", flameE, cyc.avg === null ? "—" : fmtMin(cyc.avg), cyc.min === null ? "Duración media de cada quemado" : `Duración media · el más corto ${fmtMin(cyc.min)}`, "mdi:timer-sand", cyc.done >= 4 && cyc.med < L.burnMin ? C.amber : C.orange);
-      k("c4", flameE, String(cyc.perHour), "Máximo de encendidos en una hora", "mdi:repeat", cyc.perHour > L.startsHour ? C.amber : C.orange);
+      k("c3", flameE, cyc.avg === null ? "—" : fmtMin(cyc.avg), cyc.min === null ? "Duración media de cada quemado" : `Duración media · el más corto ${fmtMin(cyc.min)}`, "mdi:timer-sand", A("ciclo") && cyc.done >= 4 && cyc.med < L.burnMin ? C.amber : C.orange);
+      k("c4", flameE, String(cyc.perHour), "Máximo de encendidos en una hora", "mdi:repeat", A("ciclo") && cyc.perHour > L.startsHour ? C.amber : C.orange);
     } else if (flameE) burn.push(this.empty("c0", this._boiler ? "Todavía no hay historial de la llama." : "Leyendo el historial de la llama…"));
     const hh = n("hchours"), hs = n("hcstarts");
-    if (hh > 0 && hs > 0) k("c5", b.hcstarts, fmtMin((hh * 60) / hs), "Media histórica por arranque en calefacción", "mdi:chart-timeline", (hh * 60) / hs < L.burnMin ? C.amber : C.green);
+    if (hh > 0 && hs > 0) k("c5", b.hcstarts, fmtMin((hh * 60) / hs), "Media histórica por arranque en calefacción", "mdi:chart-timeline", A("media") && (hh * 60) / hs < L.burnMin ? C.amber : C.green);
     if (n("averageignitiontime") !== null) k("c6", b.averageignitiontime, `${fmt(n("averageignitiontime"), 1)} s`, "Tiempo medio de encendido", "mdi:flash");
     if (n("counterstartattempts1") !== null || n("counterstartattempts2") !== null) {
       const d = (this._boilerDelta(b.counterstartattempts1) || 0) + (this._boilerDelta(b.counterstartattempts2) || 0);
-      k("c7", b.counterstartattempts1 || b.counterstartattempts2, `${fmt(n("counterstartattempts1"), 0)} · ${fmt(n("counterstartattempts2"), 0)}`, `Encendidos fallidos al 1.er y al 2.º intento${d ? ` · +${d} en 24 h` : ""}`, "mdi:fire-off", d ? C.amber : C.green);
+      k("c7", b.counterstartattempts1 || b.counterstartattempts2, `${fmt(n("counterstartattempts1"), 0)} · ${fmt(n("counterstartattempts2"), 0)}`, `Encendidos fallidos al 1.er y al 2.º intento${d ? ` · +${d} en 24 h` : ""}`, "mdi:fire-off", A("encendido") && d ? C.amber : C.green);
     }
     if (n("deactivationsifc") !== null || n("deactivationstemplimiter") !== null) {
       const tot = (n("deactivationsifc") || 0) + (n("deactivationstemplimiter") || 0);
-      k("c8", b.deactivationsifc || b.deactivationstemplimiter, `${fmt(n("deactivationsifc"), 0)} · ${fmt(n("deactivationstemplimiter"), 0)}`, "Bloqueos del control de llama y del limitador de temperatura", "mdi:lock-alert", tot ? C.amber : C.green);
+      k("c8", b.deactivationsifc || b.deactivationstemplimiter, `${fmt(n("deactivationsifc"), 0)} · ${fmt(n("deactivationstemplimiter"), 0)}`, "Bloqueos del control de llama y del limitador de temperatura", "mdi:lock-alert", A("bloqueos") && tot ? C.amber : C.green);
     }
 
     // --- counters
@@ -2970,7 +3027,20 @@ class CentroControlPanel extends HTMLElement {
       <div class="small muted" style="margin-top:10px">El botón de abrir pide un segundo toque para confirmar. «Activar audio» quita el silencio del vídeo (solo escucha). «Colgar» cierra la ventana y, si eliges una entidad, corta también la llamada en el videoportero.</div>`,
       { c: C.amber }
     );
-    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, visCard, ordCard, tabsCard, bellCard] }];
+    const calOn = this._calAvLoad();
+    const calCard = Object.keys(this.cfg.caldera || {}).length
+      ? this.card(
+          "calav",
+          `<h3>${icon("mdi:water-boiler")}Avisos de la caldera</h3>
+      <div class="small muted" style="margin-bottom:8px">Elige qué avisos puede dar la pestaña Caldera. Si no salta ninguno de los elegidos, no se enseña nada. Por defecto, solo las averías que da la propia caldera.</div>
+      <div class="chips">${BOILER_ALERTS.map(([k, l, d]) => `<button class="chip ${calOn.includes(k) ? "on" : ""}" data-calav="toggle" data-v="${k}" title="${esc(d)}">${esc(l)}</button>`).join("")}</div>
+      <div class="small muted" style="margin-top:10px">${BOILER_ALERTS.filter(([k]) => calOn.includes(k)).map(([, l, d]) => `<b>${esc(l)}</b>: ${esc(d)}`).join(" · ") || "Ningún aviso activado."}</div>
+      <div class="chips" style="margin-top:12px"><button class="chip" data-calav="only">Solo averías</button><button class="chip" data-calav="all">Todos</button><button class="chip" data-calav="none">Ninguno</button></div>
+      <div class="small muted" style="margin-top:10px">Se guarda solo en este dispositivo.</div>`,
+          { c: C.orange }
+        )
+      : null;
+    return [{ cards: [this.title("t", "Configuración", "Ajustes del panel en este dispositivo", "mdi:cog", C.cyan)] }, { cls: "w2", cards: [rotCard, visCard, ordCard, tabsCard, ...(calCard ? [calCard] : []), bellCard] }];
   }
 }
 

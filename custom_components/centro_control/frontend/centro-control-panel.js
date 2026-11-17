@@ -128,7 +128,7 @@ const CSS = `.bell{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.65);
 header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(3,8,20,.88);backdrop-filter:blur(8px);border-bottom:1px solid #0e2a44}
 .menu{display:none}.menu.show{display:block}
 .brand{display:flex;align-items:center;gap:8px;color:${C.cyan};font-weight:700;letter-spacing:3px;text-transform:uppercase;font-size:14px;white-space:nowrap;text-shadow:0 0 10px ${C.cyan}aa;margin-right:6px}
-nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;scroll-behavior:smooth;flex:1;min-width:0}nav::-webkit-scrollbar{display:none}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;scroll-behavior:smooth;flex:1;min-width:0;touch-action:pan-x;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}nav::-webkit-scrollbar{display:none}
 .navar{all:unset;flex:none;cursor:pointer;width:28px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:10px;color:${C.cyan};font-size:22px;line-height:1;border:1px solid #12304d;background:#071426}.navar:hover{background:#0b1a30}.navar.off{display:none}
 nav button{all:unset;cursor:pointer;display:flex;align-items:center;gap:5px;padding:6px 8px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;position:relative}
 nav button ha-icon{--mdc-icon-size:18px}
@@ -392,7 +392,14 @@ class CentroControlPanel extends HTMLElement {
     this._grid = root.querySelector(".grid");
     root.addEventListener("click", (e) => this._click(e));
     const nav = root.querySelector("nav");
-    if (nav) nav.addEventListener("scroll", () => this._navArrows(), { passive: true });
+    if (nav) {
+      nav.addEventListener("scroll", () => {
+        this._navScrollAt = Date.now();
+        this._navArrows();
+      }, { passive: true });
+      nav.addEventListener("pointerdown", () => (this._navTouch = true), { passive: true });
+      for (const ev of ["pointerup", "pointercancel", "pointerleave"]) nav.addEventListener(ev, () => (this._navTouch = false), { passive: true });
+    }
     if (typeof window.addEventListener === "function") window.addEventListener("resize", () => this._navArrows());
     root.addEventListener("change", (e) => this._change(e));
     root.addEventListener("dragstart", (e) => this._dragStart(e));
@@ -671,21 +678,37 @@ class CentroControlPanel extends HTMLElement {
     }
     const boil = Object.keys(this.cfg.caldera || {}).length ? this._boilerAlerts(this.cfg.caldera) : [];
     const navEl = root.querySelector("nav");
-    const keepScroll = navEl.scrollLeft;
     const tabChanged = this._navTab !== this._tab;
     this._navTab = this._tab;
-    navEl.innerHTML = this._orderedTabs().filter((t) => this._tabVisible(t[0])).map(([k, l, ic]) => {
+    // La barra solo se reconstruye si cambia su contenido (pestañas, orden, insignias): rehacerla en cada refresco
+    // cortaba el deslizamiento con el dedo y devolvía la barra a la pestaña activa. La pestaña activa se marca sin reconstruir.
+    const tabs = this._orderedTabs().filter((t) => this._tabVisible(t[0]));
+    const navHtml = tabs.map(([k, l, ic]) => {
       let badge = k === "problemas" && (crit || warn) ? `<span class="badge ${crit ? "" : "warn"}">${crit || warn}</span>` : "";
       if (k === "caldera" && boil.length) badge = `<span class="badge ${boil.some((c) => c.lvl === 2) ? "" : "warn"}">${boil.length}</span>`;
-      return `<button class="${k === this._tab ? "on" : ""}" data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
+      return `<button data-tab="${k}">${icon(ic)}${l}${badge}</button>`;
     }).join("");
-    navEl.style.scrollBehavior = "auto";
-    navEl.scrollLeft = keepScroll;
-    if (tabChanged) {
-      const on = navEl.querySelector("button.on");
-      if (on && (on.offsetLeft < navEl.scrollLeft || on.offsetLeft + on.offsetWidth > navEl.scrollLeft + navEl.clientWidth)) navEl.scrollLeft = Math.max(0, on.offsetLeft - (navEl.clientWidth - on.offsetWidth) / 2);
+    const touching = this._navTouch || Date.now() - (this._navScrollAt || 0) < 700;
+    let rebuilt = false;
+    if (navHtml !== this._navHtml && !touching) {
+      const keepScroll = navEl.scrollLeft;
+      navEl.innerHTML = navHtml;
+      this._navHtml = navHtml;
+      navEl.style.scrollBehavior = "auto";
+      navEl.scrollLeft = keepScroll;
+      navEl.style.scrollBehavior = "";
+      rebuilt = true;
     }
-    navEl.style.scrollBehavior = "";
+    for (const b of navEl.querySelectorAll("button[data-tab]")) b.classList.toggle("on", b.dataset.tab === this._tab);
+    // Solo se centra la pestaña activa cuando cambia sola o por un toque, nunca mientras el usuario desliza la barra.
+    if ((tabChanged || rebuilt) && !touching) {
+      const on = navEl.querySelector("button.on");
+      if (tabChanged && on && (on.offsetLeft < navEl.scrollLeft || on.offsetLeft + on.offsetWidth > navEl.scrollLeft + navEl.clientWidth)) {
+        navEl.style.scrollBehavior = "auto";
+        navEl.scrollLeft = Math.max(0, on.offsetLeft - (navEl.clientWidth - on.offsetWidth) / 2);
+        navEl.style.scrollBehavior = "";
+      }
+    }
     this._navArrows();
     let sections;
     try {

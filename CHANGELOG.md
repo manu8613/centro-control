@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.17.1] - 2026-11-17
+
+### Corregido
+- La barra de pestañas ya se puede deslizar con el dedo en la tablet: antes se reconstruía en cada refresco de datos, lo que cortaba el gesto, la dejaba fija y la devolvía a la pestaña activa sin dejar llegar a Configuración. Ahora solo se rehace si cambian las pestañas o sus insignias, y nunca mientras se está tocando o deslizando; la pestaña activa se marca sin reconstruirla.
+
 ## [2.17.0] - 2026-11-17
 
 ### Cambiado

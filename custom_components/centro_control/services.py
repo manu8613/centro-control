@@ -17,6 +17,7 @@ _BASE = {vol.Optional(ENTRY): cv.string}
 SCHEMA_WATER = vol.Schema({**_BASE, vol.Required("zona"): cv.string, vol.Optional("minutos"): vol.Coerce(float)})
 SCHEMA_STOP = vol.Schema({**_BASE, vol.Optional("zona"): cv.string})
 SCHEMA_PLAIN = vol.Schema(_BASE)
+SCHEMA_TRIAL = vol.Schema({**_BASE, vol.Required("nombre"): vol.All(cv.string, vol.Length(min=1, max=80))})
 SCHEMA_RESET = vol.Schema({**_BASE, vol.Required("confirmar"): cv.boolean})
 SCHEMA_IMPORT = vol.Schema({**_BASE, vol.Optional("dias", default=730): vol.All(vol.Coerce(int), vol.Range(min=1, max=800))})
 
@@ -47,6 +48,18 @@ def async_setup_services(hass: HomeAssistant) -> None:
     async def acknowledge(call: ServiceCall) -> None:
         _manager(hass, call).acknowledge()
 
+    async def trial_start(call: ServiceCall) -> None:
+        manager = _manager(hass, call)
+        if not manager.ebus_available():
+            raise ServiceValidationError("No hay ebusd conectado (no se encuentra la señal del bus eBUS).")
+        manager.ebus_start_trial(call.data["nombre"])
+
+    async def trial_stop(call: ServiceCall) -> None:
+        _manager(hass, call).ebus_stop_trial()
+
+    async def trial_clear(call: ServiceCall) -> None:
+        _manager(hass, call).ebus_clear_trials()
+
     async def panel(call: ServiceCall) -> None:
         from .dashboard import async_setup_dashboard
 
@@ -72,5 +85,8 @@ def async_setup_services(hass: HomeAssistant) -> None:
     hass.services.async_register(DOMAIN, "importar_historico", import_history, schema=SCHEMA_IMPORT)
     hass.services.async_register(DOMAIN, "parar_riego", stop, schema=SCHEMA_STOP)
     hass.services.async_register(DOMAIN, "reconocer_problemas", acknowledge, schema=SCHEMA_PLAIN)
+    hass.services.async_register(DOMAIN, "prueba_convivencia_iniciar", trial_start, schema=SCHEMA_TRIAL)
+    hass.services.async_register(DOMAIN, "prueba_convivencia_parar", trial_stop, schema=SCHEMA_PLAIN)
+    hass.services.async_register(DOMAIN, "prueba_convivencia_borrar", trial_clear, schema=SCHEMA_PLAIN)
     hass.services.async_register(DOMAIN, "crear_panel", panel, schema=SCHEMA_PLAIN)
     hass.services.async_register(DOMAIN, "reiniciar_contadores", reset, schema=SCHEMA_RESET)

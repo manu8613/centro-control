@@ -354,3 +354,19 @@ def test_caldera_alerts_are_selectable():
     ids = re.findall(r'^  \["([a-z]+)", "[^"]+", "[^"]+"\],$', js.split("const BOILER_ALERTS = [")[1].split("];")[0], re.M)
     names = re.findall(r'add\("([^"]+)", [012]', js.split("_boilerChecks(b) {")[1].split("  v_caldera() {")[0])
     assert len(ids) == 10 and set(names) == {n for _, n in re.findall(r'^  \["([a-z]+)", "([^"]+)", "[^"]+"\],$', js.split("const BOILER_ALERTS = [")[1].split("];")[0], re.M)}
+
+
+def test_caldera_shows_bus_collisions_and_trials():
+    js = (Path(__file__).parents[1] / "custom_components/centro_control/frontend/centro-control-panel.js").read_text(encoding="utf-8")
+    block = js.split("_ebusCards(b) {")[1].split("  v_caldera() {")[0]
+    # Solo se enseña con ebusd; lee los datos de la integración y no de lecturas sueltas.
+    assert 'a(this.id(key), "disponible") !== true' in block
+    assert "this.n(" not in block and "this.s(" not in block
+    assert all(f'data-ebus="{a}"' in js for a in ("start", "stop", "clear"))
+    # Los textos de los veredictos cubren todos los resultados que calcula la integración.
+    from custom_components.centro_control.convivencia import VERDICTS
+
+    assert all(f"{v}:" in js.split("const EBUS_VERDICTS = {")[1].split("};")[0] for v in VERDICTS)
+    # Los servicios que llama el panel existen.
+    services = (Path(__file__).parents[1] / "custom_components/centro_control/services.yaml").read_text(encoding="utf-8")
+    assert all(f"prueba_convivencia_{s}:" in services for s in ("iniciar", "parar", "borrar"))

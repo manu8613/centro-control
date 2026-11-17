@@ -643,6 +643,9 @@
       "problemas": {
         "name": "Problemas"
       },
+      "convivencia_ebus": {
+        "name": "Colisiones en el bus eBUS"
+      },
       "luces_encendidas": {
         "name": "Luces encendidas"
       },
@@ -765,6 +768,40 @@
           "name": "Zona",
           "description": "Vacío = todas."
         },
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "prueba_convivencia_iniciar": {
+      "name": "Iniciar prueba de convivencia",
+      "description": "Empieza a contar cortes del bus eBUS con la configuración de ebusd que anotes.",
+      "fields": {
+        "nombre": {
+          "name": "Configuración probada",
+          "description": "Anota los parámetros de ebusd de esta prueba, p. ej. «pollinterval 60, solo lectura»."
+        },
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "prueba_convivencia_parar": {
+      "name": "Terminar prueba de convivencia",
+      "description": "Cierra la prueba en curso y guarda su resultado.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "prueba_convivencia_borrar": {
+      "name": "Borrar pruebas de convivencia",
+      "description": "Borra el historial de pruebas guardadas.",
+      "fields": {
         "config_entry_id": {
           "name": "Centro de Control",
           "description": "Solo si tienes más de uno."

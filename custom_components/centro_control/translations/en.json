@@ -643,6 +643,9 @@
       "problemas": {
         "name": "Problemas"
       },
+      "convivencia_ebus": {
+        "name": "eBUS bus collisions"
+      },
       "luces_encendidas": {
         "name": "Luces encendidas"
       },
@@ -768,6 +771,40 @@
         "config_entry_id": {
           "name": "Centro de Control",
           "description": "Solo si tienes más de uno."
+        }
+      }
+    },
+    "prueba_convivencia_iniciar": {
+      "name": "Start coexistence trial",
+      "description": "Starts counting eBUS signal losses with the ebusd settings you describe.",
+      "fields": {
+        "nombre": {
+          "name": "Settings under test",
+          "description": "Write the ebusd parameters of this trial, e.g. 'pollinterval 60, read-only'."
+        },
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Only if you have more than one."
+        }
+      }
+    },
+    "prueba_convivencia_parar": {
+      "name": "End coexistence trial",
+      "description": "Closes the running trial and saves its result.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Only if you have more than one."
+        }
+      }
+    },
+    "prueba_convivencia_borrar": {
+      "name": "Clear coexistence trials",
+      "description": "Deletes the saved trial history.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Centro de Control",
+          "description": "Only if you have more than one."
         }
       }
     },

@@ -1,9 +1,10 @@
 # Estado
 
-Versión publicada: v2.17.0 (v2.17.1 en PR) · Commit de referencia: `94b1c43` · Actualizado: 2026-11-17
+Versión publicada: v2.17.1 (v2.18.0 en PR) · Commit de referencia: `94b1c43` · Actualizado: 2026-11-17
 
 ## Funciona (comprobado)
-- v2.17.1 (PR): la barra de pestañas se desliza con el dedo sin cortarse y deja llegar a Configuración (ya no se reconstruye en cada refresco ni mientras se toca). Probado en Chrome sin pantalla antes y después; falta en la tablet real.
+- v2.18.0 (PR): la pestaña Caldera detecta colisiones del bus eBUS con el Tado (cortes de señal y reinicios de ebusd), avisa por el servicio de notificación y permite hacer pruebas de convivencia por configuración de ebusd. Probado con pytest y Chrome sin pantalla; falta probarlo en la casa real.
+- v2.17.1: la barra de pestañas se desliza con el dedo sin cortarse y deja llegar a Configuración (ya no se reconstruye en cada refresco ni mientras se toca). Probado en Chrome sin pantalla antes y después; falta en la tablet real.
 - v2.17.0 (PR): la pestaña Caldera solo avisa de lo que se elija en Configuración (por dispositivo; por defecto, solo las averías de la caldera) y no enseña nada si no salta ninguno. Probado en Chrome sin pantalla con presión alta, estado S.41, falta de señal y avería, con selección, recarga y «Ninguno»; falta verlo en la casa real.
 - v2.16.1: la pestaña Caldera aguanta lecturas que se pierden un momento (conserva el último valor 15 min), avisa de falta de señal del bus solo si dura más de 5 min y conserva el historial de la llama si falla una lectura. Probado en Chrome sin pantalla con lecturas no disponibles, cortes de señal y fallos del historial; falta verlo en la casa real.
 - v2.16.0: pestaña Caldera con las entidades de ebusd (detección automática en el registro, plataforma MQTT, circuito «bai»): indicadores de aguja, estado S.xx, ciclo de quemado de 24 h con avisos y peligro, contadores y gráficas. Probada en Chrome sin pantalla con valores reales de una caldera e historial simulado; falta verla en la casa real.
@@ -58,8 +59,8 @@ Versión publicada: v2.17.0 (v2.17.1 en PR) · Commit de referencia: `94b1c43` �
 - Pendientes: verlo en la casa real; si siguen los cortes de señal de verdad, el fondo está en el bus (colisiones por el sondeo de ebusd), no en el panel.
 
 ## Último cierre
-**Centro de Control · fix/pestanas-deslizar · v2.17.1**
-- Objetivo: que el deslizable de pestañas no se quede fijo ni vuelva a la pestaña activa y deje llegar a Configuración.
-- Cambios: en `_render` la barra solo se reconstruye si cambia su contenido (`_navHtml`) y nunca mientras se toca o se desliza (`_navTouch`, `_navScrollAt`); la pestaña activa se marca con la clase sin reconstruir; el centrado solo ocurre al cambiar de pestaña; `touch-action:pan-x` en `nav`.
-- Pruebas: pytest 79 OK; Chrome sin pantalla (420 px) deslizando mientras llegan actualizaciones: antes se recreaban los botones, ahora no; llega al final y abre Configuración.
-- Pendientes: probar en la tablet real.
+**Centro de Control · feat/caldera-convivencia-tado · v2.18.0**
+- Objetivo: detectar colisiones ebusd ↔ Tado y avisar, para saber qué parámetros de ebusd permiten que convivan.
+- Cambios: `convivencia.py` (monitor de cortes de señal y reinicios, veredictos), enganche en `manager.py` (listeners, guardado, problemas y notificación), sensor `convivencia_ebus`, servicios `prueba_convivencia_*`, sección en la pestaña Caldera.
+- Pruebas: pytest 96 OK; Chrome sin pantalla con cortes, corte largo, prueba en curso e historial.
+- Pendientes: probar en la casa real; HA no ve los choques ni los reintentos del Tado, solo la señal de ebusd.

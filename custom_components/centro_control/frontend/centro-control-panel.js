@@ -54,6 +54,13 @@ const BOILER_STATE_WARN = { 32: "espera por desviación de la velocidad del vent
 const BOILER_GRACE = 15 * 60000;
 // Un corte de señal del bus solo se avisa si dura más que esto (las colisiones del bus son de segundos).
 const BOILER_SIGNAL_GRACE = 5 * 60000;
+// Resultado de una prueba de convivencia con otro aparato en el bus (el cálculo lo hace la integración).
+const EBUS_VERDICTS = {
+  insuficiente: ["Prueba demasiado corta", "#94a3b8", "Déjala al menos 2 h para poder concluir algo."],
+  convive: ["Conviven bien", "#22c55e", "Sin cortes que merezcan la pena. Esta configuración vale."],
+  dudoso: ["Dudoso", "#f59e0b", "Hay algún corte o reinicio: alarga la prueba o prueba valores más suaves."],
+  no_convive: ["No conviven", "#ef4444", "Cortes repetidos o largos: esta configuración se pisa con el otro aparato."],
+};
 // Avisos de la caldera que se eligen en Configuración (por dispositivo). Por defecto, solo las averías que da la propia caldera.
 const BOILER_ALERTS = [
   ["averias", "Averías", "código de avería (F.xx) que da la caldera"],
@@ -1100,6 +1107,11 @@ class CentroControlPanel extends HTMLElement {
       e.stopPropagation();
       return this._layAction(lay.dataset);
     }
+    const ebus = e.target.closest("[data-ebus]");
+    if (ebus) {
+      e.stopPropagation();
+      return this._ebusAction(ebus.dataset);
+    }
     const cav = e.target.closest("[data-calav]");
     if (cav) {
       e.stopPropagation();
@@ -2105,6 +2117,63 @@ class CentroControlPanel extends HTMLElement {
     }
     this._schedule(true);
   }
+  /** Convivencia ebusd ↔ otro aparato del bus (Tado): cortes de señal de ebusd contados por la integración y pruebas por configuración. */
+  _ebusAction(d) {
+    if (d.ebus === "start") {
+      const name = String(this.shadowRoot.querySelector(".ebusname")?.value || "").trim();
+      if (!name) return;
+      this._hass.callService("centro_control", "prueba_convivencia_iniciar", { nombre: name });
+    } else if (d.ebus === "stop") this._hass.callService("centro_control", "prueba_convivencia_parar", {});
+    else if (d.ebus === "clear") this._hass.callService("centro_control", "prueba_convivencia_borrar", {});
+    this._force = true;
+    this._schedule(true);
+  }
+  _ebusCards(b) {
+    const key = "convivencia_ebus";
+    if (!this.id(key) || !b.globalsignal || this.a(this.id(key), "disponible") !== true) return [];
+    const A = (attr) => this.a(this.id(key), attr);
+    const hour = A("hora") || {}, day = A("dia") || {}, live = A("prueba"), done = A("pruebas") || [];
+    const lvl = A("nivel") || "ok", cut = Number(A("corte_actual_s")) || 0;
+    const col = lvl === "critico" ? C.red : lvl === "aviso" ? C.amber : C.green;
+    const when = (t) => new Date(t * 1000).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    const sec = (v) => (v >= 60 ? fmtMin(v / 60) : `${Math.round(v)} s`);
+    const out = [this.title("tv", "Convivencia con el Tado", "Cortes del bus eBUS que ve ebusd: señal perdida y reinicios", "mdi:swap-horizontal-bold", col)];
+    const msg = cut > 0 ? `Sin señal desde hace ${sec(cut)}` : lvl === "ok" ? "Sin colisiones en la última hora" : `${hour.cortes} corte${hour.cortes === 1 ? "" : "s"} en la última hora`;
+    out.push(this.card("vs", `<h3 style="color:${col}">${icon(lvl === "ok" ? "mdi:check-circle" : "mdi:alert")}${esc(msg)}</h3>
+      <table>
+        <tr><td class="muted">Cortes · última hora</td><td><b>${hour.cortes ?? 0}</b> · ${sec(hour.sin_senal_s || 0)} sin señal</td></tr>
+        <tr><td class="muted">Cortes · 24 h</td><td><b>${day.cortes ?? 0}</b> · ${sec(day.sin_senal_s || 0)} sin señal</td></tr>
+        <tr><td class="muted">Reinicios de ebusd · 24 h</td><td><b>${day.reinicios ?? 0}</b></td></tr>
+        <tr><td class="muted">Último corte</td><td>${A("ultimo_corte") ? when(A("ultimo_corte")) : "ninguno"}</td></tr>
+      </table>
+      <div class="small muted" style="margin-top:8px">Es un indicador indirecto: Home Assistant no ve los choques en sí, pero cuando dos aparatos se pisan en el bus ebusd pierde la señal. Los avisos usan el servicio de notificación de las opciones.</div>`, { c: col }));
+    const vd = (t) => EBUS_VERDICTS[t.veredicto] || EBUS_VERDICTS.insuficiente;
+    const stats = (t) => `${fmt(t.horas, 1)} h · ${t.cortes} corte${t.cortes === 1 ? "" : "s"} · ${sec(t.sin_senal_s)} sin señal · peor ${sec(t.peor_s)} · ${t.reinicios} reinicio${t.reinicios === 1 ? "" : "s"}`;
+    let body;
+    if (live) {
+      const [vt, vc, vh] = vd(live);
+      body = `<h3 style="color:${vc}">${icon("mdi:flask-outline")}Prueba en curso</h3>
+        <div><b>${esc(live.nombre)}</b></div>
+        <div class="small muted">Desde ${when(live.inicio)}</div>
+        <div style="margin:8px 0">${esc(stats(live))}</div>
+        <div class="alert" style="--a:${vc}"><b>${esc(vt)}</b> (provisional)<br>${esc(vh)}</div>
+        <button class="btn" data-ebus="stop" style="margin-top:8px">Terminar prueba</button>`;
+    } else {
+      body = `<h3>${icon("mdi:flask-outline")}Prueba de convivencia</h3>
+        <div class="small muted" style="margin-bottom:8px">Cambia los parámetros de ebusd (por ejemplo <i>pollinterval</i> o solo lectura), anótalos aquí y empieza. Déjala al menos 2 h y termínala para guardar el resultado.</div>
+        <input class="bellin ebusname" placeholder="Qué configuración pruebas, p. ej. pollinterval 60, solo lectura" autocomplete="off" maxlength="80">
+        <button class="btn" data-ebus="start" style="margin-top:8px">Empezar prueba</button>`;
+    }
+    out.push(this.card("vp", body, { c: C.violet }));
+    if (done.length) {
+      const rows = [...done].reverse().map((t) => {
+        const [vt, vc] = vd(t);
+        return `<div class="alert" style="--a:${vc}"><b>${esc(t.nombre)}</b> · <span style="color:${vc}">${esc(vt)}</span><br><span class="small muted">${esc(when(t.inicio))} · ${esc(stats(t))}</span></div>`;
+      });
+      out.push(this.card("vh", `<h3>${icon("mdi:history")}Pruebas hechas</h3>${rows.join("")}<button class="btn" data-ebus="clear" style="margin-top:8px">Borrar historial</button>`, { c: C.violet }));
+    }
+    return out;
+  }
   /** Avisos que saltan ahora y que se han elegido en Configuración (el resto no se enseñan). */
   _boilerAlerts(b) {
     const on = this._calAvLoad();
@@ -2292,6 +2361,8 @@ class CentroControlPanel extends HTMLElement {
     if (b.fanspeed) charts.push(this.chartCard("hv", "Ventilador 24 h (rpm)", C.blue, { kind: "history", hours: 24, unit: "rpm", bucket: 2, series: [{ name: "Ventilador", entity: b.fanspeed, color: C.blue, step: true }] }));
 
     const sections = [{ cards }];
+    const conv = this._ebusCards(b);
+    if (conv.length) sections.push({ cards: conv });
     if (burn.length > 1) sections.push({ cards: burn });
     if (cnt.length > 1) sections.push({ cards: cnt });
     if (charts.length) sections.push({ cls: "w2", cards: charts });

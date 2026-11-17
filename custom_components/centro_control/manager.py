@@ -12,6 +12,7 @@ from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import (
     async_call_later,
@@ -82,6 +83,7 @@ from .const import (
     STORAGE_VERSION,
     TICK,
 )
+from .convivencia import BusMonitor
 from .energy import Counters, Integrator, Meter, to_kwh, to_watts
 from .insights import summary
 from .model import Model
@@ -293,6 +295,10 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.problems: list[dict[str, Any]] = []
         self.acknowledged: set[str] = set()
         self.notified: set[str] = set()
+        self.ebus = BusMonitor()
+        self._ebus_watch: tuple[str, ...] = ()
+        self._ebus_tado: str | None = None
+        self._ebus_unsub: CALLBACK_TYPE | None = None
         self.zone_runs: dict[str, dict[str, float]] = {}  # zone id -> {start, end}
         self.zone_last: dict[str, dict[str, Any]] = {}
         self.zone_minutes: dict[str, float] = {z.id: z.minutes for z in self.model.zones}
@@ -343,6 +349,7 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.counters.set_billing_day(billing, dt_util.now().date())
         self._meters = {k: Meter.from_dict(v) for k, v in data.get("meters", {}).items()}
         self.acknowledged = set(data.get("acknowledged", []))
+        self.ebus = BusMonitor.from_dict(data.get("ebus"))
         self.zone_runs = {k: v for k, v in data.get("zone_runs", {}).items() if k in self.zone_minutes}
         self.zone_last = data.get("zone_last", {})
         self.zone_minutes.update({k: float(v) for k, v in data.get("zone_minutes", {}).items() if k in self.zone_minutes})
@@ -357,6 +364,7 @@ class CentroManager(DataUpdateCoordinator[None]):
             "counters": self.counters.as_dict(),
             "meters": {k: v.as_dict() for k, v in self._meters.items()},
             "acknowledged": sorted(self.acknowledged),
+            "ebus": self.ebus.as_dict(),
             "zone_runs": self.zone_runs,
             "zone_last": self.zone_last,
             "zone_minutes": self.zone_minutes,
@@ -460,11 +468,15 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._unsubs.append(async_track_time_interval(self.hass, self._tick, TICK))
         self._unsubs.append(async_track_time_interval(self.hass, self._problems_tick, PROBLEMS_TICK))
         self._restore_zone_runs()
+        self._ebus_bind()
         self._tick(dt_util.now())
         self._problems_tick(dt_util.now())
 
     @callback
     def async_stop(self) -> None:
+        if self._ebus_unsub:
+            self._ebus_unsub()
+            self._ebus_unsub = None
         for unsub in self._unsubs:
             unsub()
         self._unsubs.clear()
@@ -897,10 +909,93 @@ class CentroManager(DataUpdateCoordinator[None]):
         entity = self.model.get(CONF_RAIN_SENSOR)
         return self.is_raining(self.hass.states.get(entity)) if entity else False
 
+    # ================================================================ bus eBUS (colisiones ebusd ↔ Tado)
+    def ebus_available(self) -> bool:
+        return "globalsignal" in self.caldera_entities()
+
+    @callback
+    def _ebus_bind(self) -> None:
+        """Escucha la señal y el tiempo de actividad de ebusd (aparecen por descubrimiento MQTT, a veces tarde)."""
+        found = self.caldera_entities()
+        watch = tuple(found[k] for k in ("globalsignal", "globaluptime") if k in found)
+        self._ebus_tado = self.tado_bridge_entity()
+        if self._ebus_tado:
+            watch += (self._ebus_tado,)
+        self.ebus.tado_watched = bool(self._ebus_tado)
+        if watch == self._ebus_watch:
+            return
+        if self._ebus_unsub:
+            self._ebus_unsub()
+            self._ebus_unsub = None
+        self._ebus_watch = watch
+        if not watch:
+            return
+        self._ebus_unsub = async_track_state_change_event(self.hass, list(watch), self._on_ebus)
+        now = dt_util.utcnow().timestamp()
+        for entity in watch:  # estado de partida: cierra un corte que quedó abierto antes de reiniciar HA
+            if st := self.hass.states.get(entity):
+                self._ebus_feed(entity, st.state, now)
+
+    def tado_bridge_entity(self) -> str | None:
+        """Sensor de conexión del bridge de Tado (se busca por el dispositivo, no por un id fijo)."""
+        devices = dr.async_get(self.hass)
+        for entry in er.async_get(self.hass).entities.values():
+            if entry.platform != "tado" or entry.domain != "binary_sensor" or entry.disabled_by or not entry.device_id:
+                continue
+            if (entry.device_class or entry.original_device_class) != "connectivity":
+                continue
+            device = devices.async_get(entry.device_id)
+            text = f"{device.model or ''} {device.name_by_user or device.name or ''}" if device else ""
+            if re.search(r"bridge|\bbr\d", text, re.IGNORECASE):
+                return entry.entity_id
+        return None
+
+    def _ebus_feed(self, entity: str, state: str, ts: float) -> None:
+        if entity == self._ebus_tado:
+            self.ebus.tado(state, ts)
+        elif entity == self.caldera_entities().get("globalsignal"):
+            self.ebus.signal(state, ts)
+        else:
+            try:
+                self.ebus.uptime(float(state), ts)
+            except ValueError:
+                pass
+
+    @callback
+    def _on_ebus(self, event: Any) -> None:
+        new = event.data.get("new_state")
+        if new is None:
+            return
+        self._ebus_feed(new.entity_id, new.state, new.last_changed.timestamp())
+        self.schedule_save()
+        self._problems_tick(dt_util.now())
+
+    @callback
+    def ebus_start_trial(self, name: str) -> None:
+        self.ebus.start_trial(name, dt_util.utcnow().timestamp())
+        self.schedule_save()
+        self.async_set_updated_data(None)
+
+    @callback
+    def ebus_stop_trial(self) -> dict[str, Any] | None:
+        done = self.ebus.stop_trial(dt_util.utcnow().timestamp())
+        self.schedule_save()
+        self.async_set_updated_data(None)
+        return done
+
+    @callback
+    def ebus_clear_trials(self) -> None:
+        self.ebus.clear_trials()
+        self.schedule_save()
+        self.async_set_updated_data(None)
+
     @callback
     def _problems_tick(self, now: datetime) -> None:
         try:
             found = evaluate(self.model, self.hass.states.get, self.hass.states.async_all(), self._live_for_problems(now), now)
+            self._ebus_bind()
+            found += self.ebus.problems(now.timestamp())
+            self.ebus.prune(now.timestamp())
         except Exception:  # noqa: BLE001
             _LOGGER.exception("Error revisando problemas")
             return

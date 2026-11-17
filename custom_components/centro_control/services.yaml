@@ -69,3 +69,29 @@ importar_historico:
       selector:
         config_entry:
           integration: centro_control
+prueba_convivencia_iniciar:
+  fields:
+    nombre:
+      required: true
+      example: "pollinterval 60, solo lectura"
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control
+prueba_convivencia_parar:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control
+prueba_convivencia_borrar:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: centro_control

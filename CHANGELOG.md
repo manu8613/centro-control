@@ -8,6 +8,15 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.18.0] - 2026-11-17
+
+### Añadido
+- Pestaña Caldera: nueva sección **Convivencia con el Tado** para ver si ebusd y otro aparato del bus eBUS se pisan. Cuenta las veces que ebusd pierde la señal del bus y los reinicios de ebusd (última hora y 24 h). Es un indicador indirecto: Home Assistant no ve los choques en sí, pero cuando dos aparatos se pisan ebusd pierde la señal.
+- **Aviso**: si ebusd pierde la señal 3 veces o más en una hora, o lleva más de 5 minutos sin ella, salta un problema crítico y llega por el servicio de notificación de las opciones (con 1–2 cortes solo se ve como aviso).
+- **Prueba de convivencia**: anota los parámetros de ebusd que pruebas (p. ej. «pollinterval 60, solo lectura»), empieza y termina la prueba; guarda duración, cortes, tiempo sin señal, corte más largo, reinicios y un veredicto (conviven, dudoso, no conviven, o prueba demasiado corta si dura menos de 2 h). El historial permite comparar configuraciones.
+- **Bridge del Tado**: se detecta solo, por su dispositivo en la integración Tado (sin ningún id fijo), y se vigila su conexión. Si el bridge se cae a la vez que ebusd pierde la señal (en un margen de 10 min) se confirma la colisión y salta un problema crítico; una caída suelta del bridge solo es un aviso. Si el Tado se cae durante una prueba, el veredicto es «No conviven».
+- Sensor «Colisiones en el bus eBUS» y acciones `prueba_convivencia_iniciar`, `prueba_convivencia_parar` y `prueba_convivencia_borrar`.
+
 ## [2.17.1] - 2026-11-17
 
 ### Corregido

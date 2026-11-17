@@ -25,6 +25,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
+from homeassistant.util import dt as dt_util
 
 from .const import SUB_CIRCUIT, SUB_STRING, SUB_ZONE
 from .entity import CentroEntity
@@ -115,6 +116,16 @@ def _problems_attrs(m: CentroManager) -> dict[str, Any]:
         "info": sum(1 for p in problems if p["nivel"] == "info"),
         "reconocidos": sum(1 for p in problems if p["reconocido"]),
     }
+
+
+def _ebus_attrs(m: CentroManager) -> dict[str, Any]:
+    return {"disponible": m.ebus_available(), **m.ebus.report(dt_util.utcnow().timestamp())}
+
+
+def _ebus_value(m: CentroManager) -> StateType:
+    if not m.ebus_available():
+        return None
+    return m.ebus.window(dt_util.utcnow().timestamp(), 3600.0)["cortes"]
 
 
 def _lights_on(m: CentroManager) -> StateType:
@@ -417,6 +428,13 @@ MAIN: tuple[CentroSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value=lambda m: sum(1 for p in m.problems if not p["reconocido"]),
         attrs=_problems_attrs,
+    ),
+    CentroSensorDescription(
+        key="convivencia_ebus",
+        icon="mdi:swap-horizontal-bold",
+        state_class=SensorStateClass.MEASUREMENT,
+        value=_ebus_value,
+        attrs=_ebus_attrs,
     ),
     CentroSensorDescription(
         key="luces_encendidas",

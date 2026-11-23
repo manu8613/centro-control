@@ -431,7 +431,8 @@ class CentroControlPanel extends HTMLElement {
     this._menu.narrow = this._narrow;
     holder.classList.toggle("show", !!this._narrow);
     this._grid = root.querySelector(".grid");
-    if (typeof ResizeObserver === "function") this._ro = new ResizeObserver(() => this._packSoon());
+    // re-pack inside the observer callback (before the browser paints), so a section that grows is never drawn over the next one
+    if (typeof ResizeObserver === "function") this._ro = new ResizeObserver(() => this._pack());
     root.addEventListener("click", (e) => this._click(e));
     const nav = root.querySelector("nav");
     if (nav) {
@@ -808,6 +809,8 @@ class CentroControlPanel extends HTMLElement {
       }
     this._mountHosts();
     this._pack();
+    clearTimeout(this._packLate);
+    this._packLate = setTimeout(() => this._pack(), 700); // icons and fonts that finish loading after the first paint
   }
 
   /** The grid has rows of 8 px and every section spans as many as its content needs, so a short section no longer leaves a gap under it
@@ -828,21 +831,13 @@ class CentroControlPanel extends HTMLElement {
       } else el.style.removeProperty("--cs");
     }
     for (const el of this._grid.children) {
-      const n = Math.max(1, Math.ceil((el.getBoundingClientRect().height + 16) / 8));
+      const n = Math.max(1, Math.ceil((el.offsetHeight + 16) / 8));
       if (el._span !== n) {
         el._span = n;
         el.style.gridRowEnd = "span " + n;
       }
     }
   }
-  _packSoon() {
-    if (this._packT) return;
-    this._packT = requestAnimationFrame(() => {
-      this._packT = 0;
-      this._pack();
-    });
-  }
-
   // ---------------------------------------------------------------- layout (per device)
   _layLoad() {
     if (this._lay) return this._lay;

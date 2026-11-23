@@ -14,6 +14,9 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 - Los marcadores de **autosuficiencia** (ahora y hoy) del Puente de mando son ahora tarjetas sueltas, para poder moverlos a otra sección o ocultarlos por separado.
 - **Diseño sin huecos muertos**: la cuadrícula ya no reparte las secciones en filas de la misma altura. Cada sección ocupa solo el alto que necesita y las de abajo suben a rellenar el espacio que dejan las más cortas (antes quedaba un hueco bajo ellas y la sección siguiente saltaba a otra fila).
 
+### Corregido
+- En el móvil, al crecer una sección (por ejemplo cuando terminan de cargar los iconos o la fuente), la siguiente se montaba un instante encima y se recolocaba medio segundo después. Ahora el empaquetado se recalcula en el mismo fotograma en que cambia el tamaño, antes de pintar.
+
 ### Añadido
 - **Mover secciones enteras arrastrando**: cada sección tiene ahora un asa ✥ (ratón, dedo o lápiz). Mientras la arrastras se ve una guía con la columna donde caerá su borde izquierdo; al soltar, se queda en esa columna, en el primer hueco libre, y las demás se recolocan. Se guarda por pestaña y dispositivo; si en otro dispositivo hay menos columnas, se ajusta sola. «Restablecer pestaña» lo deshace.
 - **Secciones nuevas**: botón «Nueva sección» en el modo Diseño. Crea un espacio vacío (también por pestaña y dispositivo) con el ancho (1, 2, 3 columnas o toda la fila, con «Ancho») y el alto que quieras (automático, S, M, L, XL, con «Alto»), para arrastrar tarjetas dentro. Se borra con 🗑 y sus tarjetas vuelven a su sitio.

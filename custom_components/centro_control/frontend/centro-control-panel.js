@@ -144,18 +144,18 @@ nav button.on{color:${C.cyan};background:${C.cyan}14;box-shadow:inset 0 -2px ${C
 nav .badge{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;background:${C.red};color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 4px;box-shadow:0 0 8px ${C.red}}
 nav .badge.warn{background:${C.amber};color:#221}
 main{padding:16px;max-width:1800px;margin:0 auto;container-type:inline-size}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px;align-items:start}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));column-gap:16px;row-gap:0;grid-auto-rows:8px;align-items:start}
 .sec{display:grid;grid-template-columns:repeat(12,1fr);gap:10px;align-content:start}
-.sec{position:relative}
-.sec.w2{grid-column:span 2}.sec.w3{grid-column:span 3}.sec.wall,.sec.charts{grid-column:1/-1}
+.sec{position:relative;grid-column:var(--cs,auto) / span var(--sp,1)}
+.sec.w2{--sp:2}.sec.w3{--sp:3}.sec.wall,.sec.charts{grid-column:1/-1}
 .sec.charts>.card{grid-column:span 6}
 .card.u12{grid-column:span 12!important}.card.u6{grid-column:span 6!important}.card.u4{grid-column:span 4!important}.card.u3{grid-column:span 3!important}
-@container (max-width:1040px){.sec.w3{grid-column:span 2}}
+@container (max-width:1040px){.sec.w3{--sp:2}}
 @container (max-width:900px){.sec.charts>.card{grid-column:span 12}}
-@container (max-width:690px){.sec.w2,.sec.w3{grid-column:span 1}.card.u6,.card.u4,.card.u3{grid-column:span 12!important}}
-@container (max-width:690px){.card.s6.m12{grid-column:span 12}}
-@media(max-width:720px){.card.s6.m12{grid-column:span 12}}
-@media(max-width:720px){.sec.w2,.sec.w3{grid-column:span 1}}
+@container (max-width:690px){.sec.w2,.sec.w3{--sp:1}.card.u6,.card.u4,.card.u3{grid-column:span 12!important}}
+@container (max-width:690px){.card.s6.m12{grid-column:span 12}.card.s3.m6,.card.s4.m6{grid-column:span 6}}
+@media(max-width:720px){.card.s6.m12{grid-column:span 12}.card.s3.m6,.card.s4.m6{grid-column:span 6}}
+@media(max-width:720px){.sec.w2,.sec.w3{--sp:1}}
 @media(max-width:760px){header{gap:4px;padding:6px}.brand{letter-spacing:0;margin-right:0}.brand .t{display:none}.laybtn span{display:none}.laybtn{padding:7px}nav button{padding:8px 9px}}
 .laybtn{all:unset;flex:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;border:1px solid #12304d}
 .laybtn:hover,.laybtn.on{color:${C.amber};border-color:${C.amber}88;background:${C.amber}14}
@@ -164,6 +164,7 @@ main{padding:16px;max-width:1800px;margin:0 auto;container-type:inline-size}
 .layinfo button,.lay button{all:unset;cursor:pointer;padding:5px 9px;border-radius:8px;border:1px solid ${C.amber}77;color:${C.amber};font-size:12px;display:inline-flex;align-items:center;gap:4px;background:#0a1222}
 .layinfo button:hover,.lay button:hover{background:${C.amber}22}
 main.edit .sec{outline:1px dashed ${C.amber}55;outline-offset:4px;border-radius:12px;padding-top:34px}
+main.edit .sec.dragging{opacity:.35}.secghost{position:fixed;z-index:30;pointer-events:none;box-sizing:border-box;border:2px dashed #22d3ee;border-radius:14px;background:#22d3ee1a;box-shadow:0 0 24px #22d3ee66;display:flex;align-items:flex-start;justify-content:center;padding-top:8px;color:#22d3ee;font-size:12px;letter-spacing:1px;text-transform:uppercase}
 .lay{position:absolute;top:0;right:0;z-index:3;display:flex;gap:4px;align-items:center}
 .lay.sl{left:0;right:auto;top:0;color:${C.amber};font-size:11px;letter-spacing:1px;text-transform:uppercase}
 .card .lay{top:6px;right:6px}.card .lay button{padding:3px 7px;background:#060d20ee}
@@ -219,7 +220,6 @@ svg text{font-family:inherit}
 .pulse{animation:pulse 2s ease-in-out infinite}@keyframes pulse{50%{opacity:.45}}
 .light{display:flex;align-items:center;gap:10px}.light .ic{cursor:pointer}.light.on .ic{color:${C.gold};background:${C.gold}26;box-shadow:0 0 16px ${C.gold}88}
 .light.off .ic{color:#5c7089;background:#0d1c33;box-shadow:none}.light .grow{flex:1;min-width:0}
-.autog{display:grid;grid-template-columns:repeat(2,minmax(88px,118px));gap:0 6px;align-items:end}.autog>div[data-more]{cursor:pointer}
 .cov{display:flex;align-items:center;gap:10px;padding:6px 0 4px;border-top:1px solid #12223a}.cov .ic{flex:none;display:flex}.cov .grow{flex:1;min-width:0;cursor:pointer}.cov .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cov .l{color:${C.muted};font-size:11.5px;margin-top:2px}
 .cvb{display:flex;gap:6px;flex:none}.btn.cvs{padding:7px 9px;border-radius:10px}.btn[disabled]{opacity:.35;cursor:default;pointer-events:none}
 .thermo{text-align:center}.thermo .ctr{display:flex;align-items:center;justify-content:center;gap:12px}
@@ -431,6 +431,7 @@ class CentroControlPanel extends HTMLElement {
     this._menu.narrow = this._narrow;
     holder.classList.toggle("show", !!this._narrow);
     this._grid = root.querySelector(".grid");
+    if (typeof ResizeObserver === "function") this._ro = new ResizeObserver(() => this._packSoon());
     root.addEventListener("click", (e) => this._click(e));
     const nav = root.querySelector("nav");
     if (nav) {
@@ -760,18 +761,23 @@ class CentroControlPanel extends HTMLElement {
     }
     const own = this._customCards();
     if (own.length) sections.push({ id: "propios", cards: own });
+    for (const u of this._layTab().secs) sections.push({ id: "n_" + u.id, cards: [], user: true });
     sections = this._applyLayout(sections);
     if (this._edit)
-      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: arrastra tarjetas, títulos y gráficas a otro sitio o a otra sección (con el ratón desde cualquier punto; con el dedo, desde el asa ✥), cambia su ancho con ⤢ y ocúltalas con ✕. Con «Añadir» pones indicadores y gráficas de cualquier entidad. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="add">${icon("mdi:plus-circle-outline")}Añadir</button><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
+      sections.unshift({ id: "_lay", cls: "wall", cards: [{ k: "_layinfo", html: `${icon("mdi:gesture-tap-hold")}<span>Modo diseño: arrastra tarjetas, títulos y gráficas a otro sitio (con el ratón desde cualquier punto; con el dedo, desde el asa ✥) y suéltalas en cualquier parte: van a la sección más cercana. Las secciones enteras se mueven con su asa ✥ (arriba a la derecha de cada una): caen en la columna donde sueltas su borde izquierdo, en el primer hueco libre, y las demás suben solas a ocupar los huecos. Cambia el ancho con ⤢ y oculta con ✕. Con «Nueva sección» creas un espacio vacío del ancho y alto que quieras para colocar tarjetas, y con «Añadir» pones indicadores, marcadores de aguja y gráficas de cualquier entidad. Se guarda en este dispositivo (la tablet y el PC pueden tener su propio diseño).</span><span style="flex:1"></span><button data-lay="sec-new">${icon("mdi:view-grid-plus-outline")}Nueva sección</button><button data-lay="add">${icon("mdi:plus-circle-outline")}Añadir</button><button data-lay="reset">${icon("mdi:restore")}Restablecer pestaña</button><button data-lay="toggle">${icon("mdi:check")}Listo</button>`, cls: "layinfo", attrs: "", c: C.amber }] });
     sections.push({ cls: "wall", cards: [{ k: "foot", html: "", cls: "foot", attrs: "", c: C.muted, foot: true }] });
-    const layout = (this._edit ? "E" : "") + this._tab + "|" + sections.map((s) => (s.cls || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
+    const layout = (this._edit ? "E" : "") + this._tab + "|" + sections.map((s) => (s.cls || "") + (s.style || "") + ":" + s.cards.map((c) => c.k + "/" + c.cls).join(",")).join(";");
     if (layout !== this._layoutKey) {
       this._layoutKey = layout;
       this._cards.clear();
       this._grid.innerHTML = sections
-        .map((s) => `<div class="sec ${s.cls || ""}"${s.id && s.id !== "_lay" ? ` data-sec="${esc(s.id)}"` : ""}>${s.tools || ""}${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.drag ? ' draggable="true"' : ""}${c.attrs}></div>`).join("")}</div>`)
+        .map((s) => `<div class="sec ${s.cls || ""}"${s.id && s.id !== "_lay" ? ` data-sec="${esc(s.id)}"` : ""}${s.style ? ` style="${s.style}"` : ""}>${s.tools || ""}${s.cards.map((c) => `<div class="${c.cls}" style="--c:${c.c}" data-k="${esc(c.k)}"${c.drag ? ' draggable="true"' : ""}${c.attrs}></div>`).join("")}</div>`)
         .join("");
       this._grid.querySelectorAll("[data-k]").forEach((el) => this._cards.set(el.dataset.k, { el, html: null }));
+      if (this._ro) {
+        this._ro.disconnect();
+        this._grid.querySelectorAll(".sec").forEach((el) => this._ro.observe(el));
+      }
     }
     for (const s of sections)
       for (const c of s.cards) {
@@ -801,6 +807,40 @@ class CentroControlPanel extends HTMLElement {
         }
       }
     this._mountHosts();
+    this._pack();
+  }
+
+  /** The grid has rows of 8 px and every section spans as many as its content needs, so a short section no longer leaves a gap under it
+   *  (the next section moves up into it) and sections of different height do not share a row. Re-measured when a section changes size. */
+  /** Number of columns of the grid and width of one track in px. */
+  _cols() {
+    const t = getComputedStyle(this._grid).gridTemplateColumns.split(" ").filter(Boolean);
+    return { n: Math.max(1, t.length), w: parseFloat(t[0]) || 320 };
+  }
+  _pack() {
+    if (!this._grid) return;
+    const pins = this._layTab().col, { n } = this._cols();
+    for (const el of this._grid.children) {
+      const pin = el.dataset.sec ? Number(pins[el.dataset.sec]) : 0;
+      if (pin && !el.classList.contains("wall") && !el.classList.contains("charts")) {
+        const sp = parseInt(getComputedStyle(el).getPropertyValue("--sp")) || 1;
+        el.style.setProperty("--cs", String(Math.max(1, Math.min(pin, n - sp + 1))));
+      } else el.style.removeProperty("--cs");
+    }
+    for (const el of this._grid.children) {
+      const n = Math.max(1, Math.ceil((el.getBoundingClientRect().height + 16) / 8));
+      if (el._span !== n) {
+        el._span = n;
+        el.style.gridRowEnd = "span " + n;
+      }
+    }
+  }
+  _packSoon() {
+    if (this._packT) return;
+    this._packT = requestAnimationFrame(() => {
+      this._packT = 0;
+      this._pack();
+    });
   }
 
   // ---------------------------------------------------------------- layout (per device)
@@ -824,6 +864,9 @@ class CentroControlPanel extends HTMLElement {
     const all = this._layLoad();
     const L = (all[this._tab] = all[this._tab] || { order: [], w: {}, cards: {}, cw: {} });
     if (!L.move) L.move = {};
+    if (!L.col) L.col = {};
+    if (!L.h) L.h = {};
+    if (!Array.isArray(L.secs)) L.secs = [];
     if (!L.hide) L.hide = {};
     if (!Array.isArray(L.custom)) L.custom = [];
     return L;
@@ -835,6 +878,12 @@ class CentroControlPanel extends HTMLElement {
       if (u.type === "chart") {
         const unit = this.unit(ents.find((e) => this.unit(e))) || "";
         const card = this.chartCard(k, u.title || ents.map((e) => this.name(e)).join(" · "), C.cyan, { kind: "history", hours: u.hours || 24, unit, height: 240, series: ents.map((e) => ({ name: this.name(e), entity: e })) }, 6);
+        card.own = true;
+        return card;
+      }
+      if (u.type === "gauge") {
+        const e = ents[0], v = this.n(e), c = this.st(e) ? C.cyan : C.red;
+        const card = this.card(k, gauge(v, Number.isFinite(u.min) ? u.min : 0, Number.isFinite(u.max) ? u.max : 100, c, (u.title || this.name(e)) + (this.st(e) ? "" : " · entidad no encontrada"), this.unit(e), 140), { c, w: 4, click: e, cls: "m6" });
         card.own = true;
         return card;
       }
@@ -871,10 +920,12 @@ class CentroControlPanel extends HTMLElement {
     const rank = (s) => (L.order.includes(s.id) ? L.order.indexOf(s.id) : s._i - 0.5);
     sections.sort((a, b) => rank(a) - rank(b) || a._i - b._i);
     const WIDTHS = { "1": "", "2": "w2", "3": "w3", all: "wall" };
+    const HEIGHTS = [0, 160, 280, 420, 600];
     this._secIds = sections.map((s) => s.id);
     this._cardIds = {};
     sections.forEach((s, si) => {
       if (L.w[s.id] !== undefined) s.cls = WIDTHS[L.w[s.id]] ?? s.cls;
+      if (s.user && L.h[s.id]) s.style = `min-height:${Number(L.h[s.id])}px`;
       const order = L.cards[s.id] || [];
       const cr = (c, i) => (order.includes(c.k) ? order.indexOf(c.k) : i - 0.5);
       const idx = new Map(s.cards.map((c, i) => [c, i]));
@@ -893,10 +944,24 @@ class CentroControlPanel extends HTMLElement {
       }
       if (this._edit) {
         const wl = { "": "1 col", w2: "2 col", w3: "3 col", wall: "completa", charts: "gráficas" }[s.cls || ""] || "";
-        s.tools = `<div class="lay sl">S${si + 1} · ${wl}</div><div class="lay"><button data-lay="sec-prev" data-id="${esc(s.id)}" title="Mover antes">◀</button><button data-lay="sec-next" data-id="${esc(s.id)}" title="Mover después">▶</button><button data-lay="sec-w" data-id="${esc(s.id)}" title="Ancho de la sección">⤢ Ancho</button></div>`;
+        s.tools = `<div class="lay sl">S${si + 1} · ${wl}${s.user ? " · propia" : ""}</div><div class="lay"><button class="grab" data-grabsec="${esc(s.id)}" title="Arrastrar la sección (con el dedo o el ratón)">✥</button><button data-lay="sec-prev" data-id="${esc(s.id)}" title="Mover antes">◀</button><button data-lay="sec-next" data-id="${esc(s.id)}" title="Mover después">▶</button><button data-lay="sec-w" data-id="${esc(s.id)}" title="Ancho de la sección">⤢ Ancho</button>${s.user ? `<button data-lay="sec-h" data-id="${esc(s.id)}" title="Alto de la sección">↕ Alto${L.h[s.id] ? " " + (HEIGHTS.indexOf(Number(L.h[s.id])) > 0 ? ["", "S", "M", "L", "XL"][HEIGHTS.indexOf(Number(L.h[s.id]))] : "") : ""}</button><button data-lay="sec-del" data-id="${esc(s.id)}" title="Borrar esta sección (sus tarjetas vuelven a su sitio)">🗑</button>` : ""}</div>`;
       }
     });
     return sections;
+  }
+  /** Section under the point or, over free space, the nearest one: a drop anywhere on the board lands somewhere. */
+  _nearSec(x, y, skip = null) {
+    let best = null, bd = Infinity;
+    for (const el of this._grid.querySelectorAll(".sec[data-sec]")) {
+      if (el === skip) continue;
+      const r = el.getBoundingClientRect();
+      const d = Math.hypot(x < r.left ? r.left - x : x > r.right ? x - r.right : 0, y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0);
+      if (d < bd) {
+        bd = d;
+        best = el;
+      }
+    }
+    return best;
   }
   // ---- Diseño: arrastrar tarjetas con el ratón (entre secciones y dentro de una)
   _dragTarget(e) {
@@ -904,7 +969,7 @@ class CentroControlPanel extends HTMLElement {
     const els = path.filter((n) => n && n.nodeType === 1);
     const isSec = (n) => n.classList && n.classList.contains("sec") && n.hasAttribute("data-sec");
     const card = els.find((n) => n.hasAttribute && n.hasAttribute("data-k") && n.parentElement && isSec(n.parentElement));
-    const sec = els.find(isSec);
+    const sec = els.find(isSec) || this._nearSec(e.clientX, e.clientY);
     return { card, sec };
   }
   _dragStart(e) {
@@ -967,9 +1032,28 @@ class CentroControlPanel extends HTMLElement {
     const els = [];
     for (; n && n !== this.shadowRoot; n = n.parentNode || n.host) if (n.nodeType === 1) els.push(n);
     const isSec = (m) => m.classList && m.classList.contains("sec") && m.hasAttribute("data-sec");
-    return { card: els.find((m) => m.hasAttribute("data-k") && m.parentElement && isSec(m.parentElement)), sec: els.find(isSec) };
+    return { card: els.find((m) => m.hasAttribute("data-k") && m.parentElement && isSec(m.parentElement)), sec: els.find(isSec) || this._nearSec(x, y) };
   }
   _grabStart(e) {
+    const hs = e.target && e.target.closest && e.target.closest("[data-grabsec]");
+    if (this._edit && hs) {
+      const sec = hs.closest(".sec");
+      if (!sec) return;
+      e.preventDefault();
+      const r = sec.getBoundingClientRect();
+      this._grab = e.pointerId;
+      this._grabSec = sec.dataset.sec;
+      this._grabOff = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+      this._dragging = sec.dataset.sec;
+      sec.classList.add("dragging");
+      this._ghostShow(sec);
+      try {
+        hs.setPointerCapture(e.pointerId);
+      } catch (_e) {
+        /* older browsers: the move events still reach the root */
+      }
+      return;
+    }
     const h = e.target && e.target.closest && e.target.closest("[data-grab]");
     if (!this._edit || !h || e.pointerType === "mouse") return;
     const el = h.closest("[data-k]");
@@ -987,8 +1071,12 @@ class CentroControlPanel extends HTMLElement {
   _grabMove(e) {
     if (this._grab === undefined || this._grab === null || e.pointerId !== this._grab) return;
     e.preventDefault();
-    const { card, sec } = this._grabTarget(e.clientX, e.clientY);
-    this._dragMark(card && card.dataset.k !== this._dragging ? card : null, card ? this._dragAfter(e, card) : false, sec);
+    if (this._grabSec) {
+      this._ghostMove(e.clientX, e.clientY);
+    } else {
+      const { card, sec } = this._grabTarget(e.clientX, e.clientY);
+      this._dragMark(card && card.dataset.k !== this._dragging ? card : null, card ? this._dragAfter(e, card) : false, sec);
+    }
     const h = window.innerHeight || 0, step = e.clientY < 70 ? -18 : e.clientY > h - 70 ? 18 : 0;
     if (step) {
       const m = this.shadowRoot.querySelector("main");
@@ -998,10 +1086,60 @@ class CentroControlPanel extends HTMLElement {
   _grabEnd(e, drop) {
     if (this._grab === undefined || this._grab === null || e.pointerId !== this._grab) return;
     this._grab = null;
+    if (this._grabSec) {
+      const k = this._grabSec;
+      this._grabSec = null;
+      if (drop) return this._dropSec(k, e.clientX, e.clientY);
+      return this._dragEnd();
+    }
     if (drop) {
       const { card, sec } = this._grabTarget(e.clientX, e.clientY);
       this._dropAt(e, card, sec);
     } else this._dragEnd();
+  }
+  _secEl(id) {
+    return [...this._grid.querySelectorAll(".sec[data-sec]")].find((n) => n.dataset.sec === id) || null;
+  }
+  /** Column (1-based) where the left edge of the dragged section lands for a pointer at x, and the left px of that column. */
+  _snapCol(k, x) {
+    const el = this._secEl(k), gr = this._grid.getBoundingClientRect(), { n, w } = this._cols();
+    const sp = el ? Math.max(1, Math.round((el.getBoundingClientRect().width + 16) / (w + 16))) : 1;
+    const left = x - (this._grabOff ? this._grabOff.dx : 0);
+    const col = Math.max(1, Math.min(Math.round((left - gr.left) / (w + 16)) + 1, n - sp + 1));
+    return { col, left: gr.left + (col - 1) * (w + 16), full: !!el && (el.classList.contains("wall") || el.classList.contains("charts")) };
+  }
+  _ghostShow(sec) {
+    const r = sec.getBoundingClientRect();
+    this._ghost = document.createElement("div");
+    this._ghost.className = "secghost";
+    this._ghost.style.cssText = `width:${r.width}px;height:${Math.min(r.height, 260)}px;left:${r.left}px;top:${r.top}px`;
+    this.shadowRoot.appendChild(this._ghost);
+  }
+  _ghostMove(x, y) {
+    if (!this._ghost || !this._grabSec) return;
+    const sn = this._snapCol(this._grabSec, x), off = this._grabOff || { dx: 0, dy: 0 };
+    this._ghost.style.left = (sn.full ? this._grid.getBoundingClientRect().left : sn.left) + "px";
+    this._ghost.style.top = y - off.dy + "px";
+    this._ghost.textContent = sn.full ? "" : `columna ${sn.col}`;
+  }
+  /** Drops a section: it takes the column under its left edge and goes after the sections that start above it, so the grid
+   *  places it in the first free space of those columns (under the section above it, or higher if there is room). */
+  _dropSec(k, x, y) {
+    const sn = this._snapCol(k, x), top = y - (this._grabOff ? this._grabOff.dy : 0);
+    const L = this._layTab(), order = (this._secIds || []).filter((id) => id !== k);
+    let at = 0;
+    order.forEach((id, i) => {
+      const el = this._secEl(id);
+      if (el && el.getBoundingClientRect().top < top - 8) at = i + 1;
+    });
+    order.splice(at, 0, k);
+    L.order = order;
+    if (sn.full) delete L.col[k];
+    else L.col[k] = sn.col;
+    this._laySave();
+    this._dragEnd();
+    this._layoutKey = "";
+    this._schedule(true);
   }
   // ---- Diseño: añadir un indicador o una gráfica propios
   _addOpen() {
@@ -1010,9 +1148,10 @@ class CentroControlPanel extends HTMLElement {
     this._addEl = document.createElement("div");
     this._addEl.className = "bell";
     this._addEl.innerHTML = `<div class="bellbox" style="width:min(460px,100%)"><div class="bellh">${icon("mdi:plus-circle-outline")}<b>Añadir a esta pestaña</b><span class="muted small"></span><button class="bellx" data-lay="add-cancel" title="Cerrar">${icon("mdi:close")}</button></div>
-      <div class="addf"><label>Qué quieres añadir</label><select class="addtype"><option value="kpi">Indicador (valor actual de una entidad)</option><option value="chart">Gráfica (historial de una o varias entidades)</option></select>
+      <div class="addf"><label>Qué quieres añadir</label><select class="addtype"><option value="kpi">Indicador (valor actual de una entidad)</option><option value="gauge">Marcador de aguja (valor entre un mínimo y un máximo)</option><option value="chart">Gráfica (historial de una o varias entidades)</option></select>
       <label>Entidad (en gráficas, varias separadas por coma)</label><input class="bellin addent" list="dl_addent" placeholder="sensor.temperatura_salon" autocomplete="off" spellcheck="false"><datalist id="dl_addent">${ids.map((e) => `<option value="${esc(e)}">${esc(this.name(e))}</option>`).join("")}</datalist>
       <label>Título (opcional)</label><input class="bellin addtitle" placeholder="El nombre de la entidad" autocomplete="off">
+      <label>Mínimo y máximo del marcador</label><div style="display:flex;gap:8px"><input class="bellin addmin" type="number" value="0" style="flex:1"><input class="bellin addmax" type="number" value="100" style="flex:1"></div>
       <label>Periodo de la gráfica</label><select class="addhours"><option value="6">6 horas</option><option value="24" selected>24 horas</option><option value="48">2 días</option><option value="168">7 días</option></select>
       <div class="adderr"></div></div>
       <div class="bellf"><button class="bellb" data-lay="add-cancel">Cancelar</button><button class="bellb bellaudio on" data-lay="add-ok">Añadir</button></div></div>`;
@@ -1025,22 +1164,26 @@ class CentroControlPanel extends HTMLElement {
   /** Validates the form and stores the new card. Returns the error text, or "" when it was added. */
   _addOk() {
     const q = (c) => this._addEl.querySelector(c);
-    const type = q(".addtype").value === "chart" ? "chart" : "kpi";
+    const type = ["chart", "gauge"].includes(q(".addtype").value) ? q(".addtype").value : "kpi";
+    const gmin = Number(q(".addmin").value), gmax = Number(q(".addmax").value);
     const ents = String(q(".addent").value || "").split(",").map((x) => x.trim()).filter(Boolean);
     const bad = ents.filter((e) => !this.st(e));
-    const err = !ents.length ? "Escribe o elige una entidad." : bad.length ? `No existe: ${bad.join(", ")}` : type === "kpi" && ents.length > 1 ? "Un indicador muestra una sola entidad; para varias, elige Gráfica." : "";
+    const err = !ents.length ? "Escribe o elige una entidad." : bad.length ? `No existe: ${bad.join(", ")}` : type !== "chart" && ents.length > 1 ? "Un indicador o marcador muestra una sola entidad; para varias, elige Gráfica." : type === "gauge" && !(Number.isFinite(gmin) && Number.isFinite(gmax) && gmin < gmax) ? "El mínimo debe ser menor que el máximo." : "";
     if (err) {
       q(".adderr").textContent = err;
       return err;
     }
     const L = this._layTab();
     const id = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
-    L.custom.push({ id, type, entities: ents, title: String(q(".addtitle").value || "").trim().slice(0, 60), hours: Number(q(".addhours").value) || 24 });
+    L.custom.push({ id, type, entities: ents, title: String(q(".addtitle").value || "").trim().slice(0, 60), hours: Number(q(".addhours").value) || 24, min: gmin, max: gmax });
     this._addClose();
     return "";
   }
   _dragEnd() {
     this._dragging = null;
+    this._grabSec = null;
+    if (this._ghost) this._ghost.remove();
+    this._ghost = null;
     this._dragMark(null);
     this.shadowRoot.querySelectorAll(".dragging").forEach((n) => n.classList.remove("dragging"));
   }
@@ -1073,6 +1216,20 @@ class CentroControlPanel extends HTMLElement {
       const id = String(d.id).replace(/^u_/, "");
       L.custom = L.custom.filter((u) => u.id !== id);
       for (const m of [L.move, L.hide, L.cw]) delete m[d.id];
+    } else if (d.lay === "sec-new") {
+      const id = Date.now().toString(36) + Math.floor(Math.random() * 1296).toString(36);
+      L.secs.push({ id });
+      L.w["n_" + id] = "1";
+      L.h["n_" + id] = 280;
+    } else if (d.lay === "sec-h") {
+      const seq = [0, 160, 280, 420, 600];
+      L.h[d.id] = seq[(Math.max(0, seq.indexOf(Number(L.h[d.id] || 0))) + 1) % seq.length];
+    } else if (d.lay === "sec-del") {
+      const id = String(d.id).replace(/^n_/, "");
+      L.secs = L.secs.filter((u) => u.id !== id);
+      for (const m of [L.w, L.h, L.col, L.cards]) delete m[d.id];
+      L.order = L.order.filter((x) => x !== d.id);
+      for (const [k, to] of Object.entries(L.move)) if (to === d.id) delete L.move[k];
     } else if (d.lay === "sec-prev" || d.lay === "sec-next") {
       const list = move([...this._secIds], d.id, d.lay === "sec-prev" ? -1 : 1);
       if (list) L.order = list;
@@ -1539,7 +1696,9 @@ class CentroControlPanel extends HTMLElement {
     const crit = probs.filter((p) => p.nivel === "critico").length, warn = probs.filter((p) => p.nivel === "aviso").length;
     const status = crit ? `<span class="pulse" style="color:${C.red}">◉ ${crit} crítico${crit > 1 ? "s" : ""}</span>` : warn ? `<span style="color:${C.amber}">◉ ${warn} aviso${warn > 1 ? "s" : ""}</span>` : `<span style="color:${C.green}">◉ Todo en orden</span>`;
     const now = new Date();
-    const head = this.card("head", `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><div class="muted small">${now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · periodo ${esc(this.S("periodo_tarifario") || "—")} · ${fmt(this.N("precio_actual"), 4)} €/kWh</div><div style="margin-top:4px;font-size:14px">${status}</div></div><div class="autog"><div class="muted small" style="grid-column:1/-1;text-align:center">${icon("mdi:shield-sun")} Autosuficiencia</div><div data-more="${esc(this.id("autosuficiencia_ahora") || "")}">${gauge(this.N("autosuficiencia_ahora"), 0, 100, this.selfColor(this.N("autosuficiencia_ahora")), "Ahora", "%", 118)}</div><div data-more="${esc(this.id("autosuficiencia") || "")}">${gauge(this.N("autosuficiencia"), 0, 100, this.selfColor(this.N("autosuficiencia")), "Hoy", "%", 118)}</div></div></div>`, { c: C.cyan });
+    const head = this.card("head", `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><div class="muted small">${now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · periodo ${esc(this.S("periodo_tarifario") || "—")} · ${fmt(this.N("precio_actual"), 4)} €/kWh</div><div style="margin-top:4px;font-size:14px">${status}</div></div></div>`, { c: C.cyan, w: 6, cls: "m12" });
+    const autC = (k, key, label) => this.card(k, gauge(this.N(key), 0, 100, this.selfColor(this.N(key)), label, "%", 130), { c: this.selfColor(this.N(key)), w: 3, cls: "m6", click: this.id(key) });
+    const aut = [autC("aut_now", "autosuficiencia_ahora", "Autosuficiencia ahora"), autC("aut_day", "autosuficiencia", "Autosuficiencia hoy")];
     const flow = this.card("flow", this.flowSVG(), { c: C.cyan });
     const kp = [
       this.kpi("k1", null, fmtW(pv), `Solar · ${kwh(this.N("energia_solar"))} hoy`, "mdi:solar-power-variant", C.amber, 6, "solar"),
@@ -1570,7 +1729,7 @@ class CentroControlPanel extends HTMLElement {
     const cv = this._coverGroups();
     const home = [this.sunCard(now), this.tempCard(), this.coverCard("cov_p", cv.p, true), this.coverCard("cov_e", cv.e, false)].filter(Boolean);
     return [
-      { cls: "w2", cards: [head, flow] },
+      { cls: "w2", cards: [head, ...aut, flow] },
       { cards: [...kp, this.periodChips("per"), sum] },
       ...(home.length ? [{ cls: "w2", cards: home }] : []),
       { cards: [alerts, this.chartCard("c24", "Últimas 24 h (W)", C.cyan, { kind: "history", hours: 24, unit: "W", series: this.sources24h(), height: 240 })] },

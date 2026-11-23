@@ -1,8 +1,10 @@
 # Estado
 
-Versión publicada: v2.18.0 (v2.19.0 en PR) · Commit de referencia: `6aa1fa1` · Actualizado: 2026-11-23
+Versión publicada: v2.19.0 (v2.20.0 en PR) · Commit de referencia: `4decf1e` · Actualizado: 2026-11-23
 
 ## Funciona (comprobado)
+- v2.20.0 (PR): Diseño sin huecos muertos (las secciones se empaquetan en filas de 8 px), arrastrar secciones enteras por su asa ✥ a la columna elegida soltar tarjetas en cualquier espacio libre (van a la sección más cercana), crear secciones nuevas de ancho y alto elegidos, marcadores de aguja propios y los de autosuficiencia como tarjetas sueltas. Probado en Chrome sin pantalla a 1735 px con ratón real y con eventos táctiles simulados; falta en la tablet real.
+- v2.19.0: Puente de mando con autosuficiencia, sol, temperaturas, persianas y estores. Falta verlo en la casa real.
 - v2.19.0 (PR): Puente de mando con marcadores de autosuficiencia (ahora y hoy), salida y puesta del sol, temperatura media de casa con máxima y mínima por estancia y la exterior, y control de persianas y estores por separado. Probado con pytest y Chrome sin pantalla (escritorio y móvil, con y sin entidades, botones y deslizador); hora del sol comparada con astral; falta verlo en la casa real.
 - v2.18.0: la pestaña Caldera detecta colisiones del bus eBUS con el Tado (cortes de señal y reinicios de ebusd, confirmados con la conexión del bridge del Tado), avisa por el servicio de notificación y permite hacer pruebas de convivencia por configuración de ebusd. Probado con pytest y Chrome sin pantalla; falta probarlo en la casa real.
 - v2.17.1: la barra de pestañas se desliza con el dedo sin cortarse y deja llegar a Configuración (ya no se reconstruye en cada refresco ni mientras se toca). Probado en Chrome sin pantalla antes y después; falta en la tablet real.
@@ -35,12 +37,6 @@ Versión publicada: v2.18.0 (v2.19.0 en PR) · Commit de referencia: `6aa1fa1` �
 ## Últimos cierres
 <!-- Pegar aquí el bloque CIERRE de cada tarea (ver CLAUDE.md). Conservar solo los 5 últimos. -->
 
-**Centro de Control · feat/videoportero-prueba · v2.14.0**
-- Objetivo: botón en Configuración para comprobar la ventana del videoportero (apertura, vídeo, audio y colgar) sin esperar a una llamada.
-- Cambios: `_bellTest` y lista de comprobación en vivo (`_bellTestRows`), detección de sonido en el flujo (`_bellHasSound`), la ventana de prueba no se cierra sola y «Colgar» avisa de lo que ha hecho antes de cerrar.
-- Pruebas: pytest en verde; Chrome sin pantalla con cámara simulada, con y sin entidades y con y sin sonido.
-- Pendientes: probar en el videoportero real; el aviso de «sin sonido» depende de lo que informe el navegador de la tablet.
-
 **Centro de Control · feat/diseno-personalizable · v2.15.0**
 - Objetivo: diseño totalmente personalizable: mover tarjetas, gráficas y títulos donde se quiera (también con el dedo) y añadir indicadores y gráficas propios a la pantalla principal.
 - Cambios: asa ✥ con eventos de puntero (`_grabStart/_grabMove/_grabEnd`), `_dropAt` común a ratón y dedo, `hide` y `custom` en `centro_control_diseno`, diálogo «Añadir» (`_addOpen/_addOk`), `_customCards`; títulos movibles; corregido el resaltado del botón Diseño.
@@ -65,9 +61,15 @@ Versión publicada: v2.18.0 (v2.19.0 en PR) · Commit de referencia: `6aa1fa1` �
 - Pruebas: pytest 101 OK; Chrome sin pantalla con cortes, corte largo, prueba en curso e historial.
 - Pendientes: probar en la casa real; HA no ve los choques ni los reintentos del Tado, solo la señal de ebusd.
 
-## Último cierre
 **Centro de Control · feat/puente-sol-temperaturas-persianas · v2.19.0**
 - Objetivo: en el Puente de mando, salida y puesta del sol, temperatura media de casa con la máxima y mínima por estancia y la exterior, control de persianas y estores por separado, y marcadores de autosuficiencia de ahora y de hoy.
 - Cambios: `sunTimes()` y `_sunToday()`/`sunCard()`, `_outdoorTemp()`/`tempCard()`, `_coverGroups()`/`coverCard()` (servicios `cover.*` y `data-coverpos`), `selfColor()` y marcadores en la cabecera; opciones `persianas`, `estores` y `persianas_excluir`; README, CHANGELOG y traducciones.
 - Pruebas: pytest 101 OK; Chrome sin pantalla en escritorio y móvil con persianas, estores, garaje y toldo (excluidos), sin entidades opcionales; llamadas a `cover.open_cover`, `close_cover` y `set_cover_position` comprobadas; sol frente a astral (< 1 min).
 - Pendientes: verlo en la casa real; `scripts/make_translations.py` está desfasado frente a los JSON (no incluye lo de la v2.18.0), por eso las traducciones se han tocado a mano; el panel clásico (Lovelace) no tiene estas tarjetas.
+
+## Último cierre
+**Centro de Control · feat/diseno-libre · v2.20.0**
+- Objetivo: poder mover secciones y tarjetas del modo Diseño a cualquier hueco para aprovechar el espacio (ejemplo: la sección de Persianas/Estores bajo la S1 y la tarjeta HOY bajo la S3).
+- Cambios: cuadrícula con filas de 8 px y `_pack()` (cada sección ocupa su alto, con `ResizeObserver`); `--sp`/`--cs` para ancho y columna fija de sección; asa ✥ de sección (`_grabStart/_grabMove/_grabEnd`), guía `.secghost`, `_snapCol`, `_dropSec`; `_nearSec` como destino de soltado de tarjetas; `col` en `centro_control_diseno`; README y CHANGELOG.
+- Pruebas: pytest 101 OK; Chrome sin pantalla a 1735 px: sin solapes, arrastre de sección con ratón real (columna y hueco), tarjeta soltada en espacio libre con ratón (HTML5) y con el asa en táctil simulado; sección nueva (ancho, alto, borrar) y marcador propio.
+- Pendientes: probar en la tablet real con el dedo; la sección cae en el primer hueco libre de su columna (si hay sitio más arriba, sube); lo que se coloca es por dispositivo y no se comparte entre tablet y PC.

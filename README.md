@@ -33,9 +33,14 @@ Datos de ejemplo, no de ninguna casa real.
 <p align="center"><img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/movil.jpg" alt="En el móvil" width="260"> <img src="https://raw.githubusercontent.com/manu8613/centro-control/main/docs/capturas/movil_bateria.jpg" alt="Batería en el móvil" width="260"></p>
 
 El botón **Diseño** permite mover, redimensionar y ocultar secciones, tarjetas,
-títulos y gráficas (se arrastran con el ratón o, con el dedo, desde el asa ✥,
-incluso a otra sección) y **añadir** indicadores y gráficas de cualquier
-entidad en cualquier pestaña; cada dispositivo guarda su propio diseño.
+títulos y gráficas y **añadir** indicadores y gráficas de cualquier entidad en
+cualquier pestaña; cada dispositivo guarda su propio diseño. Las tarjetas se
+arrastran con el ratón o, con el dedo, desde el asa ✥, y se pueden soltar en
+cualquier parte (van a la sección más cercana). Las secciones enteras se
+arrastran por su asa ✥ y caen en la columna donde sueltas su borde izquierdo,
+en el primer hueco libre; el resto sube solo a ocupar los huecos, sin espacios
+muertos. «Nueva sección» crea un espacio vacío del ancho y alto que
+quieras, y «Añadir» admite indicadores, marcadores de aguja y gráficas.
 
 ## Las 14 pestañas
 

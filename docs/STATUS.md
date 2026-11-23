@@ -1,9 +1,10 @@
 # Estado
 
-Versión publicada: v2.17.1 (v2.18.0 en PR) · Commit de referencia: `94b1c43` · Actualizado: 2026-11-17
+Versión publicada: v2.18.0 (v2.19.0 en PR) · Commit de referencia: `6aa1fa1` · Actualizado: 2026-11-23
 
 ## Funciona (comprobado)
-- v2.18.0 (PR): la pestaña Caldera detecta colisiones del bus eBUS con el Tado (cortes de señal y reinicios de ebusd, confirmados con la conexión del bridge del Tado), avisa por el servicio de notificación y permite hacer pruebas de convivencia por configuración de ebusd. Probado con pytest y Chrome sin pantalla; falta probarlo en la casa real.
+- v2.19.0 (PR): Puente de mando con marcadores de autosuficiencia (ahora y hoy), salida y puesta del sol, temperatura media de casa con máxima y mínima por estancia y la exterior, y control de persianas y estores por separado. Probado con pytest y Chrome sin pantalla (escritorio y móvil, con y sin entidades, botones y deslizador); hora del sol comparada con astral; falta verlo en la casa real.
+- v2.18.0: la pestaña Caldera detecta colisiones del bus eBUS con el Tado (cortes de señal y reinicios de ebusd, confirmados con la conexión del bridge del Tado), avisa por el servicio de notificación y permite hacer pruebas de convivencia por configuración de ebusd. Probado con pytest y Chrome sin pantalla; falta probarlo en la casa real.
 - v2.17.1: la barra de pestañas se desliza con el dedo sin cortarse y deja llegar a Configuración (ya no se reconstruye en cada refresco ni mientras se toca). Probado en Chrome sin pantalla antes y después; falta en la tablet real.
 - v2.17.0 (PR): la pestaña Caldera solo avisa de lo que se elija en Configuración (por dispositivo; por defecto, solo las averías de la caldera) y no enseña nada si no salta ninguno. Probado en Chrome sin pantalla con presión alta, estado S.41, falta de señal y avería, con selección, recarga y «Ninguno»; falta verlo en la casa real.
 - v2.16.1: la pestaña Caldera aguanta lecturas que se pierden un momento (conserva el último valor 15 min), avisa de falta de señal del bus solo si dura más de 5 min y conserva el historial de la llama si falla una lectura. Probado en Chrome sin pantalla con lecturas no disponibles, cortes de señal y fallos del historial; falta verlo en la casa real.
@@ -58,9 +59,15 @@ Versión publicada: v2.17.1 (v2.18.0 en PR) · Commit de referencia: `94b1c43` �
 - Pruebas: pytest en verde; Chrome sin pantalla, antes y después, con presión e ida no disponibles (1, 3 y 17 min), señal del bus en off 8 s y 10 min, y fallo del historial.
 - Pendientes: verlo en la casa real; si siguen los cortes de señal de verdad, el fondo está en el bus (colisiones por el sondeo de ebusd), no en el panel.
 
-## Último cierre
 **Centro de Control · feat/caldera-convivencia-tado · v2.18.0**
 - Objetivo: detectar colisiones ebusd ↔ Tado y avisar, para saber qué parámetros de ebusd permiten que convivan.
 - Cambios: `convivencia.py` (monitor de cortes de señal y reinicios, veredictos), enganche en `manager.py` (listeners, guardado, problemas y notificación), sensor `convivencia_ebus`, servicios `prueba_convivencia_*`, sección en la pestaña Caldera.
 - Pruebas: pytest 101 OK; Chrome sin pantalla con cortes, corte largo, prueba en curso e historial.
 - Pendientes: probar en la casa real; HA no ve los choques ni los reintentos del Tado, solo la señal de ebusd.
+
+## Último cierre
+**Centro de Control · feat/puente-sol-temperaturas-persianas · v2.19.0**
+- Objetivo: en el Puente de mando, salida y puesta del sol, temperatura media de casa con la máxima y mínima por estancia y la exterior, control de persianas y estores por separado, y marcadores de autosuficiencia de ahora y de hoy.
+- Cambios: `sunTimes()` y `_sunToday()`/`sunCard()`, `_outdoorTemp()`/`tempCard()`, `_coverGroups()`/`coverCard()` (servicios `cover.*` y `data-coverpos`), `selfColor()` y marcadores en la cabecera; opciones `persianas`, `estores` y `persianas_excluir`; README, CHANGELOG y traducciones.
+- Pruebas: pytest 101 OK; Chrome sin pantalla en escritorio y móvil con persianas, estores, garaje y toldo (excluidos), sin entidades opcionales; llamadas a `cover.open_cover`, `close_cover` y `set_cover_position` comprobadas; sol frente a astral (< 1 min).
+- Pendientes: verlo en la casa real; `scripts/make_translations.py` está desfasado frente a los JSON (no incluye lo de la v2.18.0), por eso las traducciones se han tocado a mano; el panel clásico (Lovelace) no tiene estas tarjetas.

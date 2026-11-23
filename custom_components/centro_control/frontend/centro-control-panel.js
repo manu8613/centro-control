@@ -153,6 +153,8 @@ main{padding:16px;max-width:1800px;margin:0 auto;container-type:inline-size}
 @container (max-width:1040px){.sec.w3{grid-column:span 2}}
 @container (max-width:900px){.sec.charts>.card{grid-column:span 12}}
 @container (max-width:690px){.sec.w2,.sec.w3{grid-column:span 1}.card.u6,.card.u4,.card.u3{grid-column:span 12!important}}
+@container (max-width:690px){.card.s6.m12{grid-column:span 12}}
+@media(max-width:720px){.card.s6.m12{grid-column:span 12}}
 @media(max-width:720px){.sec.w2,.sec.w3{grid-column:span 1}}
 @media(max-width:760px){header{gap:4px;padding:6px}.brand{letter-spacing:0;margin-right:0}.brand .t{display:none}.laybtn span{display:none}.laybtn{padding:7px}nav button{padding:8px 9px}}
 .laybtn{all:unset;flex:none;cursor:pointer;display:flex;align-items:center;gap:6px;padding:7px 10px;border-radius:10px;color:${C.muted};font-size:13px;white-space:nowrap;border:1px solid #12304d}
@@ -217,6 +219,9 @@ svg text{font-family:inherit}
 .pulse{animation:pulse 2s ease-in-out infinite}@keyframes pulse{50%{opacity:.45}}
 .light{display:flex;align-items:center;gap:10px}.light .ic{cursor:pointer}.light.on .ic{color:${C.gold};background:${C.gold}26;box-shadow:0 0 16px ${C.gold}88}
 .light.off .ic{color:#5c7089;background:#0d1c33;box-shadow:none}.light .grow{flex:1;min-width:0}
+.autog{display:grid;grid-template-columns:repeat(2,minmax(88px,118px));gap:0 6px;align-items:end}.autog>div[data-more]{cursor:pointer}
+.cov{display:flex;align-items:center;gap:10px;padding:6px 0 4px;border-top:1px solid #12223a}.cov .ic{flex:none;display:flex}.cov .grow{flex:1;min-width:0;cursor:pointer}.cov .nm{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cov .l{color:${C.muted};font-size:11.5px;margin-top:2px}
+.cvb{display:flex;gap:6px;flex:none}.btn.cvs{padding:7px 9px;border-radius:10px}.btn[disabled]{opacity:.35;cursor:default;pointer-events:none}
 .thermo{text-align:center}.thermo .ctr{display:flex;align-items:center;justify-content:center;gap:12px}
 .cells{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:4px 14px}
 .cell{display:flex;align-items:center;gap:6px;font-size:11.5px;font-variant-numeric:tabular-nums}.cell .bar{flex:1;height:7px}
@@ -346,6 +351,35 @@ function gauge(value, min, max, color, label, unit, size = 150) {
   <text x="70" y="86" text-anchor="middle" fill="${C.muted}" font-size="10">${esc(unit)}</text>
   <text x="70" y="114" text-anchor="middle" fill="${C.muted}" font-size="11">${esc(label)}</text></svg>`;
 }
+
+/** Sunrise and sunset of the local calendar day of `date` (sunrise equation, ±1 min). null when the sun does not rise or set (polar day/night). */
+function sunTimes(date, lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const rad = Math.PI / 180, J2000 = 2451545.0;
+  const noon = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 12);
+  const jNoon = noon.getTime() / 86400000 + 2440587.5;
+  const n = Math.round(jNoon - J2000 + lon / 360);
+  const jStar = n - lon / 360;
+  const M = (357.5291 + 0.98560028 * jStar) % 360;
+  const Cc = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const lam = (M + Cc + 180 + 102.9372) % 360;
+  const jTransit = J2000 + jStar + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * lam * rad);
+  const sinD = Math.sin(lam * rad) * Math.sin(23.4397 * rad), cosD = Math.cos(Math.asin(sinD));
+  const cosW = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * sinD) / (Math.cos(lat * rad) * cosD);
+  const toDate = (j) => new Date((j - 2440587.5) * 86400000);
+  if (cosW > 1) return { rise: null, set: null, polar: "noche" };
+  if (cosW < -1) return { rise: null, set: null, polar: "dia" };
+  const w = Math.acos(cosW) / rad / 360;
+  return { rise: toDate(jTransit - w), set: toDate(jTransit + w), noon: toDate(jTransit) };
+}
+const hhmm = (d) => (d ? d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "—");
+const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const fmtDur = (ms) => {
+  const m = Math.max(0, Math.round(ms / 60000));
+  return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min` : `${m} min`;
+};
+// cover supported_features bits
+const COVER_OPEN = 1, COVER_CLOSE = 2, COVER_SET_POS = 4, COVER_STOP = 8;
 
 // ------------------------------------------------------------------ the panel
 class CentroControlPanel extends HTMLElement {
@@ -1187,6 +1221,8 @@ class CentroControlPanel extends HTMLElement {
       this._write(t.dataset.set, t.value);
     } else if (t.dataset.number) {
       this._hass.callService("number", "set_value", { entity_id: t.dataset.number, value: Number(t.value) });
+    } else if (t.dataset.coverpos) {
+      this._hass.callService("cover", "set_cover_position", { entity_id: t.dataset.coverpos, position: Number(t.value) });
     } else if (t.dataset.bright) {
       this._hass.callService("light", "turn_on", { entity_id: t.dataset.bright, brightness_pct: Number(t.value) });
     }
@@ -1371,6 +1407,131 @@ class CentroControlPanel extends HTMLElement {
   }
 
   // ---------------------------------------------------------------- 1 resumen
+  // ---------------------------------------------------------------- bridge: sun, temperatures, covers
+  /** Today's sunrise/sunset: from sun.sun when its next event is today, otherwise calculated with the home's coordinates. */
+  _sunToday(now = new Date()) {
+    const cfg = this._hass?.config || {};
+    const calc = sunTimes(now, Number(cfg.latitude), Number(cfg.longitude));
+    const fromSun = (attr) => {
+      const v = this.a("sun.sun", attr);
+      const d = v ? new Date(v) : null;
+      return d && !isNaN(d) ? d : null;
+    };
+    const nr = fromSun("next_rising"), ns = fromSun("next_setting");
+    let rise = sameDay(nr, now) ? nr : calc?.rise || (nr ? new Date(nr - 86400000) : null);
+    let set = sameDay(ns, now) ? ns : calc?.set || (ns ? new Date(ns - 86400000) : null);
+    if (rise && !sameDay(rise, now)) rise = calc?.rise || null;
+    if (set && !sameDay(set, now)) set = calc?.set || null;
+    let tomorrow = null;
+    if (set && now > set) {
+      const t = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 12);
+      tomorrow = (nr && sameDay(nr, t) ? nr : null) || sunTimes(t, Number(cfg.latitude), Number(cfg.longitude))?.rise || null;
+    }
+    return { rise, set, tomorrow, polar: calc?.polar || null };
+  }
+  sunCard(now = new Date()) {
+    const { rise, set, tomorrow, polar } = this._sunToday(now);
+    if (!rise && !set && !polar) return null;
+    const day = rise && set ? set - rise : null;
+    const up = rise && set ? now >= rise && now < set : polar === "dia";
+    const f = rise && set ? Math.max(0, Math.min(1, (now - rise) / (set - rise))) : up ? 0.5 : 0;
+    // arc: x from 20 to 220, sun dot along a half ellipse
+    const x = 20 + 200 * f, y = 70 - 52 * Math.sin(Math.PI * f);
+    const arc = `<svg viewBox="0 0 240 86" style="width:100%;max-width:300px;display:block;margin:2px auto 0">
+      <line x1="8" y1="70" x2="232" y2="70" stroke="#1d2d4a" stroke-width="1.5"/>
+      <path d="M20,70 A100,52 0 0 1 220,70" fill="none" stroke="${C.amber}44" stroke-width="2" stroke-dasharray="4 5"/>
+      ${up ? `<path d="M20,70 A100,52 0 0 1 ${x.toFixed(1)},${y.toFixed(1)}" fill="none" stroke="${C.amber}" stroke-width="2.5" style="filter:drop-shadow(0 0 4px ${C.amber})"/>` : ""}
+      <circle cx="${x.toFixed(1)}" cy="${up ? y.toFixed(1) : 70}" r="${up ? 8 : 6}" fill="${up ? C.gold : "#334155"}" style="${up ? `filter:drop-shadow(0 0 8px ${C.gold})` : ""}"/>
+    </svg>`;
+    let next;
+    if (polar === "dia") next = "Sol de medianoche: hoy no se pone";
+    else if (polar === "noche") next = "Noche polar: hoy no sale";
+    else if (rise && now < rise) next = `Amanece en ${fmtDur(rise - now)}`;
+    else if (up && set) next = `Se pone en ${fmtDur(set - now)}`;
+    else next = tomorrow ? `Mañana amanece a las ${hhmm(tomorrow)}` : "Ya es de noche";
+    const col = (ic, l, v, c) => `<div style="text-align:center;flex:1"><div class="small muted">${icon(ic)} ${l}</div><div style="font-size:22px;font-weight:800;color:${c};font-variant-numeric:tabular-nums">${v}</div></div>`;
+    return this.card("sol", `<h3>${icon(up ? "mdi:white-balance-sunny" : "mdi:weather-night")}Sol</h3>${arc}
+      <div style="display:flex;gap:8px;margin-top:2px">${col("mdi:weather-sunset-up", "Salida", hhmm(rise), C.amber)}${col("mdi:weather-sunset-down", "Puesta", hhmm(set), C.orange)}</div>
+      <div class="small muted" style="text-align:center;margin-top:6px">${day !== null ? `${fmtDur(day)} de luz · ` : ""}${esc(next)}</div>`, { c: C.amber, w: 6, cls: "m12", click: this.st("sun.sun") ? "sun.sun" : null });
+  }
+  /** Outdoor temperature: the configured sensor or weather entity, otherwise the weather entity used for the cloud forecast. */
+  _outdoorTemp() {
+    for (const e of [this.set_("temperatura_exterior"), this.set_("meteo_entidad")]) {
+      if (!e || !this.st(e)) continue;
+      const v = e.startsWith("weather.") ? toNum(this.a(e, "temperature")) : this.n(e);
+      if (v !== null) return { entity: e, value: v };
+    }
+    return null;
+  }
+  tempCard() {
+    const id = this.id("temperatura_interior");
+    const avg = this.N("temperatura_interior");
+    const ext = this._outdoorTemp();
+    if (avg === null && !ext) return null;
+    const mx = toNum(this.A("temperatura_interior", "maxima")), mn = toNum(this.A("temperatura_interior", "minima"));
+    const big = (l, v, c, e) => `<div style="flex:1;text-align:center${e ? ";cursor:pointer" : ""}"${e ? ` data-more="${esc(e)}"` : ""}><div class="small muted">${l}</div><div style="font-size:26px;font-weight:800;color:${c};font-variant-numeric:tabular-nums;white-space:nowrap;text-shadow:0 0 12px ${c}88">${v === null ? "—" : fmt(v, 1) + " °C"}</div></div>`;
+    const room = (ic, c, l, v, n) => `<tr><td style="color:${c};white-space:nowrap">${icon(ic)} ${l}</td><td>${esc(n || "—")}</td><td class="r"><b>${v === null ? "—" : fmt(v, 1) + " °C"}</b></td></tr>`;
+    const tempC = (v) => (v === null ? C.muted : v >= 26 ? C.red : v >= 23 ? C.orange : v >= 19 ? C.green : C.blue);
+    return this.card("tmp", `<h3 data-tab="clima" style="cursor:pointer">${icon("mdi:home-thermometer")}Temperaturas</h3>
+      <div style="display:flex;gap:8px">${big("Media en casa", avg, tempC(avg), id)}${big("Fuera", ext ? ext.value : null, ext ? (ext.value <= 3 ? C.blue : ext.value >= 30 ? C.red : C.cyan) : C.muted, ext && ext.entity)}</div>
+      ${avg !== null ? `<table style="margin-top:8px">${room("mdi:thermometer-chevron-up", C.orange, "Máx.", mx, this.A("temperatura_interior", "maxima_nombre"))}${room("mdi:thermometer-chevron-down", C.blue, "Mín.", mn, this.A("temperatura_interior", "minima_nombre"))}</table>` : ""}`, { c: C.orange, w: 6, cls: "m12" });
+  }
+  /** Shutters (persianas) and blinds (estores): chosen in the options, otherwise recognised by name or device class. Gates, garage doors and awnings are left out unless chosen. */
+  _coverGroups() {
+    const P = this._list(this.set_("persianas")), E = this._list(this.set_("estores"));
+    const both = P.length && E.length;
+    const auto = both ? [] : this._live("cover", "", "persianas_excluir");
+    const kind = (e) => {
+      if (P.includes(e)) return "p";
+      if (E.includes(e)) return "e";
+      const txt = `${e} ${this.name(e)}`, dc = this.a(e, "device_class");
+      if (/garaj|garage|puerta|door|portal|cancela|verja|gate|port[oó]n|valla|toldo|awning|p[eé]rgola/i.test(txt)) return null;
+      if (/estor|store|cortin|curtain|blind|shade|screen|veneciana/i.test(txt)) return "e";
+      if (/persian|shutter|roller|rolling/i.test(txt)) return "p";
+      if (["blind", "shade", "curtain"].includes(dc)) return "e";
+      if (["garage", "gate", "door", "damper", "awning"].includes(dc)) return null;
+      return "p"; // shutter, window or no class: in Spain usually a persiana
+    };
+    const excluded = new Set(this._list(this.set_("persianas_excluir")));
+    const all = [...new Set([...P, ...E, ...auto])].filter((e) => this.st(e) && !excluded.has(e));
+    const out = { p: [], e: [] };
+    for (const e of all) {
+      const k = kind(e);
+      if (k) out[k].push(e);
+    }
+    const sort = (x, y) => this.name(x).localeCompare(this.name(y), "es");
+    out.p.sort(sort);
+    out.e.sort(sort);
+    return out;
+  }
+  coverCard(k, list, fem) {
+    if (!list.length) return null;
+    const T = fem ? { one: "Persiana", many: "Persianas", open: "Abierta", closed: "Cerrada", all: "todas", ic: "mdi:window-shutter", icOpen: "mdi:window-shutter-open" } : { one: "Estor", many: "Estores", open: "Abierto", closed: "Cerrado", all: "todos", ic: "mdi:roller-shade-closed", icOpen: "mdi:roller-shade" };
+    const feat = (e) => toNum(this.a(e, "supported_features"), 0);
+    const pos = (e) => toNum(this.a(e, "current_position"));
+    const isOpen = (e) => {
+      const s = this.s(e), p = pos(e);
+      return p !== null ? p > 0 : ["open", "opening"].includes(s);
+    };
+    const open = list.filter(isOpen).length, na = list.filter((e) => ["unavailable", "unknown"].includes(this.s(e))).length;
+    const moving = list.some((e) => ["opening", "closing"].includes(this.s(e)));
+    const svc = (service, ids) => (ids.length ? `data-service="cover.${service}" data-data="${esc(JSON.stringify({ entity_id: ids.length === 1 ? ids[0] : ids }))}"` : "disabled");
+    const can = (bit) => list.filter((e) => feat(e) & bit && !["unavailable", "unknown"].includes(this.s(e)));
+    const c = fem ? C.cyan : C.violet;
+    const allBtns = `<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin:4px 0 6px">
+      <button class="btn full" style="--c:${c}" ${svc("open_cover", can(COVER_OPEN))}>${icon("mdi:arrow-up-bold")}Subir ${T.all}</button>
+      <button class="btn" style="--c:${C.muted}" ${svc("stop_cover", can(COVER_STOP))} title="Parar ${T.all}">${icon("mdi:stop")}</button>
+      <button class="btn full" style="--c:${c}" ${svc("close_cover", can(COVER_CLOSE))}>${icon("mdi:arrow-down-bold")}Bajar ${T.all}</button></div>`;
+    const row = (e) => {
+      const s = this.s(e), p = pos(e), f = feat(e), off = ["unavailable", "unknown"].includes(s);
+      const st = off ? `<span style="color:${C.red}">Sin conexión</span>` : s === "opening" ? `<span class="pulse" style="color:${c}">Subiendo…</span>` : s === "closing" ? `<span class="pulse" style="color:${c}">Bajando…</span>` : p !== null ? (p >= 100 ? T.open : p <= 0 ? T.closed : `${T.open} ${fmt(p, 0)} %`) : s === "open" ? T.open : s === "closed" ? T.closed : esc(s || "—");
+      const b = (bit, service, ic, title) => (f & bit ? `<button class="btn cvs" style="--c:${bit === COVER_STOP ? C.muted : c}" ${off ? "disabled" : svc(service, [e])} title="${title}">${icon(ic)}</button>` : "");
+      const slider = f & COVER_SET_POS && !off ? `<input type="range" min="0" max="100" step="5" value="${p ?? 0}" data-coverpos="${esc(e)}" style="--c:${c};margin:2px 0 4px" aria-label="Posición de ${esc(this.name(e))}">` : "";
+      return `<div class="cov"><div class="ic" style="color:${isOpen(e) ? c : C.muted}">${icon(isOpen(e) ? T.icOpen : T.ic)}</div><div class="grow" data-more="${esc(e)}"><div class="nm">${esc(this.name(e))}</div><div class="l">${st}</div></div><div class="cvb">${b(COVER_OPEN, "open_cover", "mdi:arrow-up", "Subir")}${b(COVER_STOP, "stop_cover", "mdi:stop", "Parar")}${b(COVER_CLOSE, "close_cover", "mdi:arrow-down", "Bajar")}</div></div>${slider}`;
+    };
+    return this.card(k, `<h3>${icon(T.ic)}${T.many}</h3><div class="small muted" style="margin:-4px 0 6px">${open} de ${list.length} ${fem ? "abiertas" : "abiertos"}${moving ? " · en movimiento" : ""}${na ? ` · <span style="color:${C.red}">${na} sin conexión</span>` : ""}</div>${allBtns}<div class="covl">${list.map(row).join("")}</div>`, { c, w: 6, cls: "m12" });
+  }
+
   v_resumen() {
     const { pv, grid, bat, load, soc } = this.live();
     const per = this.period;
@@ -1378,7 +1539,7 @@ class CentroControlPanel extends HTMLElement {
     const crit = probs.filter((p) => p.nivel === "critico").length, warn = probs.filter((p) => p.nivel === "aviso").length;
     const status = crit ? `<span class="pulse" style="color:${C.red}">◉ ${crit} crítico${crit > 1 ? "s" : ""}</span>` : warn ? `<span style="color:${C.amber}">◉ ${warn} aviso${warn > 1 ? "s" : ""}</span>` : `<span style="color:${C.green}">◉ Todo en orden</span>`;
     const now = new Date();
-    const head = this.card("head", `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><div class="muted small">${now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · periodo ${esc(this.S("periodo_tarifario") || "—")} · ${fmt(this.N("precio_actual"), 4)} €/kWh</div><div style="margin-top:4px;font-size:14px">${status}</div></div><div style="text-align:right"><div class="muted small">Autosuficiencia ahora</div><div class="big" style="--c:${C.lime}">${fmt(this.N("autosuficiencia_ahora"), 0)} %</div></div></div>`, { c: C.cyan });
+    const head = this.card("head", `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap"><div><div class="muted small">${now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })} · periodo ${esc(this.S("periodo_tarifario") || "—")} · ${fmt(this.N("precio_actual"), 4)} €/kWh</div><div style="margin-top:4px;font-size:14px">${status}</div></div><div class="autog"><div class="muted small" style="grid-column:1/-1;text-align:center">${icon("mdi:shield-sun")} Autosuficiencia</div><div data-more="${esc(this.id("autosuficiencia_ahora") || "")}">${gauge(this.N("autosuficiencia_ahora"), 0, 100, this.selfColor(this.N("autosuficiencia_ahora")), "Ahora", "%", 118)}</div><div data-more="${esc(this.id("autosuficiencia") || "")}">${gauge(this.N("autosuficiencia"), 0, 100, this.selfColor(this.N("autosuficiencia")), "Hoy", "%", 118)}</div></div></div>`, { c: C.cyan });
     const flow = this.card("flow", this.flowSVG(), { c: C.cyan });
     const kp = [
       this.kpi("k1", null, fmtW(pv), `Solar · ${kwh(this.N("energia_solar"))} hoy`, "mdi:solar-power-variant", C.amber, 6, "solar"),
@@ -1406,9 +1567,12 @@ class CentroControlPanel extends HTMLElement {
     const alerts = this.card("alerts", `<h3>${icon("mdi:alert-decagram")}Alertas</h3>${this.problemsHTML(probs, 3)}`, { c: probs.length ? (crit ? C.red : C.amber) : C.green });
     alerts.cls += " click";
     alerts.attrs = ` data-tab="problemas"`;
+    const cv = this._coverGroups();
+    const home = [this.sunCard(now), this.tempCard(), this.coverCard("cov_p", cv.p, true), this.coverCard("cov_e", cv.e, false)].filter(Boolean);
     return [
       { cls: "w2", cards: [head, flow] },
       { cards: [...kp, this.periodChips("per"), sum] },
+      ...(home.length ? [{ cls: "w2", cards: home }] : []),
       { cards: [alerts, this.chartCard("c24", "Últimas 24 h (W)", C.cyan, { kind: "history", hours: 24, unit: "W", series: this.sources24h(), height: 240 })] },
     ];
   }
@@ -1735,6 +1899,10 @@ class CentroControlPanel extends HTMLElement {
     return cards;
   }
 
+  /** Self-sufficiency colour: red below 25 %, amber below 50 %, lime from there. */
+  selfColor(v) {
+    return v === null ? C.muted : v < 25 ? C.red : v < 50 ? C.amber : C.lime;
+  }
   socDiffColor(d) {
     const warn = toNum(this.set_("diferencia_soc_aviso"), 5), crit = toNum(this.set_("diferencia_soc_critico"), 15);
     return d === null ? C.muted : d >= crit ? C.red : d >= warn ? C.amber : C.green;

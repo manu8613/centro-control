@@ -8,6 +8,15 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.20.0] - 2026-11-23
+
+### Cambiado
+- **Diseño sin huecos muertos**: la cuadrícula ya no reparte las secciones en filas de la misma altura. Cada sección ocupa solo el alto que necesita y las de abajo suben a rellenar el espacio que dejan las más cortas (antes quedaba un hueco bajo ellas y la sección siguiente saltaba a otra fila).
+
+### Añadido
+- **Mover secciones enteras arrastrando**: cada sección tiene ahora un asa ✥ (ratón, dedo o lápiz). Mientras la arrastras se ve una guía con la columna donde caerá su borde izquierdo; al soltar, se queda en esa columna, en el primer hueco libre, y las demás se recolocan. Se guarda por pestaña y dispositivo; si en otro dispositivo hay menos columnas, se ajusta sola. «Restablecer pestaña» lo deshace.
+- **Soltar tarjetas en cualquier parte**: ya no hace falta acertar dentro de otra sección; si sueltas en un espacio libre, la tarjeta va a la sección más cercana, que se resalta mientras arrastras.
+
 ## [2.19.0] - 2026-11-23
 
 ### Añadido

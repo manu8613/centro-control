@@ -1,6 +1,6 @@
 # Estado
 
-Versión publicada: v2.20.0 (v2.20.1 en PR) · Commit de referencia: `4decf1e` · Actualizado: 2026-11-23
+Versión publicada: v2.20.0 (v2.20.1 en PR) · Commit de referencia: `56a72ef` · Actualizado: 2026-11-23
 
 ## Funciona (comprobado)
 - v2.20.1 (PR): corregido el solape momentáneo de secciones en el móvil: el empaquetado se recalcula dentro del `ResizeObserver` (antes de pintar) y 700 ms después de cada refresco. Reproducido en Chrome sin pantalla con iconos que crecen tarde: de 2 fotogramas pintados con solape (236 px) a 0.

@@ -85,6 +85,9 @@ L = {  # key: (label, description or None)
     "enchufes": ("Enchufes del panel", "Vacío = todos los interruptores y enchufes de Home Assistant (se añaden solos los nuevos)."),
     "enchufes_excluir": ("Enchufes o interruptores que no quiero ver", None),
     "patron_exterior": ("Palabras de luces exteriores", "Expresión regular sobre el nombre, p. ej. porche|patio|jardín."),
+    "persianas": ("Persianas del panel", "Vacío = se reconocen solas por el nombre («persiana») o por el tipo de cortina (shutter)."),
+    "estores": ("Estores del panel", "Vacío = se reconocen solos por el nombre («estor», «cortina») o por el tipo (blind, shade, curtain)."),
+    "persianas_excluir": ("Persianas o estores que no quiero ver", "Por ejemplo, la puerta del garaje si sale como cortina."),
     "climas": ("Termostatos", "Vacío = todos."),
     "temperaturas": ("Sensores de temperatura", "Vacío = todos, menos los de la batería e inversor."),
     "humedades": ("Sensores de humedad", "Vacío = todos."),
@@ -228,7 +231,7 @@ SECTIONS = {
     ),
     "gas": ("Gas", ["gas_auto", "gas_lectura", "gas_factor", "gas_coste_hoy", "gas_coste_mes", "gas_factura", "gas_caudal"]),
     "videoportero": ("Videoportero: ventana de llamada", ["timbre_llamadas", "timbre_camara", "timbre_abrir"]),
-    "luces": ("Luces y enchufes", ["luces", "luces_excluir", "enchufes", "enchufes_excluir", "patron_exterior"]),
+    "luces": ("Luces, enchufes, persianas y estores", ["luces", "luces_excluir", "enchufes", "enchufes_excluir", "patron_exterior", "persianas", "estores", "persianas_excluir"]),
     "clima": (
         "Temperaturas",
         [

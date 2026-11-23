@@ -8,6 +8,16 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.19.0] - 2026-11-23
+
+### Añadido
+- Puente de mando: **marcadores de autosuficiencia** de ahora y de hoy (en rojo por debajo del 25 %, ámbar por debajo del 50 % y verde desde ahí). Al tocarlos se abre el historial.
+- Puente de mando: tarjeta **Sol** con la hora de salida y puesta de hoy, horas de luz, cuánto falta para la próxima y el recorrido del sol. Usa `sun.sun` y, cuando su próxima salida o puesta ya es de mañana, la calcula con las coordenadas de Home Assistant (coincide con la de Home Assistant en menos de un minuto). De noche dice a qué hora amanece mañana.
+- Puente de mando: tarjeta **Temperaturas** con la media de casa, la estancia más caliente y la más fría, y la temperatura exterior (la de *Temperatura exterior* en las opciones o, si no hay, la de la entidad del tiempo). Al tocar el título se va a la pestaña Temperaturas.
+- Puente de mando: control de **Persianas** y de **Estores** por separado: subir, parar y bajar todas/todos, y cada una con sus botones y deslizador de posición si lo admite; cuántas están abiertas, en movimiento o sin conexión. Se reconocen solas por el nombre («persiana», «estor», «cortina»…) o por el tipo de cortina de Home Assistant; puertas de garaje, cancelas y toldos se quedan fuera.
+- Opciones → Luces, enchufes, persianas y estores: elegir a mano las persianas, los estores y los que no se quieren ver.
+- Las tarjetas nuevas se pueden mover, redimensionar u ocultar con el modo Diseño, como las demás. Si no hay datos (sin persianas, sin sensores de temperatura…), la tarjeta no sale.
+
 ## [2.18.0] - 2026-11-17
 
 ### Añadido

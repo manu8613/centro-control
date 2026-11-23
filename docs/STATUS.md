@@ -3,7 +3,7 @@
 Versión publicada: v2.19.0 (v2.20.0 en PR) · Commit de referencia: `4decf1e` · Actualizado: 2026-11-23
 
 ## Funciona (comprobado)
-- v2.20.0 (PR): Diseño sin huecos muertos (las secciones se empaquetan en filas de 8 px), arrastrar secciones enteras por su asa ✥ a la columna elegida y soltar tarjetas en cualquier espacio libre (van a la sección más cercana). Probado en Chrome sin pantalla a 1735 px con ratón real y con eventos táctiles simulados; falta en la tablet real.
+- v2.20.0 (PR): Diseño sin huecos muertos (las secciones se empaquetan en filas de 8 px), arrastrar secciones enteras por su asa ✥ a la columna elegida soltar tarjetas en cualquier espacio libre (van a la sección más cercana), crear secciones nuevas de ancho y alto elegidos, marcadores de aguja propios y los de autosuficiencia como tarjetas sueltas. Probado en Chrome sin pantalla a 1735 px con ratón real y con eventos táctiles simulados; falta en la tablet real.
 - v2.19.0: Puente de mando con autosuficiencia, sol, temperaturas, persianas y estores. Falta verlo en la casa real.
 - v2.19.0 (PR): Puente de mando con marcadores de autosuficiencia (ahora y hoy), salida y puesta del sol, temperatura media de casa con máxima y mínima por estancia y la exterior, y control de persianas y estores por separado. Probado con pytest y Chrome sin pantalla (escritorio y móvil, con y sin entidades, botones y deslizador); hora del sol comparada con astral; falta verlo en la casa real.
 - v2.18.0: la pestaña Caldera detecta colisiones del bus eBUS con el Tado (cortes de señal y reinicios de ebusd, confirmados con la conexión del bridge del Tado), avisa por el servicio de notificación y permite hacer pruebas de convivencia por configuración de ebusd. Probado con pytest y Chrome sin pantalla; falta probarlo en la casa real.
@@ -71,5 +71,5 @@ Versión publicada: v2.19.0 (v2.20.0 en PR) · Commit de referencia: `4decf1e` �
 **Centro de Control · feat/diseno-libre · v2.20.0**
 - Objetivo: poder mover secciones y tarjetas del modo Diseño a cualquier hueco para aprovechar el espacio (ejemplo: la sección de Persianas/Estores bajo la S1 y la tarjeta HOY bajo la S3).
 - Cambios: cuadrícula con filas de 8 px y `_pack()` (cada sección ocupa su alto, con `ResizeObserver`); `--sp`/`--cs` para ancho y columna fija de sección; asa ✥ de sección (`_grabStart/_grabMove/_grabEnd`), guía `.secghost`, `_snapCol`, `_dropSec`; `_nearSec` como destino de soltado de tarjetas; `col` en `centro_control_diseno`; README y CHANGELOG.
-- Pruebas: pytest 101 OK; Chrome sin pantalla a 1735 px: sin solapes, arrastre de sección con ratón real (columna y hueco), tarjeta soltada en espacio libre con ratón (HTML5) y con el asa en táctil simulado.
+- Pruebas: pytest 101 OK; Chrome sin pantalla a 1735 px: sin solapes, arrastre de sección con ratón real (columna y hueco), tarjeta soltada en espacio libre con ratón (HTML5) y con el asa en táctil simulado; sección nueva (ancho, alto, borrar) y marcador propio.
 - Pendientes: probar en la tablet real con el dedo; la sección cae en el primer hueco libre de su columna (si hay sitio más arriba, sube); lo que se coloca es por dispositivo y no se comparte entre tablet y PC.

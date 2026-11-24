@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.19.0 (v2.20.0 en PR) · Commit de referencia: `4decf1e` · Actualizado: 2026-11-23
+Versión publicada: v2.20.0 (v2.20.1 en PR) · Commit de referencia: `56a72ef` · Actualizado: 2026-11-23
 
 ## Funciona (comprobado)
+- v2.20.1 (PR): corregido el solape momentáneo de secciones en el móvil: el empaquetado se recalcula dentro del `ResizeObserver` (antes de pintar) y 700 ms después de cada refresco. Reproducido en Chrome sin pantalla con iconos que crecen tarde: de 2 fotogramas pintados con solape (236 px) a 0.
 - v2.20.0 (PR): Diseño sin huecos muertos (las secciones se empaquetan en filas de 8 px), arrastrar secciones enteras por su asa ✥ a la columna elegida soltar tarjetas en cualquier espacio libre (van a la sección más cercana), crear secciones nuevas de ancho y alto elegidos, marcadores de aguja propios y los de autosuficiencia como tarjetas sueltas. Probado en Chrome sin pantalla a 1735 px con ratón real y con eventos táctiles simulados; falta en la tablet real.
 - v2.19.0: Puente de mando con autosuficiencia, sol, temperaturas, persianas y estores. Falta verlo en la casa real.
 - v2.19.0 (PR): Puente de mando con marcadores de autosuficiencia (ahora y hoy), salida y puesta del sol, temperatura media de casa con máxima y mínima por estancia y la exterior, y control de persianas y estores por separado. Probado con pytest y Chrome sin pantalla (escritorio y móvil, con y sin entidades, botones y deslizador); hora del sol comparada con astral; falta verlo en la casa real.

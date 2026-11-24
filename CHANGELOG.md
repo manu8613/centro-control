@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.20.1] - 2026-11-23
+
+### Corregido
+- En el móvil, al crecer una sección (por ejemplo cuando terminan de cargar los iconos o la fuente), la siguiente se montaba un instante encima y se recolocaba medio segundo después. Ahora el empaquetado se recalcula en el mismo fotograma en que cambia el tamaño, antes de pintar, y otra vez 700 ms después de cada refresco.
+
 ## [2.20.0] - 2026-11-23
 
 ### Cambiado

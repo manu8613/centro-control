@@ -208,3 +208,25 @@ async def test_irradiance_source_is_respected(hass: HomeAssistant, freezer, aioc
     state = _sensor(hass, entry, "S1_rendimiento_string")
     assert state.attributes["fuente"] == fuente
     assert state.attributes["estado"].startswith(estado)
+
+
+async def test_siar_error_in_latin1_is_readable(hass: HomeAssistant, freezer, aioclient_mock) -> None:
+    from custom_components.centro_control.siar import SIAR_KEY_URLS
+
+    freezer.move_to("2026-06-10 11:00:00+02:00")
+    body = '{"Datos": null, "MensajeRespuesta": "Clave API no válida"}'.encode("cp1252")
+    aioclient_mock.get(f"{SIAR_KEY_URLS[0]}/Datos/Horarios/Estacion", status=403, content=body)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Casa",
+        data={},
+        options={**_entry(STRING).options, "siar_estacion": "xx01", "siar_clave_api": "k" * 50, "irradiancia_fuente": "siar"},
+        subentries_data=[{"subentry_id": "S1", "subentry_type": "string", "title": "Tejado", "unique_id": None, "data": {**STRING, "inclinacion": 30, "orientacion": 180}}],
+    )
+    await _setup(hass, entry)
+    freezer.tick(timedelta(seconds=10))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    error = _sensor(hass, entry, "rendimiento_solar_siar").attributes["error"]
+    assert error == "HTTP 403: Clave API no válida"
+    assert not any("mapama" in str(c[1]) for c in aioclient_mock.mock_calls)  # a real answer: the old host is not tried

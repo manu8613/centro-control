@@ -34,7 +34,7 @@ Versión publicada: v2.20.0 (v2.20.1 y v2.21.0 en PR) · Commit de referencia: `
 - Nada.
 
 ## Pendiente / por verificar
-- SiAR (v2.21.0): probado solo contra respuestas simuladas según los manuales de la API (clave API: `HoraMin`, `Fecha` ISO, `MensajeRespuesta`); falta con una clave real (servidor que responde, retraso con el que publica la estación y límites de la clave).
+- SiAR (v2.21.0): en la casa real la API respondió en Latin-1 y fallaba al leerla (corregido); falta ver el mensaje real que da. Antes, probado solo contra respuestas simuladas según los manuales de la API (clave API: `HoraMin`, `Fecha` ISO, `MensajeRespuesta`); falta con una clave real (servidor que responde, retraso con el que publica la estación y límites de la clave).
 - Rendimiento real (v2.21.0): comparar unos días despejados con la producción real; si Open-Meteo se queda corto o largo en esta zona, valorar un sensor de irradiancia propio.
 - Dependabot añadido en este cambio: revisar los primeros PR que abra.
 
@@ -75,5 +75,5 @@ Versión publicada: v2.20.0 (v2.20.1 y v2.21.0 en PR) · Commit de referencia: `
 **Centro de Control · feat/rendimiento-real-strings · v2.21.0**
 - Objetivo: indicador del % de rendimiento real de los paneles por string cruzando su producción, la temperatura exterior y la ficha técnica, en el panel y como entidades de HA.
 - Cambios: `efficiency.py` (modelo NOCT, potencia esperada, eficiencia de conversión, Open-Meteo `minutely_15` con `global_tilted_irradiance_instant`); campos nuevos del string (`inclinacion`, `orientacion`, `coef_temp_pmax`, `noct`, `eficiencia_modulo`, `degradacion`, `irradiancia`); `_update_efficiency`/`_fetch_irradiance` en `manager.py` con contadores `fv_real_*`/`fv_esp_*`; sensores `rendimiento_string`, `rendimiento_solar`, `rendimiento_solar_hoy`; `effCards()` en la pestaña Solar; `siar.py` (lectura de la API, hora de la estación, sol y transposición Erbs + Hay-Davies), tramos de 30 min por string y `rendimiento_solar_siar`; credenciales fuera del panel y ocultas en exportaciones; opción `irradiancia_fuente` y modo `ClaveAPI` (`_siar_by_key`).
-- Pruebas: pytest 136 OK (35 nuevas, con Open-Meteo y SiAR simulados, clave API y las cuatro fuentes de irradiancia); Chrome sin pantalla en escritorio y móvil con dos strings, sin errores de consola.
+- Pruebas: pytest 138 OK (37 nuevas, con Open-Meteo y SiAR simulados, clave API y las cuatro fuentes de irradiancia); Chrome sin pantalla en escritorio y móvil con dos strings, sin errores de consola.
 - Pendientes: verlo en la casa real; con Open-Meteo el valor instantáneo con nubes es orientativo; el recorte del inversor se deduce (batería ≥ 97 %, sin cargar ni verter), no se lee.

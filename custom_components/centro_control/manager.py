@@ -917,7 +917,8 @@ class CentroManager(DataUpdateCoordinator[None]):
         session = async_get_clientsession(self.hass)
         async with asyncio.timeout(30):
             response = await session.get(f"{base}/{path}", params=params)
-            text = await response.text()
+            # SiAR answers in Windows-1252/Latin-1 (e.g. "válida"), not always in UTF-8
+            text = siar.decode(await response.read(), response.charset)
         try:
             payload: Any = json.loads(text)
         except ValueError:

@@ -44,6 +44,18 @@ SOLAR_CONSTANT = 1367.0
 # --------------------------------------------------------------------- API answers
 
 
+def decode(raw: bytes, charset: str | None = None) -> str:
+    """Text of an answer: the declared charset, else UTF-8, else Windows-1252 (never fails)."""
+    for encoding in (charset, "utf-8", "cp1252"):
+        if not encoding:
+            continue
+        try:
+            return raw.decode(encoding)
+        except (LookupError, UnicodeDecodeError):
+            continue
+    return raw.decode("latin-1")
+
+
 def text_of(payload: Any) -> str:
     """The string inside an API answer (plain JSON string, or the first string value of an object)."""
     if isinstance(payload, str):

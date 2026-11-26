@@ -15,7 +15,7 @@ NAME: Final = "Centro de Control"
 AUTHOR: Final = "manu8613"
 AUTHOR_URL: Final = "https://github.com/manu8613"
 REPO_URL: Final = "https://github.com/manu8613/centro-control"
-VERSION: Final = "2.20.1"
+VERSION: Final = "2.21.0"
 
 DEFAULT_TITLE: Final = "Centro de Control"
 DASHBOARD_URL: Final = "centro-control"
@@ -27,6 +27,11 @@ SAVE_DELAY: Final = 60
 
 TICK: Final = timedelta(seconds=10)
 PROBLEMS_TICK: Final = timedelta(seconds=30)
+IRRADIANCE_REFRESH: Final = 600  # s, Open-Meteo gives 15-min data
+IRRADIANCE_RETRY: Final = 120  # s after a failed request
+SIAR_REFRESH: Final = 1800  # s, SiAR records are half-hourly
+SIAR_RETRY: Final = 600  # s after a failed request
+SIAR_TOKEN_TTL: Final = 6 * 3600  # s, ask for a new token from time to time
 MAX_INTEGRATION_GAP: Final = 120.0  # s; longer gaps are not integrated
 HISTORY_DAYS: Final = 800
 ATTR_HISTORY_DAYS: Final = 62
@@ -139,6 +144,18 @@ CONF_TEMPERATURES: Final = "temperaturas"
 CONF_HUMIDITIES: Final = "humedades"
 CONF_CLIMATES: Final = "climas"
 CONF_OUTDOOR_TEMP: Final = "temperatura_exterior"
+CONF_SIAR_STATION: Final = "siar_estacion"
+CONF_SIAR_USER: Final = "siar_usuario"
+CONF_SIAR_PASSWORD: Final = "siar_clave"
+CONF_SIAR_KEY: Final = "siar_clave_api"
+CONF_IRR_SOURCE: Final = "irradiancia_fuente"
+IRR_AUTO: Final = "auto"
+IRR_OPEN_METEO: Final = "open_meteo"
+IRR_SIAR: Final = "siar"
+IRR_SENSOR: Final = "sensor"
+IRR_SOURCES: Final = (IRR_AUTO, IRR_OPEN_METEO, IRR_SIAR, IRR_SENSOR)
+SECRET_KEYS: Final = (CONF_SIAR_USER, CONF_SIAR_PASSWORD, CONF_SIAR_KEY)  # never sent to the panel; hidden in exports
+REDACTED: Final = "**********"
 CONF_TEMP_EXCLUDE_PATTERN: Final = "patron_excluir_temperaturas"
 CONF_TEMP_MAX: Final = "temperatura_max"
 CONF_TEMP_MIN: Final = "temperatura_min"
@@ -184,6 +201,13 @@ CONF_VOLTAGE: Final = "tension"
 CONF_CURRENT: Final = "corriente"
 CONF_PEAK: Final = "pico_wp"
 CONF_GROUP: Final = "grupo"
+CONF_TILT: Final = "inclinacion"
+CONF_AZIMUTH: Final = "orientacion"
+CONF_GAMMA: Final = "coef_temp_pmax"
+CONF_NOCT: Final = "noct"
+CONF_MODULE_EFF: Final = "eficiencia_modulo"
+CONF_DEGRADATION: Final = "degradacion"
+CONF_IRRADIANCE: Final = "irradiancia"
 CONF_SOC: Final = "soc"
 CONF_BATTERY_SIGN: Final = "signo"
 BAT_POSITIVE_DISCHARGE: Final = "positivo_descarga"
@@ -253,6 +277,7 @@ DEFAULTS: Final[dict[str, object]] = {
     CONF_CO2_TREE: 22.0,
     CONF_CO2_CAR: 0.12,
     CONF_STRING_TOLERANCE: 30.0,
+    CONF_IRR_SOURCE: IRR_AUTO,
     CONF_CELL_DELTA_WARN: 0.05,
     CONF_CELL_DELTA_CRIT: 0.10,
     CONF_CELL_MIN: 2.90,

@@ -101,7 +101,12 @@
           "inversor_fallo": "Fallo del inversor",
           "inversor_alarma": "Alarma del inversor",
           "meteo_entidad": "Entidad del tiempo (nubosidad)",
-          "consumo_diurno_pct": "Consumo entre 08:00 y 00:00"
+          "consumo_diurno_pct": "Consumo entre 08:00 y 00:00",
+          "siar_estacion": "SiAR station",
+          "siar_usuario": "SiAR user (REGEUS NIF)",
+          "siar_clave": "SiAR password",
+          "irradiancia_fuente": "Irradiance source",
+          "siar_clave_api": "SiAR API key"
         },
         "data_description": {
           "solar_potencia": "Si lo dejas vacío se suman los strings.",
@@ -110,7 +115,11 @@
           "solar_prevision_manana": "Opcional, p. ej. de Forecast.Solar o Solcast. Si no, se estima con la nubosidad.",
           "solar_pico_wp": "0 = suma de los strings.",
           "meteo_entidad": "Una entidad «weather» con previsión diaria; mejor si incluye cloud_coverage (Open-Meteo, Met.no…).",
-          "consumo_diurno_pct": "Parte del consumo diario que ocurre de 08:00 a 00:00 (por defecto 85 %). Sirve para la recomendación de carga por red."
+          "consumo_diurno_pct": "Parte del consumo diario que ocurre de 08:00 a 00:00 (por defecto 85 %). Sirve para la recomendación de carga por red.",
+          "siar_estacion": "Code of the nearest agroclimatic station (e.g. AB02). Its measured irradiance gives the measured efficiency per half hour and per day.",
+          "siar_usuario": "REGEUS account with API access requested in “Mi SiAR”. Never shown in the panel or exports.",
+          "irradiancia_fuente": "Where the irradiance for the real efficiency comes from. Automatic: the string's sensor if it has one, else Open-Meteo (SiAR is also used for the measured efficiency). SiAR: the last half-hour mean measured by the station.",
+          "siar_clave_api": "50-character key sent by SiAR by e-mail. With it, user and password are not needed. Never shown in the panel or exports."
         }
       },
       "deye": {
@@ -314,11 +323,25 @@
             "corriente": "Corriente",
             "energia": "Energía (contador)",
             "pico_wp": "Potencia pico (Wp)",
-            "grupo": "Grupo"
+            "grupo": "Grupo",
+            "inclinacion": "Tilt (°)",
+            "orientacion": "Azimuth (°)",
+            "coef_temp_pmax": "Pmax temperature coefficient (%/°C)",
+            "noct": "NOCT (°C)",
+            "eficiencia_modulo": "Module efficiency (%)",
+            "degradacion": "Degradation (%)",
+            "irradiancia": "Irradiance (sensor, optional)"
           },
           "data_description": {
             "potencia": "Sensor en W o kW.",
-            "energia": "Opcional. Si no, se integra la potencia."
+            "energia": "Opcional. Si no, se integra la potencia.",
+            "inclinacion": "For the real efficiency. 0 = flat, 90 = vertical.",
+            "orientacion": "Compass: 90 = east, 180 = south, 270 = west.",
+            "coef_temp_pmax": "From the datasheet, negative (e.g. -0.26). Default -0.30.",
+            "noct": "Cell temperature at 800 W/m² and 20 °C. Default 45.",
+            "eficiencia_modulo": "From the datasheet (STC). Default 21.",
+            "degradacion": "Age loss already expected by the warranty (e.g. 1 the first year). Default 0.",
+            "irradiancia": "W/m² on the plane of the panels. Without it, Open-Meteo is used with tilt and azimuth."
           },
           "description": "Cada string o MPPT del inversor. Los strings del mismo **grupo** (misma orientación) se comparan entre sí para detectar sombras o fallos."
         },
@@ -331,11 +354,25 @@
             "corriente": "Corriente",
             "energia": "Energía (contador)",
             "pico_wp": "Potencia pico (Wp)",
-            "grupo": "Grupo"
+            "grupo": "Grupo",
+            "inclinacion": "Tilt (°)",
+            "orientacion": "Azimuth (°)",
+            "coef_temp_pmax": "Pmax temperature coefficient (%/°C)",
+            "noct": "NOCT (°C)",
+            "eficiencia_modulo": "Module efficiency (%)",
+            "degradacion": "Degradation (%)",
+            "irradiancia": "Irradiance (sensor, optional)"
           },
           "data_description": {
             "potencia": "Sensor en W o kW.",
-            "energia": "Opcional. Si no, se integra la potencia."
+            "energia": "Opcional. Si no, se integra la potencia.",
+            "inclinacion": "For the real efficiency. 0 = flat, 90 = vertical.",
+            "orientacion": "Compass: 90 = east, 180 = south, 270 = west.",
+            "coef_temp_pmax": "From the datasheet, negative (e.g. -0.26). Default -0.30.",
+            "noct": "Cell temperature at 800 W/m² and 20 °C. Default 45.",
+            "eficiencia_modulo": "From the datasheet (STC). Default 21.",
+            "degradacion": "Age loss already expected by the warranty (e.g. 1 the first year). Default 0.",
+            "irradiancia": "W/m² on the plane of the panels. Without it, Open-Meteo is used with tilt and azimuth."
           },
           "description": "Cada string o MPPT del inversor. Los strings del mismo **grupo** (misma orientación) se comparan entre sí para detectar sombras o fallos."
         }
@@ -540,6 +577,14 @@
         "positivo_descarga": "Positivo = descargando",
         "positivo_carga": "Positivo = cargando"
       }
+    },
+    "irradiancia_fuente": {
+      "options": {
+        "auto": "Automatic (sensor, else Open-Meteo)",
+        "open_meteo": "Open-Meteo (modelled, every 15 min)",
+        "siar": "SiAR station (measured, 30-min mean)",
+        "sensor": "String irradiance sensor"
+      }
     }
   },
   "entity": {
@@ -672,6 +717,18 @@
       },
       "riego_restante": {
         "name": "Tiempo restante"
+      },
+      "rendimiento_string": {
+        "name": "Real efficiency"
+      },
+      "rendimiento_solar": {
+        "name": "Real panel efficiency"
+      },
+      "rendimiento_solar_hoy": {
+        "name": "Real panel efficiency today"
+      },
+      "rendimiento_solar_siar": {
+        "name": "Measured efficiency yesterday (SiAR)"
       }
     },
     "binary_sensor": {

@@ -8,6 +8,16 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.21.0] - 2026-11-26
+
+### Añadido
+- **Rendimiento real de los paneles**: cada string puede llevar ahora su inclinación, orientación y los datos de la ficha técnica (coeficiente de temperatura de Pmax, NOCT, eficiencia del módulo y degradación). Con la potencia del string, la temperatura exterior y la irradiancia en el plano de los paneles (de un sensor propio o de Open-Meteo cada 10 min, sin clave) se calcula la temperatura de la célula, la potencia que debería dar según la ficha y el **% real**, además de la eficiencia de conversión para compararla con la de la ficha.
+- Sensores nuevos: «Rendimiento real» en cada string (con irradiancia, temperatura de célula, potencia esperada, conversión y rendimiento de hoy, mes y año en los atributos), «Rendimiento real de los paneles» (ahora) y «… hoy» (ponderado por energía). Se pueden poner en cualquier pestaña con «Añadir» del modo Diseño.
+- **Irradiancia medida de una estación SiAR** (Configurar → Solar: estación, usuario y contraseña de REGEUS con acceso a la API): cada 30 min descarga las medias semihorarias de radiación y temperatura de la estación, las pasa al plano de cada string y da el **rendimiento medido** por media hora, hoy, ayer, mes y año (sensor «Rendimiento medido ayer (SiAR)»). Detecta sola si la estación da la hora en UTC o en hora local. Las credenciales no llegan al panel y salen ocultas (`**********`) en las exportaciones; al importar una exportación se conservan las guardadas.
+- SiAR con **clave API** (la de 50 caracteres que manda SiAR por correo), sin usuario ni contraseña; prueba el servidor nuevo del ministerio y, si no responde, el antiguo.
+- **Fuente de la irradiancia configurable** (Configurar → Solar): automática, Open-Meteo, estación SiAR o sensor del string. Con SiAR, el rendimiento «ahora» es el de la última media hora medida (se indica cuál) y el de hoy, mes y año sale de la irradiancia medida.
+- Pestaña Solar: sección **Rendimiento real** con marcador de aguja, el de hoy, el medido con SiAR, una tarjeta por string y la gráfica de 24 h.
+
 ## [2.20.1] - 2026-11-23
 
 ### Corregido

@@ -95,6 +95,26 @@ def _strings(m: CentroManager) -> dict[str, Any]:
     }
 
 
+def _efficiency_attrs(m: CentroManager) -> dict[str, Any]:
+    e = m.efficiency
+    return {
+        "rendimiento_hoy_pct": e.get("rendimiento_hoy_pct"),
+        "posible_recorte": e.get("posible_recorte"),
+        "error_irradiancia": e.get("error_irradiancia") or None,
+        "strings": [{"id": sid, **v} for sid, v in e.get("strings", {}).items()],
+    }
+
+
+def _siar_attrs(m: CentroManager) -> dict[str, Any]:
+    keys = ("siar_hoy_pct", "siar_ayer_pct", "siar_mes_pct", "siar_ano_pct", "siar_tramo", "siar_tramo_pct", "siar_tramo_wm2")
+    return {
+        **m.efficiency.get("siar", {}),
+        "strings": [
+            {"id": sid, "nombre": v.get("nombre"), **{k: v.get(k) for k in keys}} for sid, v in m.efficiency.get("strings", {}).items()
+        ],
+    }
+
+
 def _batteries(m: CentroManager) -> dict[str, Any]:
     return {
         "baterias": [{"id": bid, **b} for bid, b in m.live.get("batteries", {}).items()],
@@ -262,6 +282,31 @@ def _money(key: str, metric: str) -> CentroSensorDescription:
 MAIN: tuple[CentroSensorDescription, ...] = (
     # ------------------------------------------------------------- live power
     _power("potencia_solar", "pv_w", attrs=_strings),
+    CentroSensorDescription(
+        key="rendimiento_solar",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:solar-panel-large",
+        value=lambda m: m.efficiency.get("rendimiento_pct"),
+        attrs=_efficiency_attrs,
+    ),
+    CentroSensorDescription(
+        key="rendimiento_solar_hoy",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:solar-panel",
+        value=lambda m: m.efficiency.get("rendimiento_hoy_pct"),
+    ),
+    CentroSensorDescription(
+        key="rendimiento_solar_siar",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+        icon="mdi:weather-sunny",
+        value=lambda m: m.efficiency.get("siar", {}).get("siar_ayer_pct"),
+        attrs=_siar_attrs,
+    ),
     _power("potencia_red", "grid_w"),
     _power("potencia_importada", "import_w"),
     _power("potencia_exportada", "export_w"),
@@ -478,7 +523,10 @@ async def async_setup_entry(
     async_add_entities(CentroSensor(manager, d) for d in MAIN)
     for sub_id, sub in entry.subentries.items():
         if sub.subentry_type == SUB_STRING:
-            async_add_entities([StringEnergy(manager, sub_id, sub.title)], config_subentry_id=sub_id)
+            async_add_entities(
+                [StringEnergy(manager, sub_id, sub.title), StringEfficiency(manager, sub_id, sub.title)],
+                config_subentry_id=sub_id,
+            )
         elif sub.subentry_type == SUB_CIRCUIT:
             async_add_entities([CircuitEnergy(manager, sub_id, sub.title)], config_subentry_id=sub_id)
         elif sub.subentry_type == SUB_ZONE:
@@ -529,6 +577,32 @@ class _SubEnergy(CentroEntity, SensorEntity):
 
 class StringEnergy(_SubEnergy):
     PREFIX, KEY, LIVE, MODEL = "string", "energia_string", "strings", "String fotovoltaico"
+
+
+class StringEfficiency(CentroEntity, SensorEntity):
+    """Real efficiency of one string against its datasheet (% of the expected power)."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+    _attr_icon = "mdi:solar-panel-large"
+
+    def __init__(self, manager: CentroManager, sub_id: str, title: str) -> None:
+        super().__init__(manager, "rendimiento_string", sub_id, title, "String fotovoltaico")
+
+    def _data(self) -> dict[str, Any]:
+        return self.coordinator.efficiency.get("strings", {}).get(self.subentry_id or "", {})
+
+    @property
+    def native_value(self) -> StateType:
+        return self._data().get("rendimiento_pct")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self._data()
+        if not data:
+            return {"estado": "faltan inclinación y orientación (o un sensor de irradiancia) en el string"}
+        return {k: v for k, v in data.items() if k not in ("nombre", "rendimiento_pct")}
 
 
 class CircuitEnergy(_SubEnergy):

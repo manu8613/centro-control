@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.20.0 (v2.20.1 en PR) · Commit de referencia: `56a72ef` · Actualizado: 2026-11-23
+Versión publicada: v2.20.0 (v2.20.1 y v2.21.0 en PR) · Commit de referencia: `efc0bb5` · Actualizado: 2026-11-26
 
 ## Funciona (comprobado)
+- v2.21.0 (PR): rendimiento real de cada string frente a su ficha técnica (irradiancia de sensor u Open-Meteo, temperatura exterior, NOCT y coeficiente de Pmax), sensores por string y globales, y sección en la pestaña Solar; además, rendimiento medido con la irradiancia de una estación SiAR (clave API o token de REGEUS) y fuente de irradiancia configurable (automática, Open-Meteo, SiAR o sensor). Probado con pytest (con Open-Meteo y SiAR simulados) y en Chrome sin pantalla con dos strings; falta verlo en la casa real con días despejados.
 - v2.20.1 (PR): corregido el solape momentáneo de secciones en el móvil: el empaquetado se recalcula dentro del `ResizeObserver` (antes de pintar) y 700 ms después de cada refresco. Reproducido en Chrome sin pantalla con iconos que crecen tarde: de 2 fotogramas pintados con solape (236 px) a 0.
 - v2.20.0 (PR): Diseño sin huecos muertos (las secciones se empaquetan en filas de 8 px), arrastrar secciones enteras por su asa ✥ a la columna elegida soltar tarjetas en cualquier espacio libre (van a la sección más cercana), crear secciones nuevas de ancho y alto elegidos, marcadores de aguja propios y los de autosuficiencia como tarjetas sueltas. Probado en Chrome sin pantalla a 1735 px con ratón real y con eventos táctiles simulados; falta en la tablet real.
 - v2.19.0: Puente de mando con autosuficiencia, sol, temperaturas, persianas y estores. Falta verlo en la casa real.
@@ -33,16 +34,12 @@ Versión publicada: v2.20.0 (v2.20.1 en PR) · Commit de referencia: `56a72ef` �
 - Nada.
 
 ## Pendiente / por verificar
+- SiAR (v2.21.0): probado solo contra respuestas simuladas según los manuales de la API (clave API: `HoraMin`, `Fecha` ISO, `MensajeRespuesta`); falta con una clave real (servidor que responde, retraso con el que publica la estación y límites de la clave).
+- Rendimiento real (v2.21.0): comparar unos días despejados con la producción real; si Open-Meteo se queda corto o largo en esta zona, valorar un sensor de irradiancia propio.
 - Dependabot añadido en este cambio: revisar los primeros PR que abra.
 
 ## Últimos cierres
 <!-- Pegar aquí el bloque CIERRE de cada tarea (ver CLAUDE.md). Conservar solo los 5 últimos. -->
-
-**Centro de Control · feat/diseno-personalizable · v2.15.0**
-- Objetivo: diseño totalmente personalizable: mover tarjetas, gráficas y títulos donde se quiera (también con el dedo) y añadir indicadores y gráficas propios a la pantalla principal.
-- Cambios: asa ✥ con eventos de puntero (`_grabStart/_grabMove/_grabEnd`), `_dropAt` común a ratón y dedo, `hide` y `custom` en `centro_control_diseno`, diálogo «Añadir» (`_addOpen/_addOk`), `_customCards`; títulos movibles; corregido el resaltado del botón Diseño.
-- Pruebas: pytest en verde; Chrome sin pantalla con toques simulados (arrastrar tarjeta y título, ocultar, añadir indicador y gráfica, recargar, restablecer, eliminar).
-- Pendientes: probar en la tablet real; los botones de dentro de una tarjeta se mueven con su tarjeta, no sueltos; lo añadido se guarda por dispositivo (no se comparte entre tablet y PC).
 
 **Centro de Control · feat/pestana-caldera · v2.16.0**
 - Objetivo: pestaña Caldera con los datos de ebusd: indicadores de aguja, gráficas, marcadores y comprobación del ciclo de quemado con aviso y alerta de peligro.
@@ -68,9 +65,15 @@ Versión publicada: v2.20.0 (v2.20.1 en PR) · Commit de referencia: `56a72ef` �
 - Pruebas: pytest 101 OK; Chrome sin pantalla en escritorio y móvil con persianas, estores, garaje y toldo (excluidos), sin entidades opcionales; llamadas a `cover.open_cover`, `close_cover` y `set_cover_position` comprobadas; sol frente a astral (< 1 min).
 - Pendientes: verlo en la casa real; `scripts/make_translations.py` está desfasado frente a los JSON (no incluye lo de la v2.18.0), por eso las traducciones se han tocado a mano; el panel clásico (Lovelace) no tiene estas tarjetas.
 
-## Último cierre
 **Centro de Control · feat/diseno-libre · v2.20.0**
 - Objetivo: poder mover secciones y tarjetas del modo Diseño a cualquier hueco para aprovechar el espacio (ejemplo: la sección de Persianas/Estores bajo la S1 y la tarjeta HOY bajo la S3).
 - Cambios: cuadrícula con filas de 8 px y `_pack()` (cada sección ocupa su alto, con `ResizeObserver`); `--sp`/`--cs` para ancho y columna fija de sección; asa ✥ de sección (`_grabStart/_grabMove/_grabEnd`), guía `.secghost`, `_snapCol`, `_dropSec`; `_nearSec` como destino de soltado de tarjetas; `col` en `centro_control_diseno`; README y CHANGELOG.
 - Pruebas: pytest 101 OK; Chrome sin pantalla a 1735 px: sin solapes, arrastre de sección con ratón real (columna y hueco), tarjeta soltada en espacio libre con ratón (HTML5) y con el asa en táctil simulado; sección nueva (ancho, alto, borrar) y marcador propio.
 - Pendientes: probar en la tablet real con el dedo; la sección cae en el primer hueco libre de su columna (si hay sitio más arriba, sube); lo que se coloca es por dispositivo y no se comparte entre tablet y PC.
+
+## Último cierre
+**Centro de Control · feat/rendimiento-real-strings · v2.21.0**
+- Objetivo: indicador del % de rendimiento real de los paneles por string cruzando su producción, la temperatura exterior y la ficha técnica, en el panel y como entidades de HA.
+- Cambios: `efficiency.py` (modelo NOCT, potencia esperada, eficiencia de conversión, Open-Meteo `minutely_15` con `global_tilted_irradiance_instant`); campos nuevos del string (`inclinacion`, `orientacion`, `coef_temp_pmax`, `noct`, `eficiencia_modulo`, `degradacion`, `irradiancia`); `_update_efficiency`/`_fetch_irradiance` en `manager.py` con contadores `fv_real_*`/`fv_esp_*`; sensores `rendimiento_string`, `rendimiento_solar`, `rendimiento_solar_hoy`; `effCards()` en la pestaña Solar; `siar.py` (lectura de la API, hora de la estación, sol y transposición Erbs + Hay-Davies), tramos de 30 min por string y `rendimiento_solar_siar`; credenciales fuera del panel y ocultas en exportaciones; opción `irradiancia_fuente` y modo `ClaveAPI` (`_siar_by_key`).
+- Pruebas: pytest 136 OK (35 nuevas, con Open-Meteo y SiAR simulados, clave API y las cuatro fuentes de irradiancia); Chrome sin pantalla en escritorio y móvil con dos strings, sin errores de consola.
+- Pendientes: verlo en la casa real; con Open-Meteo el valor instantáneo con nubes es orientativo; el recorte del inversor se deduce (batería ≥ 97 %, sin cargar ni verter), no se lee.

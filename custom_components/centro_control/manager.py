@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import asyncio
+from datetime import UTC, datetime, timedelta
+import json
 import logging
 import re
 import time
@@ -14,6 +16,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -23,6 +26,8 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
+from . import efficiency as eff
+from . import siar
 from .const import (
     ATTR_HISTORY_DAYS,
     CONF_BILLING_DAY,
@@ -30,10 +35,10 @@ from .const import (
     CONF_CO2_FACTOR,
     CONF_CO2_GAS,
     CONF_CO2_SENSOR,
-    CONF_DAY_SHARE,
     CONF_CO2_TREE,
     CONF_CONTRACTED_P1,
     CONF_CONTRACTED_P2,
+    CONF_DAY_SHARE,
     CONF_ELECTRICITY_TAX,
     CONF_EXPORT_CAP,
     CONF_EXPORT_MODE,
@@ -69,16 +74,30 @@ from .const import (
     CONF_PV_FORECAST_TOMORROW,
     CONF_PV_POWER,
     CONF_RAIN_SENSOR,
+    CONF_IRR_SOURCE,
+    CONF_SIAR_KEY,
+    CONF_SIAR_PASSWORD,
+    CONF_SIAR_STATION,
+    CONF_SIAR_USER,
     CONF_SOC_MIN,
     CONF_VAT,
     CONF_WEATHER,
     DOMAIN,
     HISTORY_DAYS,
+    IRRADIANCE_REFRESH,
+    IRR_AUTO,
+    IRR_OPEN_METEO,
+    IRR_SENSOR,
+    IRR_SIAR,
+    IRRADIANCE_RETRY,
     LEVELS,
     MAX_INTEGRATION_GAP,
     PERIODS,
     PROBLEMS_TICK,
     SAVE_DELAY,
+    SIAR_REFRESH,
+    SIAR_RETRY,
+    SIAR_TOKEN_TTL,
     STORAGE_MINOR_VERSION,
     STORAGE_VERSION,
     TICK,
@@ -265,6 +284,13 @@ SIM_DEFAULTS: dict[str, float] = {
 }
 
 
+SIAR_FRESH = 2 * 3600  # s, a measured half hour older than this is not shown as "now"
+
+
+def _hhmm(ts: float) -> str:
+    return dt_util.as_local(datetime.fromtimestamp(ts, UTC)).strftime("%H:%M")
+
+
 def _float(state: State | None) -> float | None:
     if state is None or state.state in BAD:
         return None
@@ -318,6 +344,25 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._forecast_at = 0.0
         self._forced_close: dict[str, float] = {}
         self.imported = False
+        self.efficiency: dict[str, Any] = {}
+        self._irr_rows: dict[tuple[float, float], list[tuple[float, float | None, float | None]]] = {}
+        self._irr_at = 0.0
+        self._irr_busy = False
+        self._irr_error = ""
+        self._eff_last: dict[str, float] = {}
+        # SiAR: measured irradiance per half hour, power per half hour and measured efficiency per day
+        self.siar_rows: dict[str, tuple[float | None, float | None]] = {}  # "YYYY-MM-DD HHMM" -> (GHI, °C)
+        self.siar_offset: int | None = None
+        self.siar_info: dict[str, Any] = {}
+        self.siar_eval: dict[str, dict[str, Any]] = {}
+        self.siar_days: dict[str, dict[str, list[float]]] = {}  # day -> string id -> [kWh real, kWh expected]
+        self._slots: dict[str, dict[int, list[float]]] = {}
+        self._siar_token = ""
+        self._siar_token_at = 0.0
+        self._siar_at = 0.0
+        self._siar_busy = False
+        self._siar_eval_at = 0.0
+        self.siar_last: dict[str, tuple[float, float, float, float]] = {}  # string id -> (slot start, W, W/m² on the plane, °C)
 
     # ================================================================ setup
     @property
@@ -357,6 +402,11 @@ class CentroManager(DataUpdateCoordinator[None]):
         self.period = data.get("period", "hoy") if data.get("period") in PERIODS else "hoy"
         self.sim.update({k: float(v) for k, v in data.get("sim", {}).items() if k in SIM_DEFAULTS})
         self.imported = bool(data.get("imported", False))
+        saved = data.get("siar") or {}
+        self.siar_days = {d: {k: [float(x) for x in v] for k, v in per.items()} for d, per in (saved.get("dias") or {}).items()}
+        self._slots = {sid: {int(k): [float(x) for x in v] for k, v in slots.items()} for sid, slots in (saved.get("tramos") or {}).items()}
+        self.siar_rows = {k: (v[0], v[1]) for k, v in (saved.get("filas") or {}).items() if isinstance(v, list) and len(v) == 2}
+        self.siar_offset = saved.get("desfase")
         self.gas_entities = self._find_gas_tur()
 
     def _data_to_save(self) -> dict[str, Any]:
@@ -372,6 +422,12 @@ class CentroManager(DataUpdateCoordinator[None]):
             "period": self.period,
             "sim": self.sim,
             "imported": self.imported,
+            "siar": {
+                "dias": self.siar_days,
+                "tramos": {sid: {str(k): v for k, v in slots.items()} for sid, slots in self._slots.items()},
+                "filas": {k: list(v) for k, v in self.siar_rows.items()},
+                "desfase": self.siar_offset,
+            },
         }
 
     @callback
@@ -696,6 +752,7 @@ class CentroManager(DataUpdateCoordinator[None]):
             "batteries": batteries,
             "circuits": circuits,
         }
+        self._update_efficiency(now, ts)
         tree, car = self.model.num(CONF_CO2_TREE, 22), self.model.num(CONF_CO2_CAR, 0.12)
         self.insights = summary(self.counters, self.tariff.typical_price(), tree, car)
         if ts - self._forecast_at > 300:
@@ -703,6 +760,330 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._update_solar_plan(now, ts)
         self._check_zone_limits(now)
         self.async_set_updated_data(None)
+
+    # ================================================================ PV efficiency
+    def _outdoor_c(self) -> float | None:
+        """Outdoor temperature (°C) from the configured sensor/weather, else from the weather entity."""
+        for entity in (self.model.get(CONF_OUTDOOR_TEMP), self.model.get(CONF_WEATHER)):
+            state = self.hass.states.get(entity) if entity else None
+            if state is None:
+                continue
+            if state.domain == "weather":
+                value = state.attributes.get("temperature")
+                unit = state.attributes.get("temperature_unit")
+            else:
+                value, unit = state.state, state.attributes.get("unit_of_measurement")
+            try:
+                temp = float(value)
+            except (TypeError, ValueError):
+                continue
+            return (temp - 32) * 5 / 9 if unit == "°F" else temp
+        return None
+
+    def _curtailed(self) -> bool:
+        """Battery full, not charging and not exporting: the inverter is probably throttling the panels."""
+        live = self.live
+        soc, bat, exp = live.get("soc"), live.get("battery_w"), live.get("export_w")
+        if soc is None or bat is None:
+            return False
+        return soc >= 97 and -bat < 200 and (exp or 0) < 100
+
+    def _update_efficiency(self, now: datetime, ts: float) -> None:
+        strings = [s for s in self.model.strings if s.efficiency_ready]
+        if not strings:
+            self.efficiency = {}
+            return
+        mode = str(self.model.get(CONF_IRR_SOURCE) or IRR_AUTO)
+        if mode not in (IRR_AUTO, IRR_OPEN_METEO, IRR_SIAR, IRR_SENSOR):
+            mode = IRR_AUTO
+        planes = set()
+        if mode in (IRR_AUTO, IRR_OPEN_METEO):
+            planes = {s.spec.plane for s in strings if s.spec.plane and (mode == IRR_OPEN_METEO or not s.irradiance)}
+        if planes and not self._irr_busy and ts - self._irr_at > IRRADIANCE_REFRESH:
+            self._irr_busy = True
+            self.hass.async_create_background_task(self._fetch_irradiance(planes), f"{DOMAIN}_irradiancia")
+        t_out = self._outdoor_c()
+        curtailed = self._curtailed()
+        per: dict[str, dict[str, Any]] = {}
+        tot_real = tot_exp = 0.0
+        for s in strings:
+            spec = s.spec
+            g = t_model = None
+            w = self.live.get("strings", {}).get(s.id, {}).get("w")
+            w = max(w, 0.0) if w is not None else None
+            measured = ""
+            if mode == IRR_SIAR:
+                source = "siar"
+                last_slot = self.siar_last.get(s.id)
+                if last_slot and ts - last_slot[0] <= SIAR_FRESH:
+                    start, w_slot, g, t_slot = last_slot
+                    data = eff.evaluate(spec, w_slot, g, t_slot)
+                    measured = f"{_hhmm(start)}–{_hhmm(start + siar.SLOT)}"
+                else:
+                    data = eff.evaluate(spec, w, None, t_out)
+                    data["estado"] = "SiAR sin datos recientes" if self._siar_ready else "falta configurar SiAR"
+            elif mode == IRR_SENSOR or (mode == IRR_AUTO and s.irradiance):
+                source = "sensor"
+                g = self._num(s.irradiance) if s.irradiance else None
+                data = eff.evaluate(spec, w, g, t_out)
+                if not s.irradiance:
+                    data["estado"] = "falta el sensor de irradiancia en el string"
+            else:
+                source = "open-meteo"
+                g, t_model = eff.interpolate(self._irr_rows.get(spec.plane, []), ts)  # type: ignore[arg-type]
+                data = eff.evaluate(spec, w, g, t_out if t_out is not None else t_model)
+            # energy-weighted figures (kept in the counters: hoy, mes, año, total and daily history)
+            last = self._eff_last.get(s.id)
+            self._eff_last[s.id] = ts
+            if last is not None and 0 < ts - last <= 60 and w is not None:
+                siar.add_sample(self._slots.setdefault(s.id, {}), ts, ts - last, w, t_out, curtailed)
+            if mode != IRR_SIAR and last is not None and 0 < ts - last <= 60 and eff.counts_for_day(g, w, data["p_esperada_w"], curtailed):
+                hours = (ts - last) / 3600
+                self.counters.add(f"fv_real_{s.id}", (w or 0) * hours / 1000, now.date())
+                self.counters.add(f"fv_esp_{s.id}", (data["p_esperada_w"] or 0) * hours / 1000, now.date())
+                self.schedule_save()
+            if mode == IRR_SIAR:
+                periods = self._siar_periods(now, [s.id])
+                data.update(
+                    rendimiento_hoy_pct=periods["siar_hoy_pct"],
+                    rendimiento_mes_pct=periods["siar_mes_pct"],
+                    rendimiento_ano_pct=periods["siar_ano_pct"],
+                    medido=measured,
+                )
+            else:
+                for bucket, key in (("hoy", "rendimiento_hoy_pct"), ("mes", "rendimiento_mes_pct"), ("ano", "rendimiento_ano_pct")):
+                    data[key] = eff.ratio(self.counters.get(f"fv_real_{s.id}", bucket), self.counters.get(f"fv_esp_{s.id}", bucket))
+            w_used = self.siar_last[s.id][1] if measured else w
+            data.update(
+                nombre=s.name,
+                w=w,
+                wp=s.peak_wp,
+                fuente=source,
+                posible_recorte=curtailed,
+                t_ambiente_fuente="configurada" if t_out is not None else ("open-meteo" if t_model is not None else ""),
+            )
+            if data["rendimiento_pct"] is not None and w_used is not None and data["p_esperada_w"]:
+                tot_real += w_used
+                tot_exp += data["p_esperada_w"]
+            data.update(self.siar_eval.get(s.id, {}))
+            per[s.id] = data
+        day_real = sum(self.counters.get(f"fv_real_{s.id}") for s in strings)
+        day_exp = sum(self.counters.get(f"fv_esp_{s.id}") for s in strings)
+        if self._siar_ready and not self._siar_busy and ts - self._siar_at > SIAR_REFRESH:
+            self._siar_busy = True
+            self.hass.async_create_background_task(self._fetch_siar(), f"{DOMAIN}_siar")
+        if ts - self._siar_eval_at > 300:
+            self._siar_evaluate(now)
+        day_pct = self._siar_periods(now, [s.id for s in strings])["siar_hoy_pct"] if mode == IRR_SIAR else eff.ratio(day_real, day_exp)
+        self.efficiency = {
+            "fuente": mode,
+            "siar": self._siar_summary(now),
+            "rendimiento_pct": round(100 * tot_real / tot_exp, 1) if tot_exp > 0 else None,
+            "rendimiento_hoy_pct": day_pct,
+            "posible_recorte": curtailed,
+            "error_irradiancia": self._irr_error,
+            "strings": per,
+        }
+
+    async def _fetch_irradiance(self, planes: set[tuple[float, float]]) -> None:
+        """Irradiance on each plane of panels (and temperature) from Open-Meteo, every few minutes."""
+        session = async_get_clientsession(self.hass)
+        lat, lon = self.hass.config.latitude, self.hass.config.longitude
+        errors: list[str] = []
+        try:
+            for plane in planes:
+                try:
+                    async with asyncio.timeout(20):
+                        response = await session.get(eff.OPEN_METEO_URL, params=eff.open_meteo_params(lat, lon, plane))
+                        response.raise_for_status()
+                        payload = await response.json()
+                    self._irr_rows[plane] = eff.parse_open_meteo(payload)
+                except Exception as err:  # noqa: BLE001 - network: keep the last data and retry later
+                    errors.append(f"{plane}: {err}")
+        finally:
+            self._irr_busy = False
+            self._irr_at = time.time() if not errors else time.time() - IRRADIANCE_REFRESH + IRRADIANCE_RETRY
+            self._irr_error = "; ".join(errors)[:300]
+        if errors:
+            _LOGGER.debug("Open-Meteo sin irradiancia: %s", self._irr_error)
+
+    # ---------------------------------------------------------------- SiAR (measured irradiance)
+    @property
+    def _siar_ready(self) -> bool:
+        m = self.model
+        return bool(m.get(CONF_SIAR_STATION) and (m.get(CONF_SIAR_KEY) or (m.get(CONF_SIAR_USER) and m.get(CONF_SIAR_PASSWORD))))
+
+    async def _siar_get(self, path: str, params: dict[str, str], base: str = siar.SIAR_URL) -> tuple[int, Any]:
+        session = async_get_clientsession(self.hass)
+        async with asyncio.timeout(30):
+            response = await session.get(f"{base}/{path}", params=params)
+            text = await response.text()
+        try:
+            payload: Any = json.loads(text)
+        except ValueError:
+            payload = text
+        return response.status, payload
+
+    async def _siar_login(self) -> None:
+        m = self.model
+        _, user = await self._siar_get("Autenticacion/cifrarCadena", {"cadena": str(m.get(CONF_SIAR_USER))})
+        _, password = await self._siar_get("Autenticacion/cifrarCadena", {"cadena": str(m.get(CONF_SIAR_PASSWORD))})
+        status, token = await self._siar_get("Autenticacion/obtenerToken", {"Usuario": siar.text_of(user), "Password": siar.text_of(password)})
+        self._siar_token = siar.text_of(token) if status < 400 else ""
+        if not self._siar_token:
+            raise RuntimeError(f"SiAR no da token (HTTP {status}): revisa usuario, contraseña y que tengas pedido el acceso a la API")
+        self._siar_token_at = time.time()
+
+    async def _fetch_siar(self) -> None:
+        """Last days of half-hourly records of the station (irradiance and temperature)."""
+        m = self.model
+        today = dt_util.now().date()
+        error = ""
+        dates = {"FechaInicial": (today - timedelta(days=2)).isoformat(), "FechaFinal": today.isoformat()}
+        station = str(m.get(CONF_SIAR_STATION)).strip().upper()
+        try:
+            if m.get(CONF_SIAR_KEY):
+                payload = await self._siar_by_key(str(m.get(CONF_SIAR_KEY)).strip(), station, dates)
+            for attempt in (() if m.get(CONF_SIAR_KEY) else (1, 2)):
+                if not self._siar_token or time.time() - self._siar_token_at > SIAR_TOKEN_TTL:
+                    await self._siar_login()
+                status, payload = await self._siar_get(
+                    "Datos/Horarios/ESTACION",
+                    {"token": self._siar_token, "Id": station, **dates},
+                )
+                if status in (401, 403) and attempt == 1:
+                    self._siar_token = ""
+                    continue
+                if status >= 400:
+                    raise RuntimeError(f"HTTP {status}: {siar.text_of(payload)[:150]}")
+                break
+            rows = siar.parse_rows(payload)
+            if not rows:
+                error = f"la estación no ha dado datos ({siar.text_of(payload)[:150] or 'respuesta vacía'})"
+            for day, hhmm, ghi, temp in rows:
+                self.siar_rows[f"{day.isoformat()} {hhmm:04d}"] = (ghi, temp)
+            oldest = (today - timedelta(days=4)).isoformat()
+            self.siar_rows = {k: v for k, v in self.siar_rows.items() if k >= oldest}
+            offset = siar.detect_offset(self._siar_row_list(), self.hass.config.longitude)
+            if offset is not None:
+                self.siar_offset = offset
+        except Exception as err:  # noqa: BLE001 - network or account: keep the last data and retry later
+            error = str(err)[:300]
+        finally:
+            self._siar_busy = False
+            self._siar_at = time.time() if not error else time.time() - SIAR_REFRESH + SIAR_RETRY
+        if error:
+            _LOGGER.debug("SiAR: %s", error)
+        self.siar_info["error"] = error
+        self.siar_info["consultado"] = dt_util.now().isoformat(timespec="seconds")
+        self._siar_evaluate(dt_util.now())
+        self.schedule_save()
+        self.async_set_updated_data(None)
+
+    async def _siar_by_key(self, key: str, station: str, dates: dict[str, str]) -> Any:
+        """Half-hourly records with the ClaveAPI (new ministry host first, then the old one)."""
+        errors = []
+        for base in siar.SIAR_KEY_URLS:
+            try:
+                status, payload = await self._siar_get("Datos/Horarios/Estacion", {"ClaveAPI": key, "Id": station, **dates}, base)
+            except Exception as err:  # noqa: BLE001 - try the other host
+                errors.append(f"{base.split('/')[2]}: {err}")
+                continue
+            if status == 404:
+                errors.append(f"{base.split('/')[2]}: HTTP 404")
+                continue
+            if status >= 400:
+                raise RuntimeError(f"HTTP {status}: {siar.text_of(payload)[:150] or 'sin mensaje'}")
+            return payload
+        raise RuntimeError("; ".join(errors) or "SiAR no responde")
+
+    def _siar_row_list(self) -> list[tuple[Any, int, float | None, float | None]]:
+        out = []
+        for key, (ghi, temp) in self.siar_rows.items():
+            day, hhmm = key.split(" ")
+            out.append((datetime.fromisoformat(day).date(), int(hhmm), ghi, temp))
+        return sorted(out)
+
+    def _siar_evaluate(self, now: datetime) -> None:
+        """Measured efficiency per half hour (SiAR irradiance on the plane vs the power of the same half hour)."""
+        self._siar_eval_at = time.time()
+        cutoff = time.time() - 4 * 86400
+        for slots in self._slots.values():
+            for key in [k for k in slots if k < cutoff]:
+                del slots[key]
+        rows = self._siar_row_list()
+        if not rows:
+            self.siar_eval = {}
+            return
+        offset = self.siar_offset if self.siar_offset is not None else 0
+        lat, lon = self.hass.config.latitude, self.hass.config.longitude
+        last_row = max(siar.slot_start(d, h, offset) for d, h, _, _ in rows) + siar.SLOT
+        self.siar_info.update(
+            ultimo_dato=dt_util.as_local(datetime.fromtimestamp(last_row, UTC)).isoformat(timespec="minutes"),
+            retraso_min=round((time.time() - last_row) / 60),
+            hora_estacion=("UTC" if offset == 0 else f"UTC+{offset}") + ("" if self.siar_offset is not None else " (sin confirmar)"),
+        )
+        recent = {(now.date() - timedelta(days=i)).isoformat() for i in range(3)}
+        evals: dict[str, dict[str, Any]] = {}
+        for s in self.model.strings:
+            spec = s.spec
+            slots = self._slots.get(s.id, {})
+            if not spec.wp or spec.tilt is None or spec.azimuth is None:
+                continue
+            days: dict[str, list[float]] = {}
+            last: dict[str, Any] = {}
+            for day, hhmm, ghi, t_station in rows:
+                start = siar.slot_start(day, hhmm, offset)
+                slot = slots.get(int(start))
+                if ghi is None or slot is None:
+                    continue
+                watts, t_air, usable = siar.slot_means(slot)
+                poa = siar.plane_irradiance(ghi, start + siar.SLOT / 2, lat, lon, spec.tilt, spec.azimuth)
+                t_amb = t_air if t_air is not None else t_station
+                if not usable or watts is None or poa is None or poa < eff.MIN_G_DAY or t_amb is None:
+                    continue
+                p_exp = eff.expected_power(spec, poa, eff.cell_temperature(t_amb, poa, spec.noct))
+                if p_exp <= 0 or 100 * watts / p_exp > eff.MAX_INDEX:
+                    continue
+                local = dt_util.as_local(datetime.fromtimestamp(start + siar.SLOT, UTC))
+                acc = days.setdefault(local.date().isoformat(), [0.0, 0.0])
+                acc[0] += watts * siar.SLOT / 3.6e6
+                acc[1] += p_exp * siar.SLOT / 3.6e6
+                last = {"siar_tramo": local.strftime("%H:%M"), "siar_tramo_pct": round(100 * watts / p_exp, 1), "siar_tramo_wm2": round(poa)}
+                self.siar_last[s.id] = (start, watts, poa, t_amb)
+            for day, values in days.items():
+                if day in recent:
+                    self.siar_days.setdefault(day, {})[s.id] = [round(values[0], 4), round(values[1], 4)]
+            evals[s.id] = {**last, **self._siar_periods(now, [s.id])}
+        oldest = (now.date() - timedelta(days=400)).isoformat()
+        self.siar_days = {d: v for d, v in self.siar_days.items() if d >= oldest}
+        self.siar_eval = evals
+
+    def _siar_periods(self, now: datetime, ids: list[str]) -> dict[str, float | None]:
+        today = now.date()
+        tests = {
+            "siar_hoy_pct": lambda d: d == today.isoformat(),
+            "siar_ayer_pct": lambda d: d == (today - timedelta(days=1)).isoformat(),
+            "siar_mes_pct": lambda d: d.startswith(today.strftime("%Y-%m")),
+            "siar_ano_pct": lambda d: d.startswith(str(today.year)),
+        }
+        out: dict[str, float | None] = {}
+        for key, test in tests.items():
+            real = sum(v[0] for d, per in self.siar_days.items() if test(d) for sid, v in per.items() if sid in ids)
+            exp = sum(v[1] for d, per in self.siar_days.items() if test(d) for sid, v in per.items() if sid in ids)
+            out[key] = eff.ratio(real, exp)
+        return out
+
+    def _siar_summary(self, now: datetime) -> dict[str, Any]:
+        if not self.model.get(CONF_SIAR_STATION):
+            return {}
+        ids = [s.id for s in self.model.strings]
+        return {
+            "estacion": str(self.model.get(CONF_SIAR_STATION)).strip().upper(),
+            "configurada": self._siar_ready,
+            **self.siar_info,
+            **self._siar_periods(now, ids),
+        }
 
     # ================================================================ forecasts
     def scenario(self) -> Scenario:

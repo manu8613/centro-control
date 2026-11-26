@@ -48,7 +48,7 @@ quieras, y «Añadir» admite indicadores, marcadores de aguja y gráficas.
 |:--|:--|
 | **Puente de mando** | Flujo de energía animado, marcadores de autosuficiencia (ahora y hoy), indicadores clave, salida y puesta del sol, temperatura media de casa con la estancia más caliente y la más fría y la exterior, control de persianas y de estores (por separado), resumen del periodo elegido, alertas y gráfica de 24 h. |
 | **Red** | Importación y vertido, uso de la potencia contratada, tensión y frecuencia, precio de hoy y mañana, 30 días. |
-| **Solar** | Producción frente a la potencia pico, cada string (W, V, A, % de Wp), comparativa W/kWp, inversor, histórico diario y mensual. Con un inversor Deye: **carga de la batería por la red**, intensidad y programas 1 y 2. Con una entidad del tiempo: **nubosidad de hoy y de 5 días** y la **recomendación de carga por red** de la noche. |
+| **Solar** | Producción frente a la potencia pico, cada string (W, V, A, % de Wp), comparativa W/kWp, **rendimiento real** de cada string frente a su ficha técnica, inversor, histórico diario y mensual. Con un inversor Deye: **carga de la batería por la red**, intensidad y programas 1 y 2. Con una entidad del tiempo: **nubosidad de hoy y de 5 días** y la **recomendación de carga por red** de la noche. |
 | **Batería** | Carga total, flujo, energía almacenada, autonomía, cada batería y sus celdas una a una, comunicación con cada BMS y diferencia de SOC entre baterías. |
 | **Consumos** | Total, consumo sin medir, ranking de circuitos y aparatos, tarjetas por grupo y gráfica apilada. |
 | **Problemas** | Críticos, avisos e información con el detalle de cada uno, estado de todas las fuentes e historial. |
@@ -109,6 +109,37 @@ Todo se cambia desde la integración, sin YAML:
   riego** suman cada elemento de tu casa. Puedes tener los que quieras y
   editarlos o borrarlos uno a uno.
   - Los strings del mismo **grupo** (misma orientación) se comparan entre sí.
+  - **Rendimiento real**: pon en el string la **inclinación** y la
+    **orientación** (o un sensor de irradiancia en el plano de los paneles) y
+    los datos de la **ficha técnica** (coeficiente de temperatura de Pmax,
+    NOCT, eficiencia del módulo y la degradación ya esperada). Con la potencia
+    del string, la temperatura exterior (la de *Temperatura exterior*, si no
+    la de la entidad del tiempo, si no la de Open-Meteo) y la irradiancia
+    (sensor o [Open-Meteo](https://open-meteo.com), cada 10 min, sin clave)
+    calcula la temperatura de la célula, la potencia que debería dar y el %
+    real: 100 % = lo que promete la ficha con esa luz y esa temperatura.
+    Por debajo de 200 W/m² no da valor instantáneo; el de hoy, mes y año va
+    ponderado por energía y se pausa si la batería está llena y no se vierte
+    (el inversor estaría recortando). Con Open-Meteo es una estimación: en
+    días de nubes variables el valor instantáneo baila; fíate del de días
+    despejados y del acumulado.
+  - **Rendimiento medido con SiAR** (opcional, Configurar → Solar): con el
+    código de una estación agroclimática de la red
+    [SiAR](https://servicio.mapa.gob.es/websiar/) y la **clave API** que da
+    SiAR (o, en su lugar, usuario y contraseña de REGEUS con el acceso a la API
+    pedido en «Mi SiAR»), se descarga cada 30 min la
+    irradiancia **medida** por su piranómetro (media de cada media hora), se
+    pasa al plano de cada string (Erbs + Hay-Davies) y se compara con lo que
+    produjo el string en esa misma media hora. Da el rendimiento medido de la
+    última media hora, de hoy, de ayer, del mes y del año. La hora de la
+    estación (UTC o local) se detecta sola con el recorrido del sol. Clave,
+    usuario y contraseña no se envían al panel y salen ocultos en las
+    exportaciones.
+  - **Fuente de la irradiancia** (Configurar → Solar): *Automática* (el
+    sensor del string si lo tiene y, si no, Open-Meteo; SiAR, si está, da
+    además el rendimiento medido), *Open-Meteo*, *Estación SiAR* (el «ahora»
+    pasa a ser la última media hora medida y hoy, mes y año salen de SiAR) o
+    *Sensor de irradiancia del string*.
   - Un circuito puede **colgar de otro** (por ejemplo, el frigorífico dentro de
     la línea de cocina): desactiva «Cuenta para el total» para no contarlo dos
     veces.
@@ -138,11 +169,16 @@ Todo se cambia desde la integración, sin YAML:
 | Factura en curso, previsión, factura simulada | Total en €; las líneas de la factura en los atributos. |
 | Autoconsumo, autosuficiencia, CO₂ evitado y emitido, consumo de gas | Por periodo en los atributos. |
 | Problemas, problema crítico | Número sin reconocer y la lista completa con nivel, área, detalle y desde cuándo. |
+| Rendimiento real de los paneles (ahora y hoy) | % de lo que deberían dar según la ficha técnica; por string en los atributos. |
+| Rendimiento medido ayer (SiAR) | El mismo % con la irradiancia medida por la estación SiAR; hoy, mes, año y última media hora en los atributos. |
 | Luces encendidas, temperatura y humedad interior | Resúmenes de la casa. |
 | Periodo del panel, simulador, minutos de riego, regar, parar, reconocer, apagar luces | Los controles del panel. |
 
 Cada string, circuito y zona de riego tiene además su propio dispositivo con su
-energía o su tiempo restante.
+energía o su tiempo restante; los strings, también su **rendimiento real** (%),
+con la irradiancia, la temperatura de la célula, la potencia esperada, la
+eficiencia de conversión y el rendimiento de hoy, del mes y del año en los
+atributos.
 
 Evento `centro_control_problema` al aparecer un problema nuevo, y acciones
 `centro_control.regar`, `parar_riego`, `reconocer_problemas`, `crear_panel` y

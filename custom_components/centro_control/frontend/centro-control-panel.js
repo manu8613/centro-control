@@ -1836,6 +1836,13 @@ class CentroControlPanel extends HTMLElement {
       this.card("rg", gauge(now, 0, 120, this._effColor(now), now === null ? "esperando luz" : "ahora", "%"), { c: this._effColor(now), w: 6, click: e }),
       this.kpi("rh", this.id("rendimiento_solar_hoy"), day === null ? "—" : `${fmt(day, 1)} %`, `Hoy (ponderado por energía)${this.a(e, "posible_recorte") ? " · batería llena: pausa por posible recorte" : ""}`, "mdi:calendar-today", this._effColor(day), 6),
     ];
+    const sid = this.id("rendimiento_solar_siar");
+    const sa = this.st(sid)?.attributes || {};
+    if (sa.estacion) {
+      const y = this.N("rendimiento_solar_siar");
+      const info = sa.error ? `error: ${sa.error}` : sa.ultimo_dato ? `último dato ${hhmm(new Date(sa.ultimo_dato))} (${fmt(sa.retraso_min, 0)} min) · hora ${sa.hora_estacion}` : "esperando datos";
+      cards.push(this.kpi("rs", sid, y === null ? "—" : `${fmt(y, 1)} %`, `Medido ayer · SiAR ${esc(sa.estacion)} · hoy ${sa.siar_hoy_pct == null ? "—" : fmt(sa.siar_hoy_pct, 0) + " %"} · mes ${sa.siar_mes_pct == null ? "—" : fmt(sa.siar_mes_pct, 0) + " %"} · ${esc(info)}`, "mdi:weather-sunny", sa.error ? C.orange : this._effColor(y), 12));
+    }
     for (const s of per) {
       const r = s.rendimiento_pct;
       const bits = [
@@ -1846,7 +1853,7 @@ class CentroControlPanel extends HTMLElement {
       ].filter(Boolean).join(" · ");
       const periods = [["hoy", s.rendimiento_hoy_pct], ["mes", s.rendimiento_mes_pct], ["año", s.rendimiento_ano_pct]].map(([l, v]) => `${l} ${v === null || v === undefined ? "—" : fmt(v, 0) + " %"}`).join(" · ");
       const ent = this.id(s.id + ":rendimiento_string");
-      cards.push(this.card("r" + s.id, `<div class="kpi"><div class="ic">${icon("mdi:solar-panel")}</div><div style="flex:1"><div class="v" style="color:${this._effColor(r)}">${r === null ? "—" : fmt(r, 1) + " %"}</div><div class="l">${esc(s.nombre)} · ${esc(s.estado === "ok" ? periods : s.estado || periods)}</div>${r !== null ? `<div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, r)}%;background:${this._effColor(r)}"></i></div>` : ""}<div class="small muted" style="margin-top:3px">${esc(bits)}${s.fuente ? ` · irradiancia: ${esc(s.fuente)}` : ""}</div></div></div>`, { c: this._effColor(r), w: 12, click: ent }));
+      cards.push(this.card("r" + s.id, `<div class="kpi"><div class="ic">${icon("mdi:solar-panel")}</div><div style="flex:1"><div class="v" style="color:${this._effColor(r)}">${r === null ? "—" : fmt(r, 1) + " %"}</div><div class="l">${esc(s.nombre)} · ${esc(s.estado === "ok" ? periods : s.estado || periods)}</div>${r !== null ? `<div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, r)}%;background:${this._effColor(r)}"></i></div>` : ""}<div class="small muted" style="margin-top:3px">${esc(bits)}${s.fuente ? ` · irradiancia: ${esc(s.fuente)}` : ""}</div>${s.siar_tramo || s.siar_ayer_pct != null ? `<div class="small muted" style="margin-top:3px">SiAR medido: ${s.siar_tramo ? `${esc(s.siar_tramo)} ${fmt(s.siar_tramo_pct, 0)} % (${fmt(s.siar_tramo_wm2, 0)} W/m²) · ` : ""}hoy ${s.siar_hoy_pct == null ? "—" : fmt(s.siar_hoy_pct, 0) + " %"} · ayer ${s.siar_ayer_pct == null ? "—" : fmt(s.siar_ayer_pct, 0) + " %"}</div>` : ""}</div></div>`, { c: this._effColor(r), w: 12, click: ent }));
     }
     if (this.a(e, "error_irradiancia")) cards.push(this.empty("rerr", `Open-Meteo no responde: ${esc(this.a(e, "error_irradiancia"))}. Se reintenta solo.`));
     const ids = per.map((s) => this.id(s.id + ":rendimiento_string")).filter(Boolean);

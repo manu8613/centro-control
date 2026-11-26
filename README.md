@@ -123,6 +123,16 @@ Todo se cambia desde la integración, sin YAML:
     (el inversor estaría recortando). Con Open-Meteo es una estimación: en
     días de nubes variables el valor instantáneo baila; fíate del de días
     despejados y del acumulado.
+  - **Rendimiento medido con SiAR** (opcional, Configurar → Solar): con el
+    código de una estación agroclimática de la red
+    [SiAR](https://servicio.mapa.gob.es/websiar/) y una cuenta de REGEUS con el
+    acceso a la API pedido en «Mi SiAR», se descarga cada 30 min la
+    irradiancia **medida** por su piranómetro (media de cada media hora), se
+    pasa al plano de cada string (Erbs + Hay-Davies) y se compara con lo que
+    produjo el string en esa misma media hora. Da el rendimiento medido de la
+    última media hora, de hoy, de ayer, del mes y del año. La hora de la
+    estación (UTC o local) se detecta sola con el recorrido del sol. Usuario y
+    contraseña no se envían al panel y salen ocultos en las exportaciones.
   - Un circuito puede **colgar de otro** (por ejemplo, el frigorífico dentro de
     la línea de cocina): desactiva «Cuenta para el total» para no contarlo dos
     veces.
@@ -153,6 +163,7 @@ Todo se cambia desde la integración, sin YAML:
 | Autoconsumo, autosuficiencia, CO₂ evitado y emitido, consumo de gas | Por periodo en los atributos. |
 | Problemas, problema crítico | Número sin reconocer y la lista completa con nivel, área, detalle y desde cuándo. |
 | Rendimiento real de los paneles (ahora y hoy) | % de lo que deberían dar según la ficha técnica; por string en los atributos. |
+| Rendimiento medido ayer (SiAR) | El mismo % con la irradiancia medida por la estación SiAR; hoy, mes, año y última media hora en los atributos. |
 | Luces encendidas, temperatura y humedad interior | Resúmenes de la casa. |
 | Periodo del panel, simulador, minutos de riego, regar, parar, reconocer, apagar luces | Los controles del panel. |
 

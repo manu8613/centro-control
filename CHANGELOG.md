@@ -13,7 +13,8 @@ las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 ### Añadido
 - **Rendimiento real de los paneles**: cada string puede llevar ahora su inclinación, orientación y los datos de la ficha técnica (coeficiente de temperatura de Pmax, NOCT, eficiencia del módulo y degradación). Con la potencia del string, la temperatura exterior y la irradiancia en el plano de los paneles (de un sensor propio o de Open-Meteo cada 10 min, sin clave) se calcula la temperatura de la célula, la potencia que debería dar según la ficha y el **% real**, además de la eficiencia de conversión para compararla con la de la ficha.
 - Sensores nuevos: «Rendimiento real» en cada string (con irradiancia, temperatura de célula, potencia esperada, conversión y rendimiento de hoy, mes y año en los atributos), «Rendimiento real de los paneles» (ahora) y «… hoy» (ponderado por energía). Se pueden poner en cualquier pestaña con «Añadir» del modo Diseño.
-- Pestaña Solar: sección **Rendimiento real** con marcador de aguja, el de hoy, una tarjeta por string y la gráfica de 24 h.
+- **Irradiancia medida de una estación SiAR** (Configurar → Solar: estación, usuario y contraseña de REGEUS con acceso a la API): cada 30 min descarga las medias semihorarias de radiación y temperatura de la estación, las pasa al plano de cada string y da el **rendimiento medido** por media hora, hoy, ayer, mes y año (sensor «Rendimiento medido ayer (SiAR)»). Detecta sola si la estación da la hora en UTC o en hora local. Las credenciales no llegan al panel y salen ocultas (`**********`) en las exportaciones; al importar una exportación se conservan las guardadas.
+- Pestaña Solar: sección **Rendimiento real** con marcador de aguja, el de hoy, el medido con SiAR, una tarjeta por string y la gráfica de 24 h.
 
 ## [2.20.1] - 2026-11-23
 

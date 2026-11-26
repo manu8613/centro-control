@@ -24,6 +24,7 @@ from .const import (
     DASHBOARD_URL,
     DOMAIN,
     REPO_URL,
+    SECRET_KEYS,
     SUB_CIRCUIT,
     SUB_STRING,
     SUB_ZONE,
@@ -166,7 +167,9 @@ def panel_config(hass: HomeAssistant, manager: CentroManager) -> dict[str, Any]:
         "author_url": AUTHOR_URL,
         "repo_url": REPO_URL,
         "ids": ctx.ids,
-        "settings": {k: v for k, v in ctx.settings.items() if isinstance(v, (str, int, float, bool, list)) and v not in ("", [])},
+        "settings": {
+            k: v for k, v in ctx.settings.items() if isinstance(v, (str, int, float, bool, list)) and v not in ("", []) and k not in SECRET_KEYS
+        },
         "strings": ctx.strings,
         "batteries": ctx.batteries,
         "soc_pair": [b.id for b in manager.model.soc_pair],

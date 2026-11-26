@@ -94,3 +94,57 @@ async def test_string_without_mounting_has_no_efficiency(hass: HomeAssistant) ->
     string = _sensor(hass, entry, "S1_rendimiento_string")
     assert string.state == "unknown"
     assert "inclinación" in string.attributes["estado"]
+
+
+async def test_efficiency_measured_with_siar(hass: HomeAssistant, freezer, aioclient_mock) -> None:
+    from custom_components.centro_control.dashboard import panel_config
+    from custom_components.centro_control.siar import SIAR_URL
+
+    from .test_siar import clear_rows
+
+    hass.config.latitude, hass.config.longitude = 42.0, -4.5
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    freezer.move_to("2026-06-10 11:00:00+02:00")
+    now = dt_util.utcnow().timestamp()
+    aioclient_mock.get("https://api.open-meteo.com/v1/forecast", json={"minutely_15": {"time": [now - 900, now + 9000], "global_tilted_irradiance_instant": [800, 800], "temperature_2m": [20, 20]}})
+    aioclient_mock.get(f"{SIAR_URL}/Autenticacion/cifrarCadena", text='"cifrado"')
+    aioclient_mock.get(f"{SIAR_URL}/Autenticacion/obtenerToken", json="token-de-prueba")
+    aioclient_mock.get(f"{SIAR_URL}/Datos/Horarios/ESTACION", json={"Datos": clear_rows(dt_util.now().date(), 0)})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Casa",
+        data={},
+        options={**_entry(STRING).options, "siar_estacion": "xx01", "siar_usuario": "12345678Z", "siar_clave": "secreta"},
+        subentries_data=[{"subentry_id": "S1", "subentry_type": "string", "title": "Tejado", "unique_id": None, "data": {**STRING, "inclinacion": 30, "orientacion": 180}}],
+    )
+    await _setup(hass, entry)
+    for _ in range(6 * 75):  # 75 minutes of 10 s ticks
+        freezer.tick(timedelta(seconds=10))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    # the station gave data, the clock is UTC and the half hours with power are compared
+    data_call = next(c for c in aioclient_mock.mock_calls if "Datos" in str(c[1]))
+    assert data_call[1].query["Id"] == "XX01" and data_call[1].query["token"] == "token-de-prueba"
+    siar = _sensor(hass, entry, "rendimiento_solar_siar")
+    assert siar.attributes["estacion"] == "XX01"
+    assert siar.attributes["hora_estacion"] == "UTC"
+    assert not siar.attributes["error"]
+    hoy = siar.attributes["siar_hoy_pct"]
+    assert hoy is not None and 50 < hoy < 120
+    string = _sensor(hass, entry, "S1_rendimiento_string")
+    assert string.attributes["siar_tramo_pct"] is not None
+    # the credentials never reach the panel
+    config = panel_config(hass, entry.runtime_data)
+    assert "siar_clave" not in config["settings"] and "siar_usuario" not in config["settings"]
+    assert "secreta" not in str(config)
+
+
+def test_exports_hide_the_siar_password():
+    from custom_components.centro_control.api import _entry_dict, _keep_secrets
+
+    entry = MockConfigEntry(domain=DOMAIN, title="Casa", data={}, options={"siar_estacion": "XX01", "siar_usuario": "12345678Z", "siar_clave": "secreta"})
+    exported = _entry_dict(entry)["opciones"]
+    assert exported["siar_clave"] == "**********" and exported["siar_usuario"] == "**********"
+    assert exported["siar_estacion"] == "XX01"
+    assert _keep_secrets(dict(exported), entry.options)["siar_clave"] == "secreta"
+    assert "siar_clave" not in _keep_secrets(dict(exported), {})

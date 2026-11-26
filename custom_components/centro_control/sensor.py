@@ -105,6 +105,16 @@ def _efficiency_attrs(m: CentroManager) -> dict[str, Any]:
     }
 
 
+def _siar_attrs(m: CentroManager) -> dict[str, Any]:
+    keys = ("siar_hoy_pct", "siar_ayer_pct", "siar_mes_pct", "siar_ano_pct", "siar_tramo", "siar_tramo_pct", "siar_tramo_wm2")
+    return {
+        **m.efficiency.get("siar", {}),
+        "strings": [
+            {"id": sid, "nombre": v.get("nombre"), **{k: v.get(k) for k in keys}} for sid, v in m.efficiency.get("strings", {}).items()
+        ],
+    }
+
+
 def _batteries(m: CentroManager) -> dict[str, Any]:
     return {
         "baterias": [{"id": bid, **b} for bid, b in m.live.get("batteries", {}).items()],
@@ -288,6 +298,14 @@ MAIN: tuple[CentroSensorDescription, ...] = (
         suggested_display_precision=1,
         icon="mdi:solar-panel",
         value=lambda m: m.efficiency.get("rendimiento_hoy_pct"),
+    ),
+    CentroSensorDescription(
+        key="rendimiento_solar_siar",
+        native_unit_of_measurement=PERCENTAGE,
+        suggested_display_precision=1,
+        icon="mdi:weather-sunny",
+        value=lambda m: m.efficiency.get("siar", {}).get("siar_ayer_pct"),
+        attrs=_siar_attrs,
     ),
     _power("potencia_red", "grid_w"),
     _power("potencia_importada", "import_w"),

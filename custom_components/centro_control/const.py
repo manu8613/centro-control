@@ -29,6 +29,9 @@ TICK: Final = timedelta(seconds=10)
 PROBLEMS_TICK: Final = timedelta(seconds=30)
 IRRADIANCE_REFRESH: Final = 600  # s, Open-Meteo gives 15-min data
 IRRADIANCE_RETRY: Final = 120  # s after a failed request
+SIAR_REFRESH: Final = 1800  # s, SiAR records are half-hourly
+SIAR_RETRY: Final = 600  # s after a failed request
+SIAR_TOKEN_TTL: Final = 6 * 3600  # s, ask for a new token from time to time
 MAX_INTEGRATION_GAP: Final = 120.0  # s; longer gaps are not integrated
 HISTORY_DAYS: Final = 800
 ATTR_HISTORY_DAYS: Final = 62
@@ -141,6 +144,11 @@ CONF_TEMPERATURES: Final = "temperaturas"
 CONF_HUMIDITIES: Final = "humedades"
 CONF_CLIMATES: Final = "climas"
 CONF_OUTDOOR_TEMP: Final = "temperatura_exterior"
+CONF_SIAR_STATION: Final = "siar_estacion"
+CONF_SIAR_USER: Final = "siar_usuario"
+CONF_SIAR_PASSWORD: Final = "siar_clave"
+SECRET_KEYS: Final = (CONF_SIAR_USER, CONF_SIAR_PASSWORD)  # never sent to the panel; hidden in exports
+REDACTED: Final = "**********"
 CONF_TEMP_EXCLUDE_PATTERN: Final = "patron_excluir_temperaturas"
 CONF_TEMP_MAX: Final = "temperatura_max"
 CONF_TEMP_MIN: Final = "temperatura_min"

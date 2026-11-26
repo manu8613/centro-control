@@ -30,7 +30,7 @@ from homeassistant.const import __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import area_registry as ar, device_registry as dr, entity_registry as er
 
-from .const import DOMAIN, SUBENTRY_TYPES, VERSION
+from .const import DOMAIN, REDACTED, SECRET_KEYS, SUBENTRY_TYPES, VERSION
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,12 +64,23 @@ def _entry_dict(entry: ConfigEntry) -> dict[str, Any]:
     return {
         "entry_id": entry.entry_id,
         "titulo": entry.title,
-        "opciones": dict(entry.options),
+        "opciones": {k: (REDACTED if k in SECRET_KEYS and v else v) for k, v in entry.options.items()},
         "elementos": [
             {"tipo": s.subentry_type, "titulo": s.title, "datos": dict(s.data)}
             for s in sorted(entry.subentries.values(), key=lambda s: (s.subentry_type, s.title))
         ],
     }
+
+
+def _keep_secrets(new: dict[str, Any], current: Any) -> dict[str, Any]:
+    """An export hides the passwords: importing it keeps the ones already saved."""
+    for key in SECRET_KEYS:
+        if new.get(key) == REDACTED:
+            if current.get(key):
+                new[key] = current[key]
+            else:
+                new.pop(key)
+    return new
 
 
 def _write(path: Path, data: dict[str, Any]) -> None:
@@ -332,7 +343,7 @@ class ConfigView(_Admin):
         manager.async_update_entry(
             entry,
             title=item.get("titulo") or entry.title,
-            options=dict(item.get("opciones", entry.options)),
+            options=_keep_secrets(dict(item.get("opciones", entry.options)), entry.options),
         )
         await manager.async_setup(entry.entry_id)
 

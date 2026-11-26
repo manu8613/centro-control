@@ -125,14 +125,21 @@ Todo se cambia desde la integración, sin YAML:
     despejados y del acumulado.
   - **Rendimiento medido con SiAR** (opcional, Configurar → Solar): con el
     código de una estación agroclimática de la red
-    [SiAR](https://servicio.mapa.gob.es/websiar/) y una cuenta de REGEUS con el
-    acceso a la API pedido en «Mi SiAR», se descarga cada 30 min la
+    [SiAR](https://servicio.mapa.gob.es/websiar/) y la **clave API** que da
+    SiAR (o, en su lugar, usuario y contraseña de REGEUS con el acceso a la API
+    pedido en «Mi SiAR»), se descarga cada 30 min la
     irradiancia **medida** por su piranómetro (media de cada media hora), se
     pasa al plano de cada string (Erbs + Hay-Davies) y se compara con lo que
     produjo el string en esa misma media hora. Da el rendimiento medido de la
     última media hora, de hoy, de ayer, del mes y del año. La hora de la
-    estación (UTC o local) se detecta sola con el recorrido del sol. Usuario y
-    contraseña no se envían al panel y salen ocultos en las exportaciones.
+    estación (UTC o local) se detecta sola con el recorrido del sol. Clave,
+    usuario y contraseña no se envían al panel y salen ocultos en las
+    exportaciones.
+  - **Fuente de la irradiancia** (Configurar → Solar): *Automática* (el
+    sensor del string si lo tiene y, si no, Open-Meteo; SiAR, si está, da
+    además el rendimiento medido), *Open-Meteo*, *Estación SiAR* (el «ahora»
+    pasa a ser la última media hora medida y hoy, mes y año salen de SiAR) o
+    *Sensor de irradiancia del string*.
   - Un circuito puede **colgar de otro** (por ejemplo, el frigorífico dentro de
     la línea de cocina): desactiva «Cuenta para el total» para no contarlo dos
     veces.

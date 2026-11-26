@@ -148,3 +148,63 @@ def test_exports_hide_the_siar_password():
     assert exported["siar_estacion"] == "XX01"
     assert _keep_secrets(dict(exported), entry.options)["siar_clave"] == "secreta"
     assert "siar_clave" not in _keep_secrets(dict(exported), {})
+
+
+def _key_rows(day):
+    from .test_siar import clear_rows
+
+    return {"Datos": [{"HoraMin": r["HorMin"], "Fecha": f"{day.isoformat()}T00:00:00", "Radiacion": r["Radiacion"], "TempMedia": 15} for r in clear_rows(day, 0)], "MensajeRespuesta": None}
+
+
+async def test_irradiance_from_siar_with_api_key(hass: HomeAssistant, freezer, aioclient_mock) -> None:
+    from custom_components.centro_control.siar import SIAR_KEY_URLS
+
+    hass.config.latitude, hass.config.longitude = 42.0, -4.5
+    await hass.config.async_set_time_zone("Europe/Madrid")
+    freezer.move_to("2026-06-10 11:00:00+02:00")
+    aioclient_mock.get(f"{SIAR_KEY_URLS[0]}/Datos/Horarios/Estacion", status=404)  # new host not there: falls back to the old one
+    aioclient_mock.get(f"{SIAR_KEY_URLS[1]}/Datos/Horarios/Estacion", json=_key_rows(dt_util.now().date()))
+    string = {**STRING, "inclinacion": 30, "orientacion": 180, "irradiancia": "sensor.irr"}
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Casa",
+        data={},
+        options={**_entry(STRING).options, "siar_estacion": "xx01", "siar_clave_api": "k" * 50, "irradiancia_fuente": "siar"},
+        subentries_data=[{"subentry_id": "S1", "subentry_type": "string", "title": "Tejado", "unique_id": None, "data": string}],
+    )
+    await _setup(hass, entry)
+    for _ in range(6 * 75):
+        freezer.tick(timedelta(seconds=10))
+        async_fire_time_changed(hass, dt_util.utcnow())
+        await hass.async_block_till_done()
+    calls = [str(c[1]) for c in aioclient_mock.mock_calls]
+    assert not any("open-meteo" in c for c in calls)  # the chosen source is SiAR
+    assert any("ClaveAPI=" in c and "Id=XX01" in c for c in calls)
+    state = _sensor(hass, entry, "S1_rendimiento_string")
+    assert state.attributes["fuente"] == "siar"
+    assert state.attributes["medido"]  # e.g. "12:00–12:30"
+    assert 50 < float(state.state) < 150
+    assert state.attributes["rendimiento_hoy_pct"] is not None
+    assert _sensor(hass, entry, "rendimiento_solar").attributes is not None
+    assert "k" * 50 not in str(entry.runtime_data.efficiency)
+
+
+@pytest.mark.parametrize(("source", "fuente", "estado"), [("open_meteo", "open-meteo", "ok"), ("sensor", "sensor", "falta el sensor")])
+async def test_irradiance_source_is_respected(hass: HomeAssistant, freezer, aioclient_mock, source, fuente, estado) -> None:
+    freezer.move_to("2026-06-10 12:00:00+02:00")
+    now = dt_util.utcnow().timestamp()
+    aioclient_mock.get("https://api.open-meteo.com/v1/forecast", json={"minutely_15": {"time": [now - 900, now + 900], "global_tilted_irradiance_instant": [800, 800], "temperature_2m": [30, 30]}})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Casa",
+        data={},
+        options={**_entry(STRING).options, "irradiancia_fuente": source},
+        subentries_data=[{"subentry_id": "S1", "subentry_type": "string", "title": "Tejado", "unique_id": None, "data": {**STRING, "inclinacion": 30, "orientacion": 180}}],
+    )
+    await _setup(hass, entry)
+    freezer.tick(timedelta(seconds=10))
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    state = _sensor(hass, entry, "S1_rendimiento_string")
+    assert state.attributes["fuente"] == fuente
+    assert state.attributes["estado"].startswith(estado)

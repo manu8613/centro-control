@@ -104,7 +104,9 @@
           "consumo_diurno_pct": "Consumo entre 08:00 y 00:00",
           "siar_estacion": "Estación SiAR",
           "siar_usuario": "Usuario SiAR (NIF de REGEUS)",
-          "siar_clave": "Contraseña SiAR"
+          "siar_clave": "Contraseña SiAR",
+          "irradiancia_fuente": "Fuente de la irradiancia",
+          "siar_clave_api": "Clave API de SiAR"
         },
         "data_description": {
           "solar_potencia": "Si lo dejas vacío se suman los strings.",
@@ -115,7 +117,9 @@
           "meteo_entidad": "Una entidad «weather» con previsión diaria; mejor si incluye cloud_coverage (Open-Meteo, Met.no…).",
           "consumo_diurno_pct": "Parte del consumo diario que ocurre de 08:00 a 00:00 (por defecto 85 %). Sirve para la recomendación de carga por red.",
           "siar_estacion": "Código de la estación agroclimática más cercana (p. ej. AB02). Su irradiancia medida se usa para el rendimiento medido por media hora y por día.",
-          "siar_usuario": "Cuenta de REGEUS con el acceso a la API pedido en «Mi SiAR». No se enseña en el panel ni sale en las exportaciones."
+          "siar_usuario": "Cuenta de REGEUS con el acceso a la API pedido en «Mi SiAR». No se enseña en el panel ni sale en las exportaciones.",
+          "irradiancia_fuente": "De dónde sale la irradiancia para el rendimiento real. Automática: el sensor del string si lo tiene y, si no, Open-Meteo (SiAR se usa además para el rendimiento medido). SiAR: la media de la última media hora medida por la estación.",
+          "siar_clave_api": "Clave de 50 caracteres que da SiAR por correo. Si la pones, no hacen falta usuario ni contraseña. No se enseña en el panel ni sale en las exportaciones."
         }
       },
       "deye": {
@@ -572,6 +576,14 @@
       "options": {
         "positivo_descarga": "Positivo = descargando",
         "positivo_carga": "Positivo = cargando"
+      }
+    },
+    "irradiancia_fuente": {
+      "options": {
+        "auto": "Automática (sensor, si no Open-Meteo)",
+        "open_meteo": "Open-Meteo (estimada, cada 15 min)",
+        "siar": "Estación SiAR (medida, media de 30 min)",
+        "sensor": "Sensor de irradiancia del string"
       }
     }
   },

@@ -29,7 +29,10 @@ from datetime import UTC, date, datetime, timedelta
 from statistics import median
 from typing import Any
 
-SIAR_URL = "https://servicio.mapa.gob.es/siarapi/API/V1"
+SIAR_URL = "https://servicio.mapa.gob.es/siarapi/API/V1"  # token (REGEUS user and password)
+# ClaveAPI (50-character key sent with every request). The ministry moved from
+# mapama.gob.es to mapa.gob.es; the old host is tried if the new one fails.
+SIAR_KEY_URLS = ("https://servicio.mapa.gob.es/apisiar/API/v1", "https://servicio.mapama.gob.es/apisiar/API/v1")
 SLOT = 1800  # s, SiAR records are half-hourly means
 INVALID = -999.0  # SiAR uses -6999 / -99999 for datalogger failures
 ALBEDO = 0.2
@@ -46,7 +49,7 @@ def text_of(payload: Any) -> str:
     if isinstance(payload, str):
         return payload.strip().strip('"')
     if isinstance(payload, dict):
-        for key in ("token", "Token", "cadena", "Cadena", "Datos", "datos", "resultado", "Resultado"):
+        for key in ("MensajeRespuesta", "token", "Token", "cadena", "Cadena", "Datos", "datos", "resultado", "Resultado"):
             if isinstance(payload.get(key), str):
                 return payload[key].strip()
         for value in payload.values():
@@ -57,7 +60,7 @@ def text_of(payload: Any) -> str:
 
 def _records(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
-        if payload and all(isinstance(r, dict) for r in payload) and any("HorMin" in r or "horMin" in r for r in payload):
+        if payload and all(isinstance(r, dict) for r in payload) and any(k.lower() in ("hormin", "horamin") for r in payload for k in r):
             return payload
         for item in payload:
             found = _records(item)
@@ -92,10 +95,10 @@ def parse_rows(payload: Any) -> list[tuple[date, int, float | None, float | None
     """``[(date, HHMM end of the half hour, GHI W/m², air °C), …]``."""
     rows = []
     for r in _records(payload):
-        get = {k.lower(): v for k, v in r.items()}.get
+        get = {str(k).lower(): v for k, v in r.items()}.get
         day = _day(get("fecha"))
         try:
-            hhmm = int(float(get("hormin")))
+            hhmm = int(float(get("hormin", get("horamin"))))
         except (TypeError, ValueError):
             continue
         if day is None or not 0 <= hhmm <= 2400:

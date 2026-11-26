@@ -147,7 +147,14 @@ CONF_OUTDOOR_TEMP: Final = "temperatura_exterior"
 CONF_SIAR_STATION: Final = "siar_estacion"
 CONF_SIAR_USER: Final = "siar_usuario"
 CONF_SIAR_PASSWORD: Final = "siar_clave"
-SECRET_KEYS: Final = (CONF_SIAR_USER, CONF_SIAR_PASSWORD)  # never sent to the panel; hidden in exports
+CONF_SIAR_KEY: Final = "siar_clave_api"
+CONF_IRR_SOURCE: Final = "irradiancia_fuente"
+IRR_AUTO: Final = "auto"
+IRR_OPEN_METEO: Final = "open_meteo"
+IRR_SIAR: Final = "siar"
+IRR_SENSOR: Final = "sensor"
+IRR_SOURCES: Final = (IRR_AUTO, IRR_OPEN_METEO, IRR_SIAR, IRR_SENSOR)
+SECRET_KEYS: Final = (CONF_SIAR_USER, CONF_SIAR_PASSWORD, CONF_SIAR_KEY)  # never sent to the panel; hidden in exports
 REDACTED: Final = "**********"
 CONF_TEMP_EXCLUDE_PATTERN: Final = "patron_excluir_temperaturas"
 CONF_TEMP_MAX: Final = "temperatura_max"
@@ -270,6 +277,7 @@ DEFAULTS: Final[dict[str, object]] = {
     CONF_CO2_TREE: 22.0,
     CONF_CO2_CAR: 0.12,
     CONF_STRING_TOLERANCE: 30.0,
+    CONF_IRR_SOURCE: IRR_AUTO,
     CONF_CELL_DELTA_WARN: 0.05,
     CONF_CELL_DELTA_CRIT: 0.10,
     CONF_CELL_MIN: 2.90,

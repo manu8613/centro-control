@@ -74,6 +74,8 @@ from .const import (
     CONF_PV_FORECAST_TOMORROW,
     CONF_PV_POWER,
     CONF_RAIN_SENSOR,
+    CONF_IRR_SOURCE,
+    CONF_SIAR_KEY,
     CONF_SIAR_PASSWORD,
     CONF_SIAR_STATION,
     CONF_SIAR_USER,
@@ -83,6 +85,10 @@ from .const import (
     DOMAIN,
     HISTORY_DAYS,
     IRRADIANCE_REFRESH,
+    IRR_AUTO,
+    IRR_OPEN_METEO,
+    IRR_SENSOR,
+    IRR_SIAR,
     IRRADIANCE_RETRY,
     LEVELS,
     MAX_INTEGRATION_GAP,
@@ -278,6 +284,13 @@ SIM_DEFAULTS: dict[str, float] = {
 }
 
 
+SIAR_FRESH = 2 * 3600  # s, a measured half hour older than this is not shown as "now"
+
+
+def _hhmm(ts: float) -> str:
+    return dt_util.as_local(datetime.fromtimestamp(ts, UTC)).strftime("%H:%M")
+
+
 def _float(state: State | None) -> float | None:
     if state is None or state.state in BAD:
         return None
@@ -349,6 +362,7 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._siar_at = 0.0
         self._siar_busy = False
         self._siar_eval_at = 0.0
+        self.siar_last: dict[str, tuple[float, float, float, float]] = {}  # string id -> (slot start, W, W/m² on the plane, °C)
 
     # ================================================================ setup
     @property
@@ -779,7 +793,12 @@ class CentroManager(DataUpdateCoordinator[None]):
         if not strings:
             self.efficiency = {}
             return
-        planes = {s.spec.plane for s in strings if not s.irradiance and s.spec.plane}
+        mode = str(self.model.get(CONF_IRR_SOURCE) or IRR_AUTO)
+        if mode not in (IRR_AUTO, IRR_OPEN_METEO, IRR_SIAR, IRR_SENSOR):
+            mode = IRR_AUTO
+        planes = set()
+        if mode in (IRR_AUTO, IRR_OPEN_METEO):
+            planes = {s.spec.plane for s in strings if s.spec.plane and (mode == IRR_OPEN_METEO or not s.irradiance)}
         if planes and not self._irr_busy and ts - self._irr_at > IRRADIANCE_REFRESH:
             self._irr_busy = True
             self.hass.async_create_background_task(self._fetch_irradiance(planes), f"{DOMAIN}_irradiancia")
@@ -790,27 +809,51 @@ class CentroManager(DataUpdateCoordinator[None]):
         for s in strings:
             spec = s.spec
             g = t_model = None
-            if s.irradiance:
-                g, source = self._num(s.irradiance), "sensor"
-            else:
-                g, t_model = eff.interpolate(self._irr_rows.get(spec.plane, []), ts)  # type: ignore[arg-type]
-                source = "open-meteo"
-            t_amb = t_out if t_out is not None else t_model
             w = self.live.get("strings", {}).get(s.id, {}).get("w")
             w = max(w, 0.0) if w is not None else None
-            data = eff.evaluate(spec, w, g, t_amb)
+            measured = ""
+            if mode == IRR_SIAR:
+                source = "siar"
+                last_slot = self.siar_last.get(s.id)
+                if last_slot and ts - last_slot[0] <= SIAR_FRESH:
+                    start, w_slot, g, t_slot = last_slot
+                    data = eff.evaluate(spec, w_slot, g, t_slot)
+                    measured = f"{_hhmm(start)}–{_hhmm(start + siar.SLOT)}"
+                else:
+                    data = eff.evaluate(spec, w, None, t_out)
+                    data["estado"] = "SiAR sin datos recientes" if self._siar_ready else "falta configurar SiAR"
+            elif mode == IRR_SENSOR or (mode == IRR_AUTO and s.irradiance):
+                source = "sensor"
+                g = self._num(s.irradiance) if s.irradiance else None
+                data = eff.evaluate(spec, w, g, t_out)
+                if not s.irradiance:
+                    data["estado"] = "falta el sensor de irradiancia en el string"
+            else:
+                source = "open-meteo"
+                g, t_model = eff.interpolate(self._irr_rows.get(spec.plane, []), ts)  # type: ignore[arg-type]
+                data = eff.evaluate(spec, w, g, t_out if t_out is not None else t_model)
             # energy-weighted figures (kept in the counters: hoy, mes, año, total and daily history)
             last = self._eff_last.get(s.id)
             self._eff_last[s.id] = ts
             if last is not None and 0 < ts - last <= 60 and w is not None:
                 siar.add_sample(self._slots.setdefault(s.id, {}), ts, ts - last, w, t_out, curtailed)
-            if last is not None and 0 < ts - last <= 60 and eff.counts_for_day(g, w, data["p_esperada_w"], curtailed):
+            if mode != IRR_SIAR and last is not None and 0 < ts - last <= 60 and eff.counts_for_day(g, w, data["p_esperada_w"], curtailed):
                 hours = (ts - last) / 3600
                 self.counters.add(f"fv_real_{s.id}", (w or 0) * hours / 1000, now.date())
                 self.counters.add(f"fv_esp_{s.id}", (data["p_esperada_w"] or 0) * hours / 1000, now.date())
                 self.schedule_save()
-            for bucket, key in (("hoy", "rendimiento_hoy_pct"), ("mes", "rendimiento_mes_pct"), ("ano", "rendimiento_ano_pct")):
-                data[key] = eff.ratio(self.counters.get(f"fv_real_{s.id}", bucket), self.counters.get(f"fv_esp_{s.id}", bucket))
+            if mode == IRR_SIAR:
+                periods = self._siar_periods(now, [s.id])
+                data.update(
+                    rendimiento_hoy_pct=periods["siar_hoy_pct"],
+                    rendimiento_mes_pct=periods["siar_mes_pct"],
+                    rendimiento_ano_pct=periods["siar_ano_pct"],
+                    medido=measured,
+                )
+            else:
+                for bucket, key in (("hoy", "rendimiento_hoy_pct"), ("mes", "rendimiento_mes_pct"), ("ano", "rendimiento_ano_pct")):
+                    data[key] = eff.ratio(self.counters.get(f"fv_real_{s.id}", bucket), self.counters.get(f"fv_esp_{s.id}", bucket))
+            w_used = self.siar_last[s.id][1] if measured else w
             data.update(
                 nombre=s.name,
                 w=w,
@@ -819,8 +862,8 @@ class CentroManager(DataUpdateCoordinator[None]):
                 posible_recorte=curtailed,
                 t_ambiente_fuente="configurada" if t_out is not None else ("open-meteo" if t_model is not None else ""),
             )
-            if data["rendimiento_pct"] is not None and w is not None and data["p_esperada_w"]:
-                tot_real += w
+            if data["rendimiento_pct"] is not None and w_used is not None and data["p_esperada_w"]:
+                tot_real += w_used
                 tot_exp += data["p_esperada_w"]
             data.update(self.siar_eval.get(s.id, {}))
             per[s.id] = data
@@ -831,10 +874,12 @@ class CentroManager(DataUpdateCoordinator[None]):
             self.hass.async_create_background_task(self._fetch_siar(), f"{DOMAIN}_siar")
         if ts - self._siar_eval_at > 300:
             self._siar_evaluate(now)
+        day_pct = self._siar_periods(now, [s.id for s in strings])["siar_hoy_pct"] if mode == IRR_SIAR else eff.ratio(day_real, day_exp)
         self.efficiency = {
+            "fuente": mode,
             "siar": self._siar_summary(now),
             "rendimiento_pct": round(100 * tot_real / tot_exp, 1) if tot_exp > 0 else None,
-            "rendimiento_hoy_pct": eff.ratio(day_real, day_exp),
+            "rendimiento_hoy_pct": day_pct,
             "posible_recorte": curtailed,
             "error_irradiancia": self._irr_error,
             "strings": per,
@@ -866,12 +911,12 @@ class CentroManager(DataUpdateCoordinator[None]):
     @property
     def _siar_ready(self) -> bool:
         m = self.model
-        return bool(m.get(CONF_SIAR_STATION) and m.get(CONF_SIAR_USER) and m.get(CONF_SIAR_PASSWORD))
+        return bool(m.get(CONF_SIAR_STATION) and (m.get(CONF_SIAR_KEY) or (m.get(CONF_SIAR_USER) and m.get(CONF_SIAR_PASSWORD))))
 
-    async def _siar_get(self, path: str, params: dict[str, str]) -> tuple[int, Any]:
+    async def _siar_get(self, path: str, params: dict[str, str], base: str = siar.SIAR_URL) -> tuple[int, Any]:
         session = async_get_clientsession(self.hass)
         async with asyncio.timeout(30):
-            response = await session.get(f"{siar.SIAR_URL}/{path}", params=params)
+            response = await session.get(f"{base}/{path}", params=params)
             text = await response.text()
         try:
             payload: Any = json.loads(text)
@@ -894,18 +939,17 @@ class CentroManager(DataUpdateCoordinator[None]):
         m = self.model
         today = dt_util.now().date()
         error = ""
+        dates = {"FechaInicial": (today - timedelta(days=2)).isoformat(), "FechaFinal": today.isoformat()}
+        station = str(m.get(CONF_SIAR_STATION)).strip().upper()
         try:
-            for attempt in (1, 2):
+            if m.get(CONF_SIAR_KEY):
+                payload = await self._siar_by_key(str(m.get(CONF_SIAR_KEY)).strip(), station, dates)
+            for attempt in (() if m.get(CONF_SIAR_KEY) else (1, 2)):
                 if not self._siar_token or time.time() - self._siar_token_at > SIAR_TOKEN_TTL:
                     await self._siar_login()
                 status, payload = await self._siar_get(
                     "Datos/Horarios/ESTACION",
-                    {
-                        "token": self._siar_token,
-                        "Id": str(m.get(CONF_SIAR_STATION)).strip().upper(),
-                        "FechaInicial": (today - timedelta(days=2)).isoformat(),
-                        "FechaFinal": today.isoformat(),
-                    },
+                    {"token": self._siar_token, "Id": station, **dates},
                 )
                 if status in (401, 403) and attempt == 1:
                     self._siar_token = ""
@@ -935,6 +979,23 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._siar_evaluate(dt_util.now())
         self.schedule_save()
         self.async_set_updated_data(None)
+
+    async def _siar_by_key(self, key: str, station: str, dates: dict[str, str]) -> Any:
+        """Half-hourly records with the ClaveAPI (new ministry host first, then the old one)."""
+        errors = []
+        for base in siar.SIAR_KEY_URLS:
+            try:
+                status, payload = await self._siar_get("Datos/Horarios/Estacion", {"ClaveAPI": key, "Id": station, **dates}, base)
+            except Exception as err:  # noqa: BLE001 - try the other host
+                errors.append(f"{base.split('/')[2]}: {err}")
+                continue
+            if status == 404:
+                errors.append(f"{base.split('/')[2]}: HTTP 404")
+                continue
+            if status >= 400:
+                raise RuntimeError(f"HTTP {status}: {siar.text_of(payload)[:150] or 'sin mensaje'}")
+            return payload
+        raise RuntimeError("; ".join(errors) or "SiAR no responde")
 
     def _siar_row_list(self) -> list[tuple[Any, int, float | None, float | None]]:
         out = []
@@ -989,6 +1050,7 @@ class CentroManager(DataUpdateCoordinator[None]):
                 acc[0] += watts * siar.SLOT / 3.6e6
                 acc[1] += p_exp * siar.SLOT / 3.6e6
                 last = {"siar_tramo": local.strftime("%H:%M"), "siar_tramo_pct": round(100 * watts / p_exp, 1), "siar_tramo_wm2": round(poa)}
+                self.siar_last[s.id] = (start, watts, poa, t_amb)
             for day, values in days.items():
                 if day in recent:
                     self.siar_days.setdefault(day, {})[s.id] = [round(values[0], 4), round(values[1], 4)]

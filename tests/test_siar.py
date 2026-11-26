@@ -101,3 +101,9 @@ def test_half_hour_samples():
     assert slot_means(slots[slot_of(start)])[2] is False  # curtailed
     add_sample(slots, start + SLOT, 10, 500, None, False)
     assert slot_means(slots[slot_of(start + SLOT)])[2] is False  # too short
+
+
+def test_parse_rows_with_api_key_format():
+    payload = {"Datos": [{"HoraMin": 30, "Fecha": "2015-01-01T00:00:00", "Radiacion": 0, "TempMedia": -3.369}], "MensajeRespuesta": None}
+    assert parse_rows(payload) == [(date(2015, 1, 1), 30, 0.0, -3.369)]
+    assert text_of({"Datos": [], "MensajeRespuesta": "Clave API no válida"}) == "Clave API no válida"

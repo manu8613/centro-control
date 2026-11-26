@@ -372,6 +372,28 @@ function sunTimes(date, lat, lon) {
   const w = Math.acos(cosW) / rad / 360;
   return { rise: toDate(jTransit - w), set: toDate(jTransit + w), noon: toDate(jTransit) };
 }
+/** Sun elevation and azimuth (°, azimuth from north clockwise) at a moment (NOAA approximation, < 0.5°). */
+function sunPos(date, lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const rad = Math.PI / 180;
+  const start = Date.UTC(date.getUTCFullYear(), 0, 1);
+  const doy = Math.floor((date.getTime() - start) / 86400000) + 1;
+  const hour = date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600;
+  const g = ((2 * Math.PI) / 365) * (doy - 1 + (hour - 12) / 24);
+  const eot = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const ha = ((hour * 60 + eot + 4 * lon) / 4 - 180) * rad;
+  const phi = lat * rad;
+  const cosZ = Math.max(-1, Math.min(1, Math.sin(phi) * Math.sin(decl) + Math.cos(phi) * Math.cos(decl) * Math.cos(ha)));
+  const z = Math.acos(cosZ);
+  let az = 180;
+  if (Math.sin(z) > 1e-6) {
+    const a = Math.acos(Math.max(-1, Math.min(1, (Math.sin(decl) - Math.sin(phi) * cosZ) / (Math.cos(phi) * Math.sin(z))))) / rad;
+    az = ha < 0 ? a : 360 - a;
+  }
+  return { el: 90 - z / rad, az };
+}
+const compass = (az) => ["N", "NE", "E", "SE", "S", "SO", "O", "NO"][Math.round((((az % 360) + 360) % 360) / 45) % 8];
 const hhmm = (d) => (d ? d.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" }) : "—");
 const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const fmtDur = (ms) => {
@@ -1586,15 +1608,47 @@ class CentroControlPanel extends HTMLElement {
     if (!rise && !set && !polar) return null;
     const day = rise && set ? set - rise : null;
     const up = rise && set ? now >= rise && now < set : polar === "dia";
-    const f = rise && set ? Math.max(0, Math.min(1, (now - rise) / (set - rise))) : up ? 0.5 : 0;
-    // arc: x from 20 to 220, sun dot along a half ellipse
-    const x = 20 + 200 * f, y = 70 - 52 * Math.sin(Math.PI * f);
-    const arc = `<svg viewBox="0 0 240 86" style="width:100%;max-width:300px;display:block;margin:2px auto 0">
-      <line x1="8" y1="70" x2="232" y2="70" stroke="#1d2d4a" stroke-width="1.5"/>
-      <path d="M20,70 A100,52 0 0 1 220,70" fill="none" stroke="${C.amber}44" stroke-width="2" stroke-dasharray="4 5"/>
-      ${up ? `<path d="M20,70 A100,52 0 0 1 ${x.toFixed(1)},${y.toFixed(1)}" fill="none" stroke="${C.amber}" stroke-width="2.5" style="filter:drop-shadow(0 0 4px ${C.amber})"/>` : ""}
-      <circle cx="${x.toFixed(1)}" cy="${up ? y.toFixed(1) : 70}" r="${up ? 8 : 6}" fill="${up ? C.gold : "#334155"}" style="${up ? `filter:drop-shadow(0 0 8px ${C.gold})` : ""}"/>
-    </svg>`;
+    const cfg = this._hass?.config || {};
+    const lat = Number(cfg.latitude), lon = Number(cfg.longitude);
+    // real path of the sun: x = time of day (fixed scale, longest day of the year), y = elevation (fixed scale, highest sun of the year)
+    const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const june = sunTimes(new Date(now.getFullYear(), 5, 21, 12), lat, lon);
+    const toH = (d) => (d - midnight) / 3600000;
+    const hod = (d) => (d - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 3600000; // hour of its own day
+    const t0 = Math.floor(Math.min(june?.rise ? hod(june.rise) : 5, rise ? toH(rise) : 24) - 0.5);
+    const t1 = Math.ceil(Math.max(june?.set ? hod(june.set) : 22, set ? toH(set) : 0) + 0.5);
+    const top = Number.isFinite(lat) ? Math.max(20, Math.min(90, 90 - Math.abs(lat) + 23.44)) : 75;
+    const X = (h) => 14 + (212 * (h - t0)) / (t1 - t0), Y = (el) => 76 - (62 * Math.max(el, -6)) / top;
+    const curve = (base, from, to) => {
+      const pts = [];
+      for (let h = from; h <= to + 1e-9; h += 1 / 6) {
+        const p = sunPos(new Date(base.getTime() + h * 3600000), lat, lon);
+        if (p && p.el > -0.8) pts.push(`${X(h).toFixed(1)},${Y(p.el).toFixed(1)}`);
+      }
+      return pts.length > 1 ? `M${pts.join(" L")}` : "";
+    };
+    const pos = sunPos(now, lat, lon);
+    const el = Number(this.a("sun.sun", "elevation") ?? pos?.el);
+    const az = Number(this.a("sun.sun", "azimuth") ?? pos?.az);
+    const noon = rise && set ? new Date((rise.getTime() + set.getTime()) / 2) : null;
+    const maxEl = noon ? sunPos(noon, lat, lon)?.el : null;
+    const nowH = toH(now);
+    const today = curve(midnight, t0, t1);
+    const done = up ? curve(midnight, t0, Math.min(nowH, t1)) : "";
+    const summer = curve(new Date(now.getFullYear(), 5, 21), t0, t1);
+    const ticks = [];
+    for (let h = Math.ceil(t0); h <= t1; h += 3) ticks.push(`<text x="${X(h).toFixed(1)}" y="88" fill="#64748b" font-size="7" text-anchor="middle">${h}h</text>`);
+    const arc = Number.isFinite(lat) ? `<svg viewBox="0 0 240 92" style="width:100%;max-width:320px;display:block;margin:2px auto 0">
+      <line x1="8" y1="${Y(0)}" x2="232" y2="${Y(0)}" stroke="#1d2d4a" stroke-width="1.5"/>
+      ${summer ? `<path d="${summer}" fill="none" stroke="#64748b55" stroke-width="1" stroke-dasharray="2 4"><title>21 de junio</title></path>` : ""}
+      ${today ? `<path d="${today}" fill="none" stroke="${C.amber}55" stroke-width="2" stroke-dasharray="4 5"/>` : ""}
+      ${done ? `<path d="${done}" fill="none" stroke="${C.amber}" stroke-width="2.5" style="filter:drop-shadow(0 0 4px ${C.amber})"/>` : ""}
+      ${ticks.join("")}
+      ${Number.isFinite(el) && nowH >= t0 && nowH <= t1 ? `<circle cx="${X(nowH).toFixed(1)}" cy="${Y(el).toFixed(1)}" r="${up ? 7 : 5}" fill="${up ? C.gold : "#334155"}" style="${up ? `filter:drop-shadow(0 0 8px ${C.gold})` : ""}"/>` : ""}
+    </svg>` : "";
+    const where = Number.isFinite(el) && Number.isFinite(az)
+      ? `<div class="small" style="text-align:center;margin-top:2px"><b style="color:${up ? C.gold : "#94a3b8"}">${up ? "Altura" : "Bajo el horizonte"} ${fmt(el, 0)}°</b> · azimut ${fmt(az, 0)}° (${compass(az)})${noon && maxEl !== null && maxEl !== undefined ? ` · mediodía ${hhmm(noon)} a ${fmt(maxEl, 0)}°` : ""}</div>`
+      : "";
     let next;
     if (polar === "dia") next = "Sol de medianoche: hoy no se pone";
     else if (polar === "noche") next = "Noche polar: hoy no sale";
@@ -1602,7 +1656,7 @@ class CentroControlPanel extends HTMLElement {
     else if (up && set) next = `Se pone en ${fmtDur(set - now)}`;
     else next = tomorrow ? `Mañana amanece a las ${hhmm(tomorrow)}` : "Ya es de noche";
     const col = (ic, l, v, c) => `<div style="text-align:center;flex:1"><div class="small muted">${icon(ic)} ${l}</div><div style="font-size:22px;font-weight:800;color:${c};font-variant-numeric:tabular-nums">${v}</div></div>`;
-    return this.card("sol", `<h3>${icon(up ? "mdi:white-balance-sunny" : "mdi:weather-night")}Sol</h3>${arc}
+    return this.card("sol", `<h3>${icon(up ? "mdi:white-balance-sunny" : "mdi:weather-night")}Sol</h3>${arc}${where}
       <div style="display:flex;gap:8px;margin-top:2px">${col("mdi:weather-sunset-up", "Salida", hhmm(rise), C.amber)}${col("mdi:weather-sunset-down", "Puesta", hhmm(set), C.orange)}</div>
       <div class="small muted" style="text-align:center;margin-top:6px">${day !== null ? `${fmtDur(day)} de luz · ` : ""}${esc(next)}</div>`, { c: C.amber, w: 6, cls: "m12", click: this.st("sun.sun") ? "sun.sun" : null });
   }

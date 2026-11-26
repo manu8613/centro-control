@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.21.0 (v2.21.1 en PR) · Commit de referencia: `1987f8b` · Actualizado: 2026-11-26
+Versión publicada: v2.21.1 (v2.22.0 en PR) · Commit de referencia: `9ac0b38` · Actualizado: 2026-11-26
 
 ## Funciona (comprobado)
+- v2.22.0 (PR): tarjeta Sol con la trayectoria real del sol (altura frente a hora, escala fija del año, referencia del 21 de junio), altura, azimut y mediodía solar; corregido el punto que no caía sobre el arco. Comprobado en Chrome sin pantalla (tarde de noviembre, noche y 21 de junio) y la posición frente al cálculo en Python (misma cifra).
 - v2.21.1 (PR): SiAR lee las respuestas en Windows-1252/Latin-1 (en la casa real fallaba con `0xe1`) y muestra el mensaje real de la estación. Probado con pytest con un 403 en Latin-1; falta ver el mensaje real.
 - v2.21.0 (PR): rendimiento real de cada string frente a su ficha técnica (irradiancia de sensor u Open-Meteo, temperatura exterior, NOCT y coeficiente de Pmax), sensores por string y globales, y sección en la pestaña Solar; además, rendimiento medido con la irradiancia de una estación SiAR (clave API o token de REGEUS) y fuente de irradiancia configurable (automática, Open-Meteo, SiAR o sensor). Probado con pytest (con Open-Meteo y SiAR simulados) y en Chrome sin pantalla con dos strings; falta verlo en la casa real con días despejados.
 - v2.20.1 (PR): corregido el solape momentáneo de secciones en el móvil: el empaquetado se recalcula dentro del `ResizeObserver` (antes de pintar) y 700 ms después de cada refresco. Reproducido en Chrome sin pantalla con iconos que crecen tarde: de 2 fotogramas pintados con solape (236 px) a 0.

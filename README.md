@@ -46,7 +46,7 @@ quieras, y «Añadir» admite indicadores, marcadores de aguja y gráficas.
 
 | Pestaña | Qué enseña |
 |:--|:--|
-| **Puente de mando** | Flujo de energía animado, marcadores de autosuficiencia (ahora y hoy), indicadores clave, salida y puesta del sol, temperatura media de casa con la estancia más caliente y la más fría y la exterior, control de persianas y de estores (por separado), resumen del periodo elegido, alertas y gráfica de 24 h. |
+| **Puente de mando** | Flujo de energía animado, marcadores de autosuficiencia (ahora y hoy), indicadores clave, salida y puesta del sol con su posición real (altura, azimut y trayectoria del día), temperatura media de casa con la estancia más caliente y la más fría y la exterior, control de persianas y de estores (por separado), resumen del periodo elegido, alertas y gráfica de 24 h. |
 | **Red** | Importación y vertido, uso de la potencia contratada, tensión y frecuencia, precio de hoy y mañana, 30 días. |
 | **Solar** | Producción frente a la potencia pico, cada string (W, V, A, % de Wp), comparativa W/kWp, **rendimiento real** de cada string frente a su ficha técnica, inversor, histórico diario y mensual. Con un inversor Deye: **carga de la batería por la red**, intensidad y programas 1 y 2. Con una entidad del tiempo: **nubosidad de hoy y de 5 días** y la **recomendación de carga por red** de la noche. |
 | **Batería** | Carga total, flujo, energía almacenada, autonomía, cada batería y sus celdas una a una, comunicación con cada BMS y diferencia de SOC entre baterías. |

@@ -8,6 +8,14 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.22.0] - 2026-11-26
+
+### Añadido
+- Tarjeta **Sol** del Puente de mando: la **posición real del sol**, con su altura sobre el horizonte y su azimut (con el punto cardinal), y el mediodía solar con la altura máxima del día. El arco es ahora la trayectoria real del sol a lo largo del día (hora en horizontal, altura en vertical) con la escala fija del año, así que en invierno se ve bajo y corto y en verano alto y largo; en gris, la del 21 de junio como referencia.
+
+### Corregido
+- En la tarjeta Sol el punto no caía sobre el arco y el tramo recorrido se dibujaba con otra curva: el sol parecía más alto de lo que estaba (a media tarde de noviembre salía cerca de lo más alto).
+
 ## [2.21.1] - 2026-11-26
 
 ### Corregido

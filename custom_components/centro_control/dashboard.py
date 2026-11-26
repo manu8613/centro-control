@@ -57,7 +57,7 @@ MAIN_KEYS: dict[str, str] = {
     "sim_excedentes": "number",
 }
 SUB_KEYS: dict[str, dict[str, str]] = {
-    SUB_STRING: {"energia_string": "sensor"},
+    SUB_STRING: {"energia_string": "sensor", "rendimiento_string": "sensor"},
     SUB_CIRCUIT: {"energia_circuito": "sensor"},
     SUB_ZONE: {"riego_restante": "sensor", "regar": "button", "minutos_riego": "number"},
 }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 import logging
 import re
@@ -14,6 +15,7 @@ from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
@@ -77,12 +79,15 @@ from .const import (
     LEVELS,
     MAX_INTEGRATION_GAP,
     PERIODS,
+    IRRADIANCE_REFRESH,
+    IRRADIANCE_RETRY,
     PROBLEMS_TICK,
     SAVE_DELAY,
     STORAGE_MINOR_VERSION,
     STORAGE_VERSION,
     TICK,
 )
+from . import efficiency as eff
 from .convivencia import BusMonitor
 from .energy import Counters, Integrator, Meter, to_kwh, to_watts
 from .insights import summary
@@ -318,6 +323,12 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._forecast_at = 0.0
         self._forced_close: dict[str, float] = {}
         self.imported = False
+        self.efficiency: dict[str, Any] = {}
+        self._irr_rows: dict[tuple[float, float], list[tuple[float, float | None, float | None]]] = {}
+        self._irr_at = 0.0
+        self._irr_busy = False
+        self._irr_error = ""
+        self._eff_last: dict[str, float] = {}
 
     # ================================================================ setup
     @property
@@ -696,6 +707,7 @@ class CentroManager(DataUpdateCoordinator[None]):
             "batteries": batteries,
             "circuits": circuits,
         }
+        self._update_efficiency(now, ts)
         tree, car = self.model.num(CONF_CO2_TREE, 22), self.model.num(CONF_CO2_CAR, 0.12)
         self.insights = summary(self.counters, self.tariff.typical_price(), tree, car)
         if ts - self._forecast_at > 300:
@@ -703,6 +715,112 @@ class CentroManager(DataUpdateCoordinator[None]):
         self._update_solar_plan(now, ts)
         self._check_zone_limits(now)
         self.async_set_updated_data(None)
+
+    # ================================================================ PV efficiency
+    def _outdoor_c(self) -> float | None:
+        """Outdoor temperature (°C) from the configured sensor/weather, else from the weather entity."""
+        for entity in (self.model.get(CONF_OUTDOOR_TEMP), self.model.get(CONF_WEATHER)):
+            state = self.hass.states.get(entity) if entity else None
+            if state is None:
+                continue
+            if state.domain == "weather":
+                value = state.attributes.get("temperature")
+                unit = state.attributes.get("temperature_unit")
+            else:
+                value, unit = state.state, state.attributes.get("unit_of_measurement")
+            try:
+                temp = float(value)
+            except (TypeError, ValueError):
+                continue
+            return (temp - 32) * 5 / 9 if unit == "°F" else temp
+        return None
+
+    def _curtailed(self) -> bool:
+        """Battery full, not charging and not exporting: the inverter is probably throttling the panels."""
+        live = self.live
+        soc, bat, exp = live.get("soc"), live.get("battery_w"), live.get("export_w")
+        if soc is None or bat is None:
+            return False
+        return soc >= 97 and -bat < 200 and (exp or 0) < 100
+
+    def _update_efficiency(self, now: datetime, ts: float) -> None:
+        strings = [s for s in self.model.strings if s.efficiency_ready]
+        if not strings:
+            self.efficiency = {}
+            return
+        planes = {s.spec.plane for s in strings if not s.irradiance and s.spec.plane}
+        if planes and not self._irr_busy and ts - self._irr_at > IRRADIANCE_REFRESH:
+            self._irr_busy = True
+            self.hass.async_create_background_task(self._fetch_irradiance(planes), f"{DOMAIN}_irradiancia")
+        t_out = self._outdoor_c()
+        curtailed = self._curtailed()
+        per: dict[str, dict[str, Any]] = {}
+        tot_real = tot_exp = 0.0
+        for s in strings:
+            spec = s.spec
+            g = t_model = None
+            if s.irradiance:
+                g, source = self._num(s.irradiance), "sensor"
+            else:
+                g, t_model = eff.interpolate(self._irr_rows.get(spec.plane, []), ts)  # type: ignore[arg-type]
+                source = "open-meteo"
+            t_amb = t_out if t_out is not None else t_model
+            w = self.live.get("strings", {}).get(s.id, {}).get("w")
+            w = max(w, 0.0) if w is not None else None
+            data = eff.evaluate(spec, w, g, t_amb)
+            # energy-weighted figures (kept in the counters: hoy, mes, año, total and daily history)
+            last = self._eff_last.get(s.id)
+            self._eff_last[s.id] = ts
+            if last is not None and 0 < ts - last <= 60 and eff.counts_for_day(g, w, data["p_esperada_w"], curtailed):
+                hours = (ts - last) / 3600
+                self.counters.add(f"fv_real_{s.id}", (w or 0) * hours / 1000, now.date())
+                self.counters.add(f"fv_esp_{s.id}", (data["p_esperada_w"] or 0) * hours / 1000, now.date())
+                self.schedule_save()
+            for bucket, key in (("hoy", "rendimiento_hoy_pct"), ("mes", "rendimiento_mes_pct"), ("ano", "rendimiento_ano_pct")):
+                data[key] = eff.ratio(self.counters.get(f"fv_real_{s.id}", bucket), self.counters.get(f"fv_esp_{s.id}", bucket))
+            data.update(
+                nombre=s.name,
+                w=w,
+                wp=s.peak_wp,
+                fuente=source,
+                posible_recorte=curtailed,
+                t_ambiente_fuente="configurada" if t_out is not None else ("open-meteo" if t_model is not None else ""),
+            )
+            if data["rendimiento_pct"] is not None and w is not None and data["p_esperada_w"]:
+                tot_real += w
+                tot_exp += data["p_esperada_w"]
+            per[s.id] = data
+        day_real = sum(self.counters.get(f"fv_real_{s.id}") for s in strings)
+        day_exp = sum(self.counters.get(f"fv_esp_{s.id}") for s in strings)
+        self.efficiency = {
+            "rendimiento_pct": round(100 * tot_real / tot_exp, 1) if tot_exp > 0 else None,
+            "rendimiento_hoy_pct": eff.ratio(day_real, day_exp),
+            "posible_recorte": curtailed,
+            "error_irradiancia": self._irr_error,
+            "strings": per,
+        }
+
+    async def _fetch_irradiance(self, planes: set[tuple[float, float]]) -> None:
+        """Irradiance on each plane of panels (and temperature) from Open-Meteo, every few minutes."""
+        session = async_get_clientsession(self.hass)
+        lat, lon = self.hass.config.latitude, self.hass.config.longitude
+        errors: list[str] = []
+        try:
+            for plane in planes:
+                try:
+                    async with asyncio.timeout(20):
+                        response = await session.get(eff.OPEN_METEO_URL, params=eff.open_meteo_params(lat, lon, plane))
+                        response.raise_for_status()
+                        payload = await response.json()
+                    self._irr_rows[plane] = eff.parse_open_meteo(payload)
+                except Exception as err:  # noqa: BLE001 - network: keep the last data and retry later
+                    errors.append(f"{plane}: {err}")
+        finally:
+            self._irr_busy = False
+            self._irr_at = time.time() if not errors else time.time() - IRRADIANCE_REFRESH + IRRADIANCE_RETRY
+            self._irr_error = "; ".join(errors)[:300]
+        if errors:
+            _LOGGER.debug("Open-Meteo sin irradiancia: %s", self._irr_error)
 
     # ================================================================ forecasts
     def scenario(self) -> Scenario:

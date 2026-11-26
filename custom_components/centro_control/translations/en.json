@@ -314,11 +314,25 @@
             "corriente": "Corriente",
             "energia": "Energía (contador)",
             "pico_wp": "Potencia pico (Wp)",
-            "grupo": "Grupo"
+            "grupo": "Grupo",
+            "inclinacion": "Tilt (°)",
+            "orientacion": "Azimuth (°)",
+            "coef_temp_pmax": "Pmax temperature coefficient (%/°C)",
+            "noct": "NOCT (°C)",
+            "eficiencia_modulo": "Module efficiency (%)",
+            "degradacion": "Degradation (%)",
+            "irradiancia": "Irradiance (sensor, optional)"
           },
           "data_description": {
             "potencia": "Sensor en W o kW.",
-            "energia": "Opcional. Si no, se integra la potencia."
+            "energia": "Opcional. Si no, se integra la potencia.",
+            "inclinacion": "For the real efficiency. 0 = flat, 90 = vertical.",
+            "orientacion": "Compass: 90 = east, 180 = south, 270 = west.",
+            "coef_temp_pmax": "From the datasheet, negative (e.g. -0.26). Default -0.30.",
+            "noct": "Cell temperature at 800 W/m² and 20 °C. Default 45.",
+            "eficiencia_modulo": "From the datasheet (STC). Default 21.",
+            "degradacion": "Age loss already expected by the warranty (e.g. 1 the first year). Default 0.",
+            "irradiancia": "W/m² on the plane of the panels. Without it, Open-Meteo is used with tilt and azimuth."
           },
           "description": "Cada string o MPPT del inversor. Los strings del mismo **grupo** (misma orientación) se comparan entre sí para detectar sombras o fallos."
         },
@@ -331,11 +345,25 @@
             "corriente": "Corriente",
             "energia": "Energía (contador)",
             "pico_wp": "Potencia pico (Wp)",
-            "grupo": "Grupo"
+            "grupo": "Grupo",
+            "inclinacion": "Tilt (°)",
+            "orientacion": "Azimuth (°)",
+            "coef_temp_pmax": "Pmax temperature coefficient (%/°C)",
+            "noct": "NOCT (°C)",
+            "eficiencia_modulo": "Module efficiency (%)",
+            "degradacion": "Degradation (%)",
+            "irradiancia": "Irradiance (sensor, optional)"
           },
           "data_description": {
             "potencia": "Sensor en W o kW.",
-            "energia": "Opcional. Si no, se integra la potencia."
+            "energia": "Opcional. Si no, se integra la potencia.",
+            "inclinacion": "For the real efficiency. 0 = flat, 90 = vertical.",
+            "orientacion": "Compass: 90 = east, 180 = south, 270 = west.",
+            "coef_temp_pmax": "From the datasheet, negative (e.g. -0.26). Default -0.30.",
+            "noct": "Cell temperature at 800 W/m² and 20 °C. Default 45.",
+            "eficiencia_modulo": "From the datasheet (STC). Default 21.",
+            "degradacion": "Age loss already expected by the warranty (e.g. 1 the first year). Default 0.",
+            "irradiancia": "W/m² on the plane of the panels. Without it, Open-Meteo is used with tilt and azimuth."
           },
           "description": "Cada string o MPPT del inversor. Los strings del mismo **grupo** (misma orientación) se comparan entre sí para detectar sombras o fallos."
         }
@@ -672,6 +700,15 @@
       },
       "riego_restante": {
         "name": "Tiempo restante"
+      },
+      "rendimiento_string": {
+        "name": "Real efficiency"
+      },
+      "rendimiento_solar": {
+        "name": "Real panel efficiency"
+      },
+      "rendimiento_solar_hoy": {
+        "name": "Real panel efficiency today"
       }
     },
     "binary_sensor": {

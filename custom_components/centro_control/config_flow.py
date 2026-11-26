@@ -38,6 +38,13 @@ from .const import (
     BAT_POSITIVE_CHARGE,
     BAT_POSITIVE_DISCHARGE,
     CONF_ALARMS,
+    CONF_AZIMUTH,
+    CONF_DEGRADATION,
+    CONF_GAMMA,
+    CONF_IRRADIANCE,
+    CONF_MODULE_EFF,
+    CONF_NOCT,
+    CONF_TILT,
     CONF_BATTERY_SIGN,
     CONF_BATTERY_TEMP_MAX,
     CONF_BILLING_DAY,
@@ -524,6 +531,13 @@ class StringFlow(_ItemFlow):
         CONF_ENERGY: (ENERGY, False),
         CONF_PEAK: (_number(0, 50000, 1, "Wp"), True),
         CONF_GROUP: (TextSelector(), True),
+        CONF_TILT: (_number(0, 90, 1, "°"), False),
+        CONF_AZIMUTH: (_number(0, 359, 1, "°"), False),
+        CONF_GAMMA: (_number(-1, 0, 0.01, "%/°C"), False),
+        CONF_NOCT: (_number(30, 60, 0.1, "°C"), False),
+        CONF_MODULE_EFF: (_number(5, 30, 0.1, "%"), False),
+        CONF_DEGRADATION: (_number(0, 40, 0.01, "%"), False),
+        CONF_IRRADIANCE: (SENSOR, False),
     }
     DEFAULTS = {CONF_PEAK: 0, CONF_GROUP: "A"}
 

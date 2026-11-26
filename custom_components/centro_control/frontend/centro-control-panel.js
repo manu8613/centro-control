@@ -1811,13 +1811,47 @@ class CentroControlPanel extends HTMLElement {
     charts.push(this.chartCard("p30", "Producción 30 días (kWh)", C.amber, { kind: "days", unit: "kWh", series: [{ name: "Solar", field: "solar", color: C.amber }] }));
     charts.push(this.chartCard("p12", "Producción por meses (kWh)", C.amber, { kind: "months", unit: "kWh", count: 12, series: [{ name: "Solar", field: "solar", color: C.amber }] }));
     const deye = this.deyeCards();
+    const eff = this.effCards();
     return [
       { cards: head },
       { cards: [this.title("ts", "Strings", "", "mdi:solar-panel", C.amber), ...st, ...(inv.length ? [this.title("ti", "Inversor", "", "mdi:power-plug-battery", C.orange), ...inv] : [])] },
+      ...(eff.length ? [{ id: "rendimiento", cards: eff }] : []),
       { id: "plan", cls: "w2", cards: this.adviceCards() },
       { id: "deye", cls: deye.length > 1 ? "w3" : "", cards: deye },
       { cls: "w2", cards: charts },
     ];
+  }
+
+  // ---------------------------------------------------------------- real efficiency of the strings vs datasheet
+  _effColor(v) { return v === null || v === undefined ? C.cyan : v >= 90 ? C.green : v >= 80 ? C.lime : v >= 70 ? C.orange : C.red; }
+
+  effCards() {
+    const e = this.id("rendimiento_solar");
+    const per = this.a(e, "strings") || [];
+    if (!this.st(e) || !per.length) return [];
+    const now = this.N("rendimiento_solar");
+    const day = this.N("rendimiento_solar_hoy");
+    const cards = [
+      this.title("tr", "Rendimiento real", "Producción frente a la ficha técnica, con la luz y la temperatura de ahora", "mdi:solar-panel-large", C.green),
+      this.card("rg", gauge(now, 0, 120, this._effColor(now), now === null ? "esperando luz" : "ahora", "%"), { c: this._effColor(now), w: 6, click: e }),
+      this.kpi("rh", this.id("rendimiento_solar_hoy"), day === null ? "—" : `${fmt(day, 1)} %`, `Hoy (ponderado por energía)${this.a(e, "posible_recorte") ? " · batería llena: pausa por posible recorte" : ""}`, "mdi:calendar-today", this._effColor(day), 6),
+    ];
+    for (const s of per) {
+      const r = s.rendimiento_pct;
+      const bits = [
+        s.irradiancia_wm2 !== null ? `${fmt(s.irradiancia_wm2, 0)} W/m²` : "",
+        s.t_celda !== null ? `célula ${fmt(s.t_celda, 0)} °C (aire ${fmt(s.t_ambiente, 0)} °C)` : "",
+        s.p_esperada_w !== null ? `esperado ${fmtW(s.p_esperada_w)}` : "",
+        s.eficiencia_pct !== null ? `conversión ${fmt(s.eficiencia_pct, 1)} %` : "",
+      ].filter(Boolean).join(" · ");
+      const periods = [["hoy", s.rendimiento_hoy_pct], ["mes", s.rendimiento_mes_pct], ["año", s.rendimiento_ano_pct]].map(([l, v]) => `${l} ${v === null || v === undefined ? "—" : fmt(v, 0) + " %"}`).join(" · ");
+      const ent = this.id(s.id + ":rendimiento_string");
+      cards.push(this.card("r" + s.id, `<div class="kpi"><div class="ic">${icon("mdi:solar-panel")}</div><div style="flex:1"><div class="v" style="color:${this._effColor(r)}">${r === null ? "—" : fmt(r, 1) + " %"}</div><div class="l">${esc(s.nombre)} · ${esc(s.estado === "ok" ? periods : s.estado || periods)}</div>${r !== null ? `<div class="bar" style="margin-top:6px"><i style="width:${Math.min(100, r)}%;background:${this._effColor(r)}"></i></div>` : ""}<div class="small muted" style="margin-top:3px">${esc(bits)}${s.fuente ? ` · irradiancia: ${esc(s.fuente)}` : ""}</div></div></div>`, { c: this._effColor(r), w: 12, click: ent }));
+    }
+    if (this.a(e, "error_irradiancia")) cards.push(this.empty("rerr", `Open-Meteo no responde: ${esc(this.a(e, "error_irradiancia"))}. Se reintenta solo.`));
+    const ids = per.map((s) => this.id(s.id + ":rendimiento_string")).filter(Boolean);
+    if (ids.length) cards.push(this.chartCard("r24", "Rendimiento real 24 h (%)", C.green, { kind: "history", hours: 24, unit: "%", series: per.map((s, i) => ({ name: s.nombre, entity: this.id(s.id + ":rendimiento_string"), color: PALETTE[i % PALETTE.length] })) }));
+    return cards;
   }
 
   // ---------------------------------------------------------------- inverter control (Deye) and cloud cover

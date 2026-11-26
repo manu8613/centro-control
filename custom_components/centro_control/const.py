@@ -15,7 +15,7 @@ NAME: Final = "Centro de Control"
 AUTHOR: Final = "manu8613"
 AUTHOR_URL: Final = "https://github.com/manu8613"
 REPO_URL: Final = "https://github.com/manu8613/centro-control"
-VERSION: Final = "2.20.1"
+VERSION: Final = "2.21.0"
 
 DEFAULT_TITLE: Final = "Centro de Control"
 DASHBOARD_URL: Final = "centro-control"
@@ -27,6 +27,8 @@ SAVE_DELAY: Final = 60
 
 TICK: Final = timedelta(seconds=10)
 PROBLEMS_TICK: Final = timedelta(seconds=30)
+IRRADIANCE_REFRESH: Final = 600  # s, Open-Meteo gives 15-min data
+IRRADIANCE_RETRY: Final = 120  # s after a failed request
 MAX_INTEGRATION_GAP: Final = 120.0  # s; longer gaps are not integrated
 HISTORY_DAYS: Final = 800
 ATTR_HISTORY_DAYS: Final = 62
@@ -184,6 +186,13 @@ CONF_VOLTAGE: Final = "tension"
 CONF_CURRENT: Final = "corriente"
 CONF_PEAK: Final = "pico_wp"
 CONF_GROUP: Final = "grupo"
+CONF_TILT: Final = "inclinacion"
+CONF_AZIMUTH: Final = "orientacion"
+CONF_GAMMA: Final = "coef_temp_pmax"
+CONF_NOCT: Final = "noct"
+CONF_MODULE_EFF: Final = "eficiencia_modulo"
+CONF_DEGRADATION: Final = "degradacion"
+CONF_IRRADIANCE: Final = "irradiancia"
 CONF_SOC: Final = "soc"
 CONF_BATTERY_SIGN: Final = "signo"
 BAT_POSITIVE_DISCHARGE: Final = "positivo_descarga"

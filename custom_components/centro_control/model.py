@@ -27,7 +27,14 @@ from .const import (
     CONF_CYCLES,
     CONF_ENERGY,
     CONF_GRID_SIGN,
+    CONF_AZIMUTH,
+    CONF_DEGRADATION,
+    CONF_GAMMA,
     CONF_GROUP,
+    CONF_IRRADIANCE,
+    CONF_MODULE_EFF,
+    CONF_NOCT,
+    CONF_TILT,
     CONF_HUMIDITIES,
     CONF_ICON,
     CONF_IN_TOTAL,
@@ -55,6 +62,7 @@ from .const import (
     SUB_STRING,
     SUB_ZONE,
 )
+from .efficiency import DEFAULT_GAMMA, DEFAULT_MODULE_EFF, DEFAULT_NOCT, StringSpec
 
 
 def slug(text: str) -> str:
@@ -62,6 +70,18 @@ def slug(text: str) -> str:
     table = str.maketrans("áéíóúüñÁÉÍÓÚÜÑ", "aeiouunAEIOUUN")
     value = re.sub(r"[^a-z0-9]+", "_", text.translate(table).lower()).strip("_")
     return value or "x"
+
+
+def _opt_float(value: Any) -> float | None:
+    try:
+        return None if value in (None, "") else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _float_or(value: Any, default: float) -> float:
+    found = _opt_float(value)
+    return default if found is None else found
 
 
 def _list(value: Any) -> list[str]:
@@ -82,10 +102,34 @@ class PVString:
     energy: str | None = None
     peak_wp: float = 0.0
     group: str = "A"
+    tilt: float | None = None
+    azimuth: float | None = None
+    gamma: float = DEFAULT_GAMMA
+    noct: float = DEFAULT_NOCT
+    module_eff: float = DEFAULT_MODULE_EFF
+    degradation: float = 0.0
+    irradiance: str | None = None
 
     @property
     def metric(self) -> str:
         return f"string_{self.id}"
+
+    @property
+    def spec(self) -> StringSpec:
+        return StringSpec(
+            wp=self.peak_wp,
+            tilt=self.tilt,
+            azimuth=self.azimuth,
+            gamma=self.gamma,
+            noct=self.noct,
+            module_eff=self.module_eff,
+            degradation=self.degradation,
+        )
+
+    @property
+    def efficiency_ready(self) -> bool:
+        """Enough data to compute the real efficiency (own sensor or a plane for Open-Meteo)."""
+        return bool(self.peak_wp) and (bool(self.irradiance) or self.spec.plane is not None)
 
 
 @dataclass(frozen=True)
@@ -169,6 +213,13 @@ class Model:
                         energy=sub.get(CONF_ENERGY) or None,
                         peak_wp=float(sub.get(CONF_PEAK) or 0),
                         group=str(sub.get(CONF_GROUP) or "A"),
+                        tilt=_opt_float(sub.get(CONF_TILT)),
+                        azimuth=_opt_float(sub.get(CONF_AZIMUTH)),
+                        gamma=_float_or(sub.get(CONF_GAMMA), DEFAULT_GAMMA),
+                        noct=_float_or(sub.get(CONF_NOCT), DEFAULT_NOCT),
+                        module_eff=_float_or(sub.get(CONF_MODULE_EFF), DEFAULT_MODULE_EFF),
+                        degradation=_float_or(sub.get(CONF_DEGRADATION), 0.0),
+                        irradiance=sub.get(CONF_IRRADIANCE) or None,
                     )
                 )
             elif kind == SUB_BATTERY:

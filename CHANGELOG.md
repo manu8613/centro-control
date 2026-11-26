@@ -8,6 +8,11 @@ versión → reinicia Home Assistant.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y
 las versiones [SemVer](https://semver.org/lang/es/): `MAYOR.MENOR.PARCHE`.
 
+## [2.21.1] - 2026-11-26
+
+### Corregido
+- SiAR: el rendimiento medido daba el error `'utf-8' codec can't decode byte 0xe1`. La API de SiAR responde en Windows-1252/Latin-1 (con tildes en sus mensajes) y ahora se lee bien; el mensaje que da SiAR (por ejemplo, si la clave no vale o no tiene permiso para la estación) se muestra tal cual. Si el servidor nuevo del ministerio responde, ya no se prueba el antiguo.
+
 ## [2.21.0] - 2026-11-26
 
 ### Añadido

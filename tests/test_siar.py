@@ -107,3 +107,13 @@ def test_parse_rows_with_api_key_format():
     payload = {"Datos": [{"HoraMin": 30, "Fecha": "2015-01-01T00:00:00", "Radiacion": 0, "TempMedia": -3.369}], "MensajeRespuesta": None}
     assert parse_rows(payload) == [(date(2015, 1, 1), 30, 0.0, -3.369)]
     assert text_of({"Datos": [], "MensajeRespuesta": "Clave API no válida"}) == "Clave API no válida"
+
+
+def test_decode_latin1_answers():
+    from custom_components.centro_control.siar import decode
+
+    raw = '{"Datos": null, "MensajeRespuesta": "Clave API no válida"}'.encode("cp1252")
+    assert "válida" in decode(raw)
+    assert "válida" in decode(raw, "utf-8")  # wrong declared charset
+    assert decode("ñ".encode()) == "ñ"
+    assert decode(b"\x81\x8d", "nope") == "\x81\x8d"

@@ -1,8 +1,9 @@
 # Estado
 
-Versión publicada: v2.20.0 (v2.20.1 y v2.21.0 en PR) · Commit de referencia: `efc0bb5` · Actualizado: 2026-11-26
+Versión publicada: v2.21.0 (v2.21.1 en PR) · Commit de referencia: `1987f8b` · Actualizado: 2026-11-26
 
 ## Funciona (comprobado)
+- v2.21.1 (PR): SiAR lee las respuestas en Windows-1252/Latin-1 (en la casa real fallaba con `0xe1`) y muestra el mensaje real de la estación. Probado con pytest con un 403 en Latin-1; falta ver el mensaje real.
 - v2.21.0 (PR): rendimiento real de cada string frente a su ficha técnica (irradiancia de sensor u Open-Meteo, temperatura exterior, NOCT y coeficiente de Pmax), sensores por string y globales, y sección en la pestaña Solar; además, rendimiento medido con la irradiancia de una estación SiAR (clave API o token de REGEUS) y fuente de irradiancia configurable (automática, Open-Meteo, SiAR o sensor). Probado con pytest (con Open-Meteo y SiAR simulados) y en Chrome sin pantalla con dos strings; falta verlo en la casa real con días despejados.
 - v2.20.1 (PR): corregido el solape momentáneo de secciones en el móvil: el empaquetado se recalcula dentro del `ResizeObserver` (antes de pintar) y 700 ms después de cada refresco. Reproducido en Chrome sin pantalla con iconos que crecen tarde: de 2 fotogramas pintados con solape (236 px) a 0.
 - v2.20.0 (PR): Diseño sin huecos muertos (las secciones se empaquetan en filas de 8 px), arrastrar secciones enteras por su asa ✥ a la columna elegida soltar tarjetas en cualquier espacio libre (van a la sección más cercana), crear secciones nuevas de ancho y alto elegidos, marcadores de aguja propios y los de autosuficiencia como tarjetas sueltas. Probado en Chrome sin pantalla a 1735 px con ratón real y con eventos táctiles simulados; falta en la tablet real.
@@ -34,7 +35,7 @@ Versión publicada: v2.20.0 (v2.20.1 y v2.21.0 en PR) · Commit de referencia: `
 - Nada.
 
 ## Pendiente / por verificar
-- SiAR (v2.21.0): probado solo contra respuestas simuladas según los manuales de la API (clave API: `HoraMin`, `Fecha` ISO, `MensajeRespuesta`); falta con una clave real (servidor que responde, retraso con el que publica la estación y límites de la clave).
+- SiAR (v2.21.0): en la casa real la API respondió en Latin-1 y fallaba al leerla (corregido); falta ver el mensaje real que da. Antes, probado solo contra respuestas simuladas según los manuales de la API (clave API: `HoraMin`, `Fecha` ISO, `MensajeRespuesta`); falta con una clave real (servidor que responde, retraso con el que publica la estación y límites de la clave).
 - Rendimiento real (v2.21.0): comparar unos días despejados con la producción real; si Open-Meteo se queda corto o largo en esta zona, valorar un sensor de irradiancia propio.
 - Dependabot añadido en este cambio: revisar los primeros PR que abra.
 
@@ -75,5 +76,5 @@ Versión publicada: v2.20.0 (v2.20.1 y v2.21.0 en PR) · Commit de referencia: `
 **Centro de Control · feat/rendimiento-real-strings · v2.21.0**
 - Objetivo: indicador del % de rendimiento real de los paneles por string cruzando su producción, la temperatura exterior y la ficha técnica, en el panel y como entidades de HA.
 - Cambios: `efficiency.py` (modelo NOCT, potencia esperada, eficiencia de conversión, Open-Meteo `minutely_15` con `global_tilted_irradiance_instant`); campos nuevos del string (`inclinacion`, `orientacion`, `coef_temp_pmax`, `noct`, `eficiencia_modulo`, `degradacion`, `irradiancia`); `_update_efficiency`/`_fetch_irradiance` en `manager.py` con contadores `fv_real_*`/`fv_esp_*`; sensores `rendimiento_string`, `rendimiento_solar`, `rendimiento_solar_hoy`; `effCards()` en la pestaña Solar; `siar.py` (lectura de la API, hora de la estación, sol y transposición Erbs + Hay-Davies), tramos de 30 min por string y `rendimiento_solar_siar`; credenciales fuera del panel y ocultas en exportaciones; opción `irradiancia_fuente` y modo `ClaveAPI` (`_siar_by_key`).
-- Pruebas: pytest 136 OK (35 nuevas, con Open-Meteo y SiAR simulados, clave API y las cuatro fuentes de irradiancia); Chrome sin pantalla en escritorio y móvil con dos strings, sin errores de consola.
+- Pruebas: pytest 138 OK (37 nuevas, con Open-Meteo y SiAR simulados, clave API y las cuatro fuentes de irradiancia); Chrome sin pantalla en escritorio y móvil con dos strings, sin errores de consola.
 - Pendientes: verlo en la casa real; con Open-Meteo el valor instantáneo con nubes es orientativo; el recorte del inversor se deduce (batería ≥ 97 %, sin cargar ni verter), no se lee.
